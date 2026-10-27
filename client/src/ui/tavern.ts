@@ -4,6 +4,9 @@ import { sfx } from '../audio/sfx';
 import { CLASS_BG, el, esc } from './dom';
 import { COIN, MUG, classIcon, itemIcon } from './icons';
 
+const EMPTY_ICON: Record<string, string> = { weapon: 'weapon', helmet: 'helm', armor: 'plate', boots: 'boots', amulet: 'amulet', ring: 'ring' };
+const DEFAULT_WEAPON: Record<string, string> = { warrior: 'sword', mage: 'staff', archer: 'bow' };
+
 const MAIN_STATS: StatKey[] = ['maxHp', 'damage', 'armor', 'speed', 'attackSpeed', 'crit', 'cdr', 'regen', 'lifesteal'];
 
 /** Таверна: общий магазин, экипировка и готовность. */
@@ -89,7 +92,7 @@ export class TavernUi {
         const it = me.eq?.[s];
         return it
           ? `<div class="eslot r-${it.rarity}" title="${esc(it.name)}">${itemIcon(it.tpl, it.rarity)}</div>`
-          : `<div class="eslot"><div class="ph">${SLOT_NAMES[s]}</div></div>`;
+          : `<div class="eslot empty" title="${SLOT_NAMES[s]}">${itemIcon(EMPTY_ICON[s] === 'weapon' ? DEFAULT_WEAPON[me.c] : EMPTY_ICON[s], 'common')}</div>`;
       }).join('');
       this.el.querySelector('.stats')!.innerHTML = MAIN_STATS.map((k) => `<div><span>${STAT_LABELS[k]}</span><b>${formatStat(k, me.stats![k], false)}</b></div>`).join('');
     }

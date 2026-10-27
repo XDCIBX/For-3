@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { ARENA_OBSTACLES, ARENA_RADIUS } from '@game/shared';
 import { G, addOutline, faceted, part, toon } from './toon';
+import { repeated, sandTex, stoneTex, texturize, woodTex } from './textures';
 import { Flame, makeSun, skyTexture, type Stage } from './env';
 import type { Particles } from './particles';
 
@@ -28,7 +29,7 @@ export class ArenaStage implements Stage {
 
     const R = ARENA_RADIUS;
     // Песок с узором
-    const sand = new THREE.Mesh(new THREE.CircleGeometry(R + 1, 64).rotateX(-Math.PI / 2), toon(0xe9c98a));
+    const sand = new THREE.Mesh(new THREE.CircleGeometry(R + 1, 64).rotateX(-Math.PI / 2), toon(0xe9c98a, { map: repeated(sandTex(), 7, 7) }));
     sand.receiveShadow = true;
     s.add(sand);
     for (const [r, w, c] of [
@@ -138,6 +139,9 @@ export class ArenaStage implements Stage {
       s.add(b);
       this.banners.push(b);
     }
+
+    const stone = stoneTex();
+    texturize(s, { 0xb0a494: stone, 0xa0968a: stone, 0x9a9088: stone, 0xd0c6b6: stone, 0x8a8078: stone, 0x5a3a22: woodTex() }, (hex, map) => toon(hex, { map }));
   }
 
   update(dt: number, fx: Particles) {

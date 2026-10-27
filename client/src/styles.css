@@ -930,7 +930,8 @@ input.field:focus {
   align-items: stretch;
 }
 .shop {
-  flex: 0 0 58%;
+  flex: 1 1 auto;
+  min-width: 0;
   display: flex;
   flex-direction: column;
   min-height: 0;
@@ -974,7 +975,7 @@ input.field:focus {
 }
 .items {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
   gap: 8px;
   overflow-y: auto;
   min-height: 0;
@@ -1037,6 +1038,7 @@ input.field:focus {
   paint-order: stroke fill;
 }
 .item .slot-tag {
+  display: none;
   position: absolute;
   top: 4px;
   right: 6px;
@@ -1089,7 +1091,8 @@ input.field:focus {
   opacity: 0.6;
 }
 .side {
-  flex: 1;
+  flex: 0 0 clamp(210px, 38%, 420px);
+  min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -1101,17 +1104,26 @@ input.field:focus {
 }
 .equip-grid {
   display: grid;
-  grid-template-columns: repeat(6, 1fr);
+  grid-template-columns: repeat(6, minmax(0, 1fr));
   gap: 5px;
 }
 .eslot {
   aspect-ratio: 1;
+  width: 100%;
+  max-width: 60px;
+  justify-self: center;
+  min-width: 0;
+  overflow: hidden;
   border-radius: 10px;
   border: 2px solid var(--ink);
   background: rgba(0, 0, 0, 0.3);
   padding: 3px;
   position: relative;
   box-shadow: inset 0 0 0 2px var(--rc, transparent);
+}
+.eslot.empty .ico {
+  opacity: 0.22;
+  filter: grayscale(1);
 }
 .eslot .ph {
   position: absolute;
@@ -1124,14 +1136,23 @@ input.field:focus {
   color: var(--muted);
   text-align: center;
   line-height: 1;
+  padding: 2px;
+  overflow-wrap: anywhere;
 }
 .stats {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
   gap: 2px 8px;
   font-size: 11px;
   font-weight: 700;
   margin-top: 6px;
+}
+.stats > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 4px;
+  white-space: nowrap;
+  min-width: 0;
 }
 .stats span {
   color: var(--muted);
@@ -1296,7 +1317,7 @@ input.field:focus {
   .portrait { width: 46px; height: 46px; }
   .minimap { width: 84px; height: 84px; }
   .mate { min-width: 140px; }
-  .items { grid-template-columns: repeat(4, 1fr); gap: 6px; }
+  .items { gap: 6px; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
   .item .ii { width: 40px; height: 40px; }
   .item .in { font-size: 11px; }
   .item .st { font-size: 10px; }
@@ -1331,14 +1352,30 @@ input.field:focus {
   input.field { padding: 6px 10px; font-size: 16px; }
   .err { min-height: 0; font-size: 12px; }
   .item .slot-tag { display: none; }
+  .eslot { max-width: 46px; border-radius: 8px; }
+  .equip { padding: 6px 8px; }
+  .shop-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+  .shop-title .mug { flex: none; width: 24px; height: 24px; }
+  .timer { font-size: 16px; flex: none; }
+  .party { gap: 4px; margin-bottom: 6px; }
+  .pl { font-size: 11px; padding: 2px 5px 2px 2px; }
+  .pl .pi { width: 18px; height: 18px; }
+  .pl .pn { max-width: 64px; }
+  .side { gap: 6px; }
+  .side .btn { padding: 8px 12px; }
   .item { padding: 4px; }
   .shop { padding: 8px 10px 10px; }
   .stats { font-size: 10px; }
 }
-@media (max-width: 760px) {
+/* Узкая правая колонка таверны: ячейки снаряжения в 3 столбца, статы в 2 */
+@media (max-width: 700px) {
+  .equip-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tavern { gap: 8px; }
+}
+/* Портретная ориентация (планшеты): всё в одну колонку */
+@media (orientation: portrait) {
   .lobby { grid-template-columns: 1fr; overflow-y: auto; }
   .lobby-mid { display: none; }
   .tavern { flex-direction: column; }
-  .shop { flex: 1 1 auto; }
-  .items { grid-template-columns: repeat(auto-fill, minmax(110px, 1fr)); }
+  .side { flex: 0 0 auto; }
 }

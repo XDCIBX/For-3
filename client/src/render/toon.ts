@@ -25,10 +25,12 @@ export interface ToonOpts {
   opacity?: number;
   side?: THREE.Side;
   vertexColors?: boolean;
+  /** Текстура деталей (умножается на цвет). */
+  map?: THREE.Texture;
 }
 
 export function toon(color: THREE.ColorRepresentation, o: ToonOpts = {}): THREE.MeshToonMaterial {
-  const key = `${new THREE.Color(color).getHexString()}|${o.emissive ?? ''}|${o.emissiveIntensity ?? ''}|${o.transparent ?? ''}|${o.opacity ?? ''}|${o.side ?? ''}|${o.vertexColors ?? ''}`;
+  const key = `${new THREE.Color(color).getHexString()}|${o.emissive ?? ''}|${o.emissiveIntensity ?? ''}|${o.transparent ?? ''}|${o.opacity ?? ''}|${o.side ?? ''}|${o.vertexColors ?? ''}|${o.map?.uuid ?? ''}`;
   let m = cache.get(key) as THREE.MeshToonMaterial | undefined;
   if (!m) {
     m = new THREE.MeshToonMaterial({
@@ -40,6 +42,7 @@ export function toon(color: THREE.ColorRepresentation, o: ToonOpts = {}): THREE.
       opacity: o.opacity ?? 1,
       side: o.side ?? THREE.FrontSide,
       vertexColors: o.vertexColors ?? false,
+      map: o.map ?? null,
     });
     cache.set(key, m);
   }

@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { G, glow, part, toon } from './toon';
+import { repeated, rockTex, sandTex, stoneTex, texturize, woodTex } from './textures';
 import { Flame, canvasLabel, makeSun, type Stage } from './env';
 import type { Particles } from './particles';
 
@@ -27,13 +28,9 @@ export class TavernStage implements Stage {
     s.add(this.sun, this.sun.target);
 
     // Пол из досок
-    const plankCols = [0x9a6a3a, 0x8a5c30, 0xa8743f, 0x93653a];
-    for (let i = 0; i < 16; i++) {
-      const p = new THREE.Mesh(G.box(0.98, 0.2, 12), toon(plankCols[i % 4]));
-      p.position.set(-7.5 + i, -0.1, 0);
-      p.receiveShadow = true;
-      s.add(p);
-    }
+    const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 12).rotateX(-Math.PI / 2), toon(0xa8743f, { map: repeated(woodTex(), 4, 3) }));
+    floor.receiveShadow = true;
+    s.add(floor);
     // Ковёр
     const rug = new THREE.Mesh(new THREE.CircleGeometry(2.6, 32).rotateX(-Math.PI / 2), toon(0xa8323a));
     rug.scale.set(1.5, 1, 0.8);
@@ -238,6 +235,19 @@ export class TavernStage implements Stage {
     chL.position.set(0, 4.2, 0.5);
     this.lights.push(fireL, chL);
     s.add(fireL, chL);
+
+    // Детализация: дерево, камень и штукатурка
+    const wood = woodTex();
+    const stone = stoneTex();
+    texturize(
+      s,
+      {
+        0x5a3a22: wood, 0x4a2e1a: wood, 0x7a4a26: wood, 0x8a5a2b: wood, 0x6a4024: wood, 0x9a6a3a: wood,
+        0x8a8078: stone, 0x9a9088: stone, 0x7a7068: stone,
+        0xd8c0a0: repeated(sandTex(), 4, 2), 0xc8b090: repeated(sandTex(), 3, 2), 0x8a5c30: rockTex(),
+      },
+      (hex, map) => toon(hex, { map }),
+    );
   }
 
   private mug(x: number, y: number, z: number) {

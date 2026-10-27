@@ -70,6 +70,7 @@ class App {
     const rh = el(`<div class="rotate-hint enabled"><div class="phone"></div>Поверните устройство горизонтально</div>`);
     document.body.appendChild(rh);
     requestAnimationFrame((t) => this.loop(t));
+    window.addEventListener('resize', () => this.updateTavernShift());
     if (import.meta.env.DEV) (window as unknown as { __app: App }).__app = this;
     setTimeout(() => document.getElementById('boot')?.classList.add('hide'), 300);
     // Попытка вернуться в игру после перезагрузки страницы
@@ -338,7 +339,7 @@ class App {
           (v) => this.conn?.send({ t: 'ready', v }),
         );
         this.ui.appendChild(this.tavernUi.el);
-        this.engine.tavernShift = window.innerWidth > 760 ? 0.58 : 0;
+        this.updateTavernShift();
         sfx.music('tavern');
         sfx.bell();
         break;
@@ -363,6 +364,16 @@ class App {
         break;
     }
     void prev;
+  }
+
+  /** Сдвигаем 3D-сцену таверны так, чтобы герои были видны справа от лавки. */
+  private updateTavernShift() {
+    const shop = this.tavernUi?.el.querySelector('.shop');
+    if (!shop || window.innerWidth < window.innerHeight) {
+      this.engine.tavernShift = 0;
+      return;
+    }
+    this.engine.tavernShift = Math.min(0.75, shop.getBoundingClientRect().right / window.innerWidth);
   }
 
   private handleEvents(events: GameEvent[]) {

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Rng, type Obstacle, type WorldData, type Vec2 } from '@game/shared';
 import { G, addOutline, faceted, glow, instancedOutline, part, swayToon, toon } from './toon';
+import { barkTex, clothTex, grassTex, leafTex, rockTex, sandTex, stoneTex, woodTex } from './textures';
 import { Flame, makeSun, portalMaterial, skyTexture, waterMaterial, type Stage } from './env';
 import type { Particles } from './particles';
 
@@ -97,6 +98,9 @@ export class IslandStage implements Stage {
     const pos: number[] = [];
     const col: number[] = [];
     const idx: number[] = [];
+    const uvs: number[] = [];
+    // 1 — трава (текстура травинок), 0 — песок/тропа/камень (текстура песка)
+    const detail: number[] = [];
     const c = new THREE.Color();
     const grassA = new THREE.Color(0x7ccf55);
     const grassB = new THREE.Color(0x5fb447);
@@ -110,6 +114,8 @@ export class IslandStage implements Stage {
     const { pond, ruins, spawns } = this.world;
     pos.push(0, 0, 0);
     col.push(dirt.r, dirt.g, dirt.b);
+    uvs.push(0, 0);
+    detail.push(0);
     for (let i = 1; i <= rings; i++) {
       const rr = Math.pow(i / rings, 0.85) * maxR;
       for (let j = 0; j < segs; j++) {
@@ -123,24 +129,33 @@ export class IslandStage implements Stage {
         if (r > sr - 0.3) y = -Math.min(1.6, Math.pow((r - sr + 0.3) / 2.2, 1.4) * 1.6);
         y += noise2(x * 2, z * 2) * 0.05;
         pos.push(x, y, z);
+        uvs.push(x / 3.2, z / 3.2);
+        let grassy = 1;
         // Цвет
         const n = noise2(x, z);
         c.copy(grassA).lerp(n > 0 ? grassC : grassB, Math.abs(n) * 0.8);
         const pd = this.pathDist(x, z);
         if (pd < 1.5) c.lerp(pd < 1.1 ? dirt : dirtEdge, pd < 1.1 ? 1 : 0.6);
+        if (pd < 1.5) grassy = Math.min(grassy, Math.max(0, (pd - 0.9) / 0.6));
         const cd = Math.hypot(x, z);
         if (cd < 3.6) c.lerp(dirt, Math.min(1, (3.6 - cd) / 0.8));
+        if (cd < 3.6) grassy = Math.min(grassy, Math.max(0, (cd - 2.8) / 0.8));
         for (const s of spawns) {
           const d = Math.hypot(x - s.x, z - s.z);
           if (d < 3.6) c.lerp(corrupt, Math.min(1, (3.6 - d) / 1.4) * 0.85);
         }
         const rd = Math.hypot(x - ruins.x, z - ruins.z);
-        if (rd < 4.6) c.lerp(stone, (Math.floor(x * 1.2) + Math.floor(z * 1.2)) % 2 === 0 ? 0.85 : 0.7);
+        if (rd < 4.6) {
+          c.lerp(stone, (Math.floor(x * 1.2) + Math.floor(z * 1.2)) % 2 === 0 ? 0.85 : 0.7);
+          grassy = 0;
+        }
         const pdd = Math.hypot(x - pond.x, z - pond.z);
         if (pdd < pond.r + 0.9) c.lerp(new THREE.Color(0x4f9a3a), 0.5);
         if (r > sr - 2.4) c.lerp(sand, Math.min(1, (r - sr + 2.4) / 1.2));
         if (r > sr + 0.2) c.lerp(wet, Math.min(1, (r - sr - 0.2) / 1.5));
+        if (r > sr - 2.4) grassy = Math.min(grassy, Math.max(0, 1 - (r - sr + 2.4) / 1.2));
         col.push(c.r, c.g, c.b);
+        detail.push(grassy);
       }
     }
     for (let j = 0; j < segs; j++) idx.push(0, 1 + ((j + 1) % segs), 1 + j);
@@ -156,9 +171,28 @@ export class IslandStage implements Stage {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+    geo.setAttribute('uv', new THREE.Float32BufferAttribute(uvs, 2));
+    geo.setAttribute('detail', new THREE.Float32BufferAttribute(detail, 1));
     geo.setIndex(idx);
     geo.computeVertexNormals();
-    const ground = new THREE.Mesh(geo, toon(0xffffff, { vertexColors: true }));
+    // Трава и песок смешиваются по атрибуту detail
+    const mat = new THREE.MeshToonMaterial({ color: 0xffffff, vertexColors: true, gradientMap: toon(0xffffff).gradientMap, map: grassTex() });
+    mat.onBeforeCompile = (sh) => {
+      sh.uniforms.sandMap = { value: sandTex() };
+      sh.vertexShader = 'attribute float detail;\nvarying float vDetail;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvDetail = detail;');
+      sh.fragmentShader =
+        'uniform sampler2D sandMap;\nvarying float vDetail;\n' +
+        sh.fragmentShader.replace(
+          '#include <map_fragment>',
+          `#ifdef USE_MAP
+            float gTex = texture2D(map, vMapUv).r;
+            float sTex = texture2D(sandMap, vMapUv * 1.6).r;
+            diffuseColor.rgb *= mix(sTex, gTex, vDetail);
+          #endif`,
+        );
+    };
+    mat.customProgramCacheKey = () => 'ground';
+    const ground = new THREE.Mesh(geo, mat);
     ground.receiveShadow = true;
     this.scene.add(ground);
   }
@@ -251,20 +285,20 @@ export class IslandStage implements Stage {
       case 'rock': {
         const g = new THREE.Group();
         const geo = faceted(new THREE.DodecahedronGeometry(1, 0));
-        const m = new THREE.Mesh(geo, toon(rng.pick([0x9ea3a8, 0x8f959b, 0xa9a59a])));
+        const m = new THREE.Mesh(geo, toon(rng.pick([0x9ea3a8, 0x8f959b, 0xa9a59a]), { map: rockTex() }));
         m.scale.set(o.r * 1.1, o.r * rng.range(0.7, 1.05), o.r * 1.0);
         m.position.y = o.r * 0.35;
         m.rotation.set(rng.range(0, 1), o.rot, rng.range(0, 0.5));
         m.castShadow = m.receiveShadow = true;
         addOutline(m, 0.04);
         g.add(m);
-        const moss = new THREE.Mesh(geo, toon(0x6fb04a));
+        const moss = new THREE.Mesh(geo, toon(0x6fb04a, { map: leafTex() }));
         moss.scale.set(o.r * 0.85, o.r * 0.3, o.r * 0.8);
         moss.position.y = o.r * 0.75;
         moss.rotation.copy(m.rotation);
         if (rng.chance(0.6)) g.add(moss);
         if (rng.chance(0.5)) {
-          const small = new THREE.Mesh(geo, toon(0x9ea3a8));
+          const small = new THREE.Mesh(geo, toon(0x9ea3a8, { map: rockTex() }));
           small.scale.setScalar(o.r * 0.35);
           small.position.set(o.r * 0.9, o.r * 0.12, o.r * 0.4);
           addOutline(small, 0.03);
@@ -276,7 +310,7 @@ export class IslandStage implements Stage {
       }
       case 'stump': {
         const g = new THREE.Group();
-        const st = part(G.cyl(0.42, 0.5, 0.5, 12), 0x7a4a26, { pos: [0, 0.25, 0], outline: 0.035 });
+        const st = part(G.cyl(0.42, 0.5, 0.5, 12), 0x7a4a26, { pos: [0, 0.25, 0], outline: 0.035, map: barkTex() });
         st.castShadow = true;
         g.add(st);
         g.add(part(G.cyl(0.38, 0.38, 0.02, 12), 0xe0b77a, { pos: [0, 0.51, 0], outline: false }));
@@ -295,17 +329,17 @@ export class IslandStage implements Stage {
         const h = 2.6 * o.scale;
         const broken = o.variant === 1;
         const col = 0xd9d0bd;
-        g.add(part(G.box(1.1, 0.3, 1.1), 0xc4baa6, { pos: [0, 0.15, 0], outline: 0.03 }));
-        const shaft = part(new THREE.CylinderGeometry(0.42, 0.48, broken ? h * 0.55 : h, 12), col, { pos: [0, (broken ? h * 0.55 : h) / 2 + 0.3, 0], outline: 0.035 });
+        g.add(part(G.box(1.1, 0.3, 1.1), 0xc4baa6, { pos: [0, 0.15, 0], outline: 0.03, map: stoneTex() }));
+        const shaft = part(new THREE.CylinderGeometry(0.42, 0.48, broken ? h * 0.55 : h, 12), col, { pos: [0, (broken ? h * 0.55 : h) / 2 + 0.3, 0], outline: 0.035, map: stoneTex() });
         shaft.castShadow = true;
         g.add(shaft);
         if (!broken) {
-          g.add(part(G.box(1.05, 0.28, 1.05), 0xc4baa6, { pos: [0, h + 0.44, 0], outline: 0.03 }));
+          g.add(part(G.box(1.05, 0.28, 1.05), 0xc4baa6, { pos: [0, h + 0.44, 0], outline: 0.03, map: stoneTex() }));
           if (o.variant === 2) g.add(part(G.box(1.2, 0.16, 0.5), 0x7bb04a, { pos: [0, h + 0.62, 0.1], outline: 0.02 }));
         } else {
           g.add(part(G.cone(0.42, 0.5, 12), col, { pos: [0, h * 0.55 + 0.55, 0], rot: [0.2, 0, 0.3], outline: 0.03 }));
           // Упавший обломок
-          const piece = part(new THREE.CylinderGeometry(0.4, 0.4, 1.2, 12), col, { pos: [1.2, 0.4, 0.3], rot: [0, 0.6, Math.PI / 2], outline: 0.035 });
+          const piece = part(new THREE.CylinderGeometry(0.4, 0.4, 1.2, 12), col, { map: stoneTex(), pos: [1.2, 0.4, 0.3], rot: [0, 0.6, Math.PI / 2], outline: 0.035 });
           piece.castShadow = true;
           g.add(piece);
         }
@@ -320,7 +354,7 @@ export class IslandStage implements Stage {
       case 'tent': {
         const g = new THREE.Group();
         const col = o.variant === 0 ? 0xe05a3a : 0x3a7ad0;
-        const tent = new THREE.Mesh(new THREE.ConeGeometry(1.5, 2.0, 4, 1), toon(col));
+        const tent = new THREE.Mesh(new THREE.ConeGeometry(1.5, 2.0, 4, 1), toon(col, { map: clothTex() }));
         tent.position.y = 1.0;
         tent.rotation.y = Math.PI / 4;
         tent.castShadow = true;
@@ -388,9 +422,9 @@ export class IslandStage implements Stage {
     const c = new THREE.Color();
     for (const d of defs) {
       if (d.trees.length === 0) continue;
-      const fMat = swayToon(0xffffff, 0.035, {}, true);
+      const fMat = swayToon(0xffffff, 0.035, { map: leafTex() }, true);
       const foliage = new THREE.InstancedMesh(d.foliage, fMat, d.trees.length);
-      const trunk = new THREE.InstancedMesh(d.trunk, toon(d.tcol), d.trees.length);
+      const trunk = new THREE.InstancedMesh(d.trunk, toon(d.tcol, { map: barkTex() }), d.trees.length);
       d.trees.forEach((t, i) => {
         dummy.position.set(t.x, 0, t.z);
         dummy.rotation.set(0, t.rot, 0);
@@ -493,7 +527,7 @@ export class IslandStage implements Stage {
       new THREE.IcosahedronGeometry(0.42, 1).translate(-0.45, 0.32, -0.1),
     ])!;
     const bushN = 70;
-    const bushes = new THREE.InstancedMesh(bushGeo, swayToon(0xffffff, 0.04), bushN);
+    const bushes = new THREE.InstancedMesh(bushGeo, swayToon(0xffffff, 0.04, { map: leafTex() }), bushN);
     const berries = new THREE.InstancedMesh(
       mergeGeometries([
         new THREE.SphereGeometry(0.07, 6, 4).translate(0.3, 0.7, 0.4),
@@ -612,7 +646,7 @@ export class IslandStage implements Stage {
     const g = new THREE.Group();
     const a = Math.atan2(-s.x, -s.z);
     const ringGeo = faceted(new THREE.TorusGeometry(1.5, 0.28, 6, 14));
-    const ring = new THREE.Mesh(ringGeo, toon(0x6f6a7a));
+    const ring = new THREE.Mesh(ringGeo, toon(0x6f6a7a, { map: stoneTex() }));
     ring.position.y = 1.75;
     addOutline(ring, 0.04);
     ring.castShadow = true;
@@ -665,7 +699,7 @@ export class IslandStage implements Stage {
     this.flames.push(flame);
     // Брёвна-скамейки
     for (const a of [0.3, 2.3, 4.3]) {
-      const log = part(G.cyl(0.22, 0.22, 1.6, 10), 0x7a4a26, { pos: [Math.cos(a) * 2.1, 0.22, Math.sin(a) * 2.1], rot: [Math.PI / 2, 0, 0], outline: 0.03 });
+      const log = part(G.cyl(0.22, 0.22, 1.6, 10), 0x7a4a26, { map: barkTex(), pos: [Math.cos(a) * 2.1, 0.22, Math.sin(a) * 2.1], rot: [Math.PI / 2, 0, 0], outline: 0.03 });
       log.rotation.set(Math.PI / 2, 0, a + Math.PI / 2);
       log.rotation.order = 'YXZ';
       log.rotation.set(Math.PI / 2, a, 0);
@@ -675,8 +709,8 @@ export class IslandStage implements Stage {
     // Указатель
     const sign = new THREE.Group();
     sign.add(part(G.cyl(0.07, 0.08, 1.8, 6), 0x6a4024, { pos: [0, 0.9, 0], outline: 0.02 }));
-    sign.add(part(G.box(0.9, 0.25, 0.06), 0xc79a5a, { pos: [0.3, 1.5, 0], rot: [0, 0, 0.08], outline: 0.02 }));
-    sign.add(part(G.box(0.8, 0.22, 0.06), 0xc79a5a, { pos: [-0.25, 1.15, 0.02], rot: [0, 0.3, -0.06], outline: 0.02 }));
+    sign.add(part(G.box(0.9, 0.25, 0.06), 0xc79a5a, { pos: [0.3, 1.5, 0], rot: [0, 0, 0.08], outline: 0.02, map: woodTex() }));
+    sign.add(part(G.box(0.8, 0.22, 0.06), 0xc79a5a, { pos: [-0.25, 1.15, 0.02], rot: [0, 0.3, -0.06], outline: 0.02, map: woodTex() }));
     sign.position.set(2.0, 0, -2.3);
     s.add(sign);
     // Бочки и ящики у палаток
@@ -684,10 +718,10 @@ export class IslandStage implements Stage {
       [-5.6, -1.8],
       [6.1, -1.6],
     ]) {
-      const b = part(G.cyl(0.35, 0.3, 0.8, 12), 0x8a5a2b, { pos: [x, 0.4, z], outline: 0.03 });
+      const b = part(G.cyl(0.35, 0.3, 0.8, 12), 0x8a5a2b, { pos: [x, 0.4, z], outline: 0.03, map: woodTex() });
       b.castShadow = true;
       s.add(b, part(G.torus(0.34, 0.025, Math.PI * 2, 4, 16), 0x5a5a5a, { pos: [x, 0.62, z], rot: [Math.PI / 2, 0, 0], outline: false }));
-      const crate = part(G.box(0.6, 0.6, 0.6), 0xb07a3a, { pos: [x + 0.8 * Math.sign(x), 0.3, z + 0.4], rot: [0, rng.range(0, 1), 0], outline: 0.03 });
+      const crate = part(G.box(0.6, 0.6, 0.6), 0xb07a3a, { map: woodTex(), pos: [x + 0.8 * Math.sign(x), 0.3, z + 0.4], rot: [0, rng.range(0, 1), 0], outline: 0.03 });
       crate.castShadow = true;
       s.add(crate);
     }

@@ -403,10 +403,8 @@ export class Engine {
           if (!h) break;
           h.model.playCast(e.s);
           if (e.pid !== this.myId || !this.pred) h.rot = e.r;
-          if (h.model.cls === 'mage' && e.s >= 1) {
-            const p = h.model.root.position;
-            this.fx.burst(p.x, 1.8, p.z, { n: 10, speed: 1.5, up: 1, life: 0.4, size: 0.2, colors: [0xb08aff, 0xffffff] });
-          }
+          const hp = h.model.root.position;
+          this.effects.cast(h.model.cls, e.s, hp.x, hp.z);
           break;
         }
         case 'fx': {
@@ -416,8 +414,7 @@ export class Engine {
               this.effects.slash(e.x, e.z, e.rot ?? 0, hv?.model.weaponTpl === 'axe' ? 0xffd0a0 : 0xffffff);
               break;
             case 'charge':
-              this.effects.dust(e.x, e.z, 10);
-              this.effects.ring(e.x, e.z, 1.5, 0xffffff, 0.3);
+              this.effects.charge(e.x, e.z, e.rot ?? 0);
               break;
             case 'whirl':
               if (hv) hv.whirlT = 2;
@@ -678,7 +675,9 @@ export class Engine {
       return;
     }
     if (this.phase === 'tavern') {
-      const far = this.tavernShift > 0 ? 14 : 10.5 * Math.max(1, zoom * 0.9);
+      // Отдаляем камеру, чтобы трое героев поместились в видимую часть экрана
+      const visible = Math.max(0.2, 1 - this.tavernShift);
+      const far = Math.max(10.5, 7.6 / (visible * 2 * Math.tan((cam.fov * Math.PI) / 360) * aspect));
       cam.position.set(0, 4.6, far);
       cam.lookAt(0, 1.6, 0);
       if (this.tavernShift > 0) {

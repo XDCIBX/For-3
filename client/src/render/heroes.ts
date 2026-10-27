@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { Equip, HeroClass, Item, Rarity } from '@game/shared';
 import { G, RARITY_HEX, addOutline, blobShadow, glow, part, toon } from './toon';
+import { clothTex, texturize, woodTex } from './textures';
 
 const SKIN = 0xffd3ac;
 const DARK = 0x24160f;
@@ -442,9 +443,10 @@ export class HeroModel {
 
     const armor = eq?.armor ?? null;
     const torsoCol = armor ? ARMOR_COLORS[armor.tpl]?.[armor.rarity] ?? this.baseTorsoColor : this.baseTorsoColor;
-    this.torso.material = toon(torsoCol);
+    const isMetal = this.cls === 'warrior' && (!armor || armor.tpl === 'plate');
+    this.torso.material = toon(torsoCol, isMetal ? {} : { map: clothTex() });
     const trimCol = this.cls === 'mage' ? torsoCol : armor ? ARMOR_COLORS[armor.tpl]?.[armor.rarity] ?? 0x8e9aa6 : 0x8e9aa6;
-    for (const m of this.trimMeshes) m.material = toon(trimCol);
+    for (const m of this.trimMeshes) m.material = toon(trimCol, this.cls === 'mage' ? { map: clothTex() } : {});
     if (armor && armor.rarity !== 'common') {
       // Наплечники/воротник цвета редкости
       for (const x of [-0.36, 0.36]) {
@@ -489,6 +491,9 @@ export class HeroModel {
     }
 
     this.buildHeadgear(eq?.helmet ?? null);
+    // Фактура ткани на плащах, мантиях и шляпах, дерево на щите
+    const cloth = clothTex();
+    texturize(this.root, { 0xc8412f: cloth, 0x2f6b2c: cloth, 0x6b3fc4: cloth, 0x3f8f3a: cloth, 0x4e2a9a: cloth, 0x5a4636: cloth, 0x3a2a5a: cloth, 0xb5452f: woodTex() }, (hex, map) => toon(hex, { map }));
     this.buildWeapon(eq?.weapon ?? null);
 
     const legendaryCount = eq ? Object.values(eq).filter((i) => i?.rarity === 'legendary').length : 0;
