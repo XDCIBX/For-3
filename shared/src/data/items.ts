@@ -49,6 +49,14 @@ export const ITEM_TEMPLATES: ItemTemplate[] = [
   { id: 'bow', slot: 'weapon', cls: 'archer', names: ['Охотничий лук', 'Длинный лук', 'Эльфийский лук', 'Лук Лунного Света'], stats: { damage: 6, crit: 0.04 } },
   { id: 'crossbow', slot: 'weapon', cls: 'archer', names: ['Самострел', 'Тяжёлый арбалет', 'Арбалет Ассасина', 'Глаз Бури'], stats: { damage: 8, armor: 1 } },
   { id: 'recurve', slot: 'weapon', cls: 'archer', names: ['Короткий лук', 'Рогатый лук', 'Лук Ветров', 'Шёпот Леса'], stats: { damage: 5, attackSpeed: 0.1 } },
+  // --- Оружие охотника на демонов (парное) ---
+  { id: 'glaives', slot: 'weapon', cls: 'hunter', names: ['Учебные глефы', 'Стальные глефы', 'Глефы Скверны', 'Глефы Падшей Звезды'], stats: { damage: 5, attackSpeed: 0.08 } },
+  { id: 'daggers', slot: 'weapon', cls: 'hunter', names: ['Ржавые кинжалы', 'Парные стилеты', 'Клыки Ночи', 'Жала Бездны'], stats: { damage: 5, crit: 0.04 } },
+  { id: 'warblades', slot: 'weapon', cls: 'hunter', names: ['Тесаки охотника', 'Боевые клинки', 'Клинки Крови', 'Пожиратели Душ'], stats: { damage: 6, lifesteal: 0.03 } },
+  // --- Оружие призывателя ---
+  { id: 'tome', slot: 'weapon', cls: 'summoner', names: ['Потрёпанный гримуар', 'Книга духов', 'Гримуар Предков', 'Кодекс Вечности'], stats: { damage: 6, cdr: 0.04 } },
+  { id: 'totemstaff', slot: 'weapon', cls: 'summoner', names: ['Резной посох', 'Посох шамана', 'Тотем Грома', 'Древо Жизни'], stats: { damage: 5, maxHp: 30 } },
+  { id: 'bell', slot: 'weapon', cls: 'summoner', names: ['Медный колокольчик', 'Колокол зова', 'Колокол Предков', 'Глас Небес'], stats: { damage: 5, attackSpeed: 0.08 } },
   // --- Голова ---
   { id: 'helm', slot: 'helmet', cls: null, names: ['Кожаная шапка', 'Железный шлем', 'Шлем Стража', 'Корона Королей'], stats: { maxHp: 25, armor: 3 } },
   { id: 'hood', slot: 'helmet', cls: null, names: ['Тряпичный капюшон', 'Капюшон следопыта', 'Капюшон Тени', 'Венец Мудрости'], stats: { crit: 0.03, cdr: 0.03 } },

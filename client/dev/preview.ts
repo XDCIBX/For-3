@@ -3,6 +3,7 @@ import * as THREE from 'three';
 import { HeroModel } from '../src/render/heroes';
 import { buildWeapon } from '../src/render/equipment';
 import { MobModel } from '../src/render/mobs';
+import { MinionModel } from '../src/render/minions';
 import { makeItem, TEMPLATE_BY_ID, emptyEquip } from '@game/shared';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -23,9 +24,10 @@ scene.add(ground);
 const q = new URLSearchParams(location.search);
 const rarity = (q.get('r') ?? 'common') as 'common';
 const heroes: HeroModel[] = [];
-(['warrior', 'mage', 'archer'] as const).forEach((c, i) => {
+const list = (q.get('cls') ?? 'warrior,mage,archer').split(',') as ('warrior' | 'mage' | 'archer' | 'hunter' | 'summoner')[];
+list.forEach((c, i) => {
   const h = new HeroModel(c);
-  h.root.position.x = (i - 1) * 2.4;
+  h.root.position.x = (i - (list.length - 1) / 2) * 2.4;
   h.root.rotation.y = Number(q.get('rot') ?? 0.4);
   if (q.get('eq')) {
     const eq = emptyEquip();
@@ -60,21 +62,35 @@ if (q.get('weapons')) {
   // Сетка: 9 видов оружия × 4 редкости
   heroes.forEach((h) => h.root.removeFromParent());
   heroes.length = 0;
-  const tpls = ['sword', 'axe', 'hammer', 'staff', 'wand', 'orb', 'bow', 'recurve', 'crossbow'];
+  const tpls = (q.get('wl') ?? 'sword,axe,hammer,staff,wand,orb,bow,recurve,crossbow').split(',');
   const rars = ['common', 'rare', 'epic', 'legendary'] as const;
   tpls.forEach((t, i) =>
     rars.forEach((r, j) => {
       const w = buildWeapon(t, r, { parts: [], glow: [], spin: [] });
-      w.position.set((i - 4) * 1.15, 3.6 - j * 1.25 - (t === 'staff' ? 0.5 : 0), 0);
+      w.position.set((i - (tpls.length - 1) / 2) * 1.15, 3.6 - j * 1.25 - (t === 'staff' || t === 'totemstaff' ? 0.5 : 0), 0);
       if (t === 'crossbow') w.rotation.set(-Math.PI / 2 + 0.4, 0, 0);
       else if (t === 'bow' || t === 'recurve') w.rotation.set(0, 0, 0);
-      w.scale.setScalar(t === 'staff' ? 0.7 : 0.95);
+      w.scale.setScalar(t === 'staff' || t === 'totemstaff' ? 0.7 : 0.95);
       scene.add(w);
     }),
   );
   ground.visible = false;
   cam.position.set(0, 1.6, 11.5);
   cam.lookAt(0, 1.6, 0);
+}
+const minions: MinionModel[] = [];
+if (q.get('minions')) {
+  heroes.forEach((h) => h.root.removeFromParent());
+  heroes.length = 0;
+  (['wolf', 'golem', 'totem'] as const).forEach((k, i) => {
+    const m = new MinionModel(k);
+    m.root.position.set((i - 1) * 2.6, 0, 0);
+    m.root.rotation.y = Number(q.get('rot') ?? 0.4);
+    scene.add(m.root);
+    minions.push(m);
+  });
+  cam.position.set(0, 4, 9);
+  cam.lookAt(0, 1.1, 0);
 }
 let last = performance.now();
 const cast = q.get('cast');
@@ -83,7 +99,11 @@ function loop(now: number) {
   last = now;
   heroes.forEach((h) => {
     if (cast !== null && Math.random() < 0.01) h.playCast(Number(cast));
-    h.update(dt, { speed: Number(q.get('speed') ?? 0), dead: false, stun: false, frozen: false, whirl: false, dash: false, invuln: false, buff: false });
+    h.update(dt, { speed: Number(q.get('speed') ?? 0), dead: false, stun: false, frozen: false, whirl: false, dash: false, invuln: false, buff: false, demon: q.has('demon') });
+  });
+  minions.forEach((m) => {
+    if (cast !== null && Math.random() < 0.01) m.playAttack();
+    m.update(dt, Number(q.get('speed') ?? 0) > 0);
   });
   mobs.forEach((m) => {
     if (cast !== null && Math.random() < 0.01) m.playAttack();

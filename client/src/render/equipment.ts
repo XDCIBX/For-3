@@ -542,6 +542,153 @@ export function buildWeapon(tpl: string, r: Rarity, out: Built): THREE.Group {
       w.add(limbG);
       break;
     }
+    case 'glaives': {
+      // Боевая глефа: рукоять посередине, длинный клинок вверх и серп-крюк назад
+      const edgeCol = rank >= 1 ? glowCol : 0x5dff8a;
+      P(G.cyl(0.035, 0.035, 0.26, 8), grip, [0, 0, 0]);
+      wraps(-0.09, 4, 0.04);
+      P(G.box(0.2, 0.05, 0.08), guard, [0, 0.14, 0]);
+      M(G.box(0.1, 0.6 + rank * 0.05, 0.03), [0.03, 0.47, 0], [0, 0, -0.12]);
+      M(G.cone(0.07, 0.22, 4), [0.08 + rank * 0.006, 0.86 + rank * 0.05, 0], [0, Math.PI / 4, -0.12], [1, 1, 0.35]);
+      const crescent = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.03, 18, 1, false, -Math.PI / 2 - Math.PI * 0.42, Math.PI * 0.84), metalMat);
+      crescent.rotation.x = Math.PI / 2;
+      crescent.position.set(-0.02, 0.3, 0);
+      crescent.scale.set(0.9, 1.3, 1);
+      addOutline(crescent, 0.016);
+      w.add(crescent);
+      const edge = new THREE.Mesh(G.torus(0.3, 0.016, Math.PI * 0.84, 4, 16), toon(edgeCol, { emissive: edgeCol, emissiveIntensity: 0.6 }));
+      edge.rotation.z = Math.PI / 2 + Math.PI * 0.08;
+      edge.position.set(-0.02, 0.3, 0);
+      edge.scale.set(0.9, 1.3, 1);
+      w.add(edge);
+      // Нижний шип у навершия
+      M(G.cone(0.05, 0.22, 4), [0, -0.24, 0], [Math.PI, Math.PI / 4, 0], [1, 1, 0.4]);
+      if (rank >= 2) w.add(gem(glowCol, 0.045, [0, 0.14, 0.05], out));
+      if (rank >= 3) w.add(halo(glowCol, 0.2, [0, 0.5, 0], out, 0.3));
+      break;
+    }
+    case 'daggers': {
+      // Кинжал с изогнутой гардой
+      const len = 0.42 + rank * 0.04;
+      P(G.cyl(0.032, 0.032, 0.2, 8), grip, [0, 0, 0]);
+      wraps(-0.07, 3, 0.036);
+      P(G.sphere(0.05, 8, 6), guard, [0, -0.12, 0]);
+      P(G.torus(0.09, 0.022, Math.PI, 5, 10), guard, [0, 0.13, 0], [0, 0, 0]);
+      M(G.box(0.085, len, 0.025), [0, 0.13 + len / 2, 0]);
+      M(G.cone(0.06, 0.16, 4), [0, 0.13 + len + 0.08, 0], [0, Math.PI / 4, 0], [1, 1, 0.35]);
+      P(G.box(0.022, len * 0.7, 0.03), rank >= 2 ? glowCol : 0x6f7b85, [0, 0.13 + len * 0.45, 0], undefined, undefined, false);
+      if (rank >= 2) w.add(gem(glowCol, 0.035, [0, -0.12, 0.04], out));
+      if (rank >= 3) w.add(halo(glowCol, 0.13, [0, 0.13 + len * 0.6, 0], out, 0.3));
+      break;
+    }
+    case 'warblades': {
+      // Изогнутый клинок-сабля с шипами на обухе
+      P(G.cyl(0.036, 0.036, 0.24, 8), grip, [0, 0, 0]);
+      wraps(-0.08, 4, 0.04);
+      P(G.box(0.26, 0.05, 0.08), guard, [0, 0.14, 0]);
+      for (let i = 0; i < 4; i++) {
+        const a = i * 0.12;
+        M(G.box(0.12, 0.2, 0.03), [Math.sin(a) * 0.12 + i * 0.03, 0.26 + i * 0.17, 0], [0, 0, -a]);
+      }
+      M(G.cone(0.07, 0.24, 4), [0.16, 0.98, 0], [0, Math.PI / 4, -0.55], [1, 1, 0.35]);
+      for (let i = 0; i < 3; i++) M(G.cone(0.03, 0.1, 4), [-0.05 + i * 0.04, 0.32 + i * 0.18, 0], [0, 0, 0.9], undefined, 0.01);
+      if (rank >= 2) w.add(gem(glowCol, 0.045, [0, 0.14, 0.05], out));
+      if (rank >= 3) w.add(halo(glowCol, 0.2, [0.08, 0.6, 0], out, 0.3));
+      break;
+    }
+    case 'tome': {
+      // Книга духов с застёжкой и сияющей руной
+      const cover = rank === 0 ? 0x2a6f78 : rank === 1 ? 0x2f4f9a : rank === 2 ? 0x5a2f8a : 0x9a2f2f;
+      const runeCol = rank === 0 ? 0x7af0ff : glowCol;
+      const book = new THREE.Group();
+      book.add(part(G.box(0.36, 0.46, 0.05), cover, { pos: [0, 0, 0.06], outline: 0.018 }));
+      book.add(part(G.box(0.36, 0.46, 0.05), cover, { pos: [0, 0, -0.06], outline: 0.018 }));
+      book.add(part(G.box(0.33, 0.43, 0.09), 0xf3ead2, { pos: [0.015, 0, 0], outline: false }));
+      book.add(part(G.cyl(0.06, 0.06, 0.46, 10), cover, { pos: [-0.18, 0, 0], outline: 0.015 }));
+      for (const y of [-0.17, 0.17]) book.add(part(G.box(0.08, 0.06, 0.18), guard, { pos: [0.16, y, 0], outline: 0.01 }));
+      book.add(part(G.box(0.08, 0.05, 0.19), guard, { pos: [0.17, 0, 0], outline: 0.01 }));
+      const rune = new THREE.Mesh(G.torus(0.09, 0.016, Math.PI * 2, 4, 16), toon(runeCol, { emissive: runeCol, emissiveIntensity: 0.9 }));
+      rune.position.z = 0.09;
+      book.add(rune);
+      const eyeR = new THREE.Mesh(G.ico(0.04, 0), toon(runeCol, { emissive: runeCol, emissiveIntensity: 1 }));
+      eyeR.position.z = 0.09;
+      book.add(eyeR);
+      out.glow.push(eyeR);
+      book.add(halo(runeCol, 0.22, [0, 0, 0.1], out, rank >= 2 ? 0.3 : 0.18));
+      book.position.set(0, 0.12, 0.08);
+      book.rotation.set(-0.3, 0.3, 0);
+      w.add(book);
+      if (rank >= 1) {
+        // Листки-духи, кружащие вокруг книги
+        const orbit = new THREE.Group();
+        orbit.userData.anim = true;
+        for (let i = 0; i < 1 + rank; i++) {
+          const a = (i / (1 + rank)) * Math.PI * 2;
+          const pg = new THREE.Mesh(G.box(0.08, 0.1, 0.01), glow(runeCol, 0.7, false));
+          pg.position.set(Math.cos(a) * 0.32, Math.sin(a * 2) * 0.05, Math.sin(a) * 0.32);
+          orbit.add(pg);
+        }
+        orbit.position.set(0, 0.12, 0.08);
+        out.spin.push(orbit);
+        w.add(orbit);
+      }
+      break;
+    }
+    case 'totemstaff': {
+      // Посох с резным тотемом, перьями и черепом-навершием
+      P(G.cyl(0.035, 0.05, 1.5, 8), WOOD, [0, 0.5, 0], undefined, undefined, 0.015);
+      wraps(0.0, 3, 0.05, 0.06);
+      const faceCols = [0xd9a441, 0x2ab8c8, 0xc9343a];
+      for (let i = 0; i < 2; i++) {
+        const y = 1.12 + i * 0.2;
+        P(G.cyl(0.11, 0.1, 0.19, 8), i === 0 ? 0x8a5a2b : 0x6a4428, [0, y, 0], undefined, undefined, 0.015);
+        for (const x of [-0.04, 0.04]) P(G.box(0.035, 0.03, 0.02), faceCols[(i + 1) % 3], [x, y + 0.03, 0.1], undefined, undefined, false);
+        P(G.box(0.08, 0.025, 0.02), 0x1a1210, [0, y - 0.04, 0.1], undefined, undefined, false);
+      }
+      // Рогатый череп
+      P(G.sphere(0.12, 12, 10), 0xf3ead2, [0, 1.56, 0.02], undefined, [1, 0.9, 1.05], 0.015);
+      const eyeCol = rank === 0 ? 0x7af0ff : glowCol;
+      for (const x of [-0.045, 0.045]) {
+        const e = new THREE.Mesh(G.sphere(0.025, 6, 4), toon(eyeCol, { emissive: eyeCol, emissiveIntensity: 1 }));
+        e.position.set(x, 1.57, 0.12);
+        w.add(e);
+        out.glow.push(e);
+      }
+      for (const s of [-1, 1]) P(G.cone(0.035, 0.2, 6), 0xefe2c2, [s * 0.13, 1.66, 0], [0, 0, -s * 0.9], undefined, 0.012);
+      // Перья на шнурках
+      const featherCols = [0xe94b3c, 0xffffff, 0x2ab8c8];
+      for (let i = 0; i < 2 + rank; i++) {
+        const a = (i / (2 + rank)) * Math.PI * 2;
+        P(G.cyl(0.006, 0.006, 0.18, 3), 0x3a2414, [Math.cos(a) * 0.12, 1.0, Math.sin(a) * 0.12], undefined, undefined, false);
+        P(G.capsule(0.025, 0.12), featherCols[i % 3], [Math.cos(a) * 0.13, 0.86, Math.sin(a) * 0.13], [0, 0, 0.2], [1, 1, 0.4], 0.01);
+      }
+      w.add(halo(eyeCol, 0.24, [0, 1.56, 0], out, 0.2));
+      if (rank >= 2) w.add(gem(glowCol, 0.05, [0, 1.12, 0.12], out));
+      break;
+    }
+    case 'bell': {
+      // Колокол духов на рукояти с лентами
+      P(G.cyl(0.035, 0.04, 0.5, 8), grip, [0, 0.1, 0]);
+      wraps(-0.08, 3, 0.044);
+      P(G.torus(0.06, 0.015, Math.PI * 2, 4, 10), guard, [0, 0.37, 0], [Math.PI / 2, 0, 0], undefined, false);
+      const bellCol = rank === 0 ? 0xc9a24a : metal;
+      const bell = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.2, 0.26, 16, 1, true), toon(bellCol, shine ? { emissive: glowCol, emissiveIntensity: 0.3, side: THREE.DoubleSide } : { side: THREE.DoubleSide }));
+      bell.position.y = 0.55;
+      bell.rotation.x = Math.PI;
+      addOutline(bell, 0.015);
+      w.add(bell);
+      P(G.sphere(0.08, 10, 6), bellCol, [0, 0.67, 0], undefined, [1, 0.6, 1]);
+      P(G.torus(0.2, 0.02, Math.PI * 2, 4, 20), guard, [0, 0.43, 0], [Math.PI / 2, 0, 0], undefined, false);
+      const tongueCol = rank === 0 ? 0x7af0ff : glowCol;
+      const tongue = new THREE.Mesh(G.sphere(0.05, 8, 6), toon(tongueCol, { emissive: tongueCol, emissiveIntensity: 1 }));
+      tongue.position.y = 0.42;
+      w.add(tongue);
+      out.glow.push(tongue);
+      for (const s of [-1, 1]) P(G.box(0.04, 0.3, 0.01), s < 0 ? 0xe94b3c : 0x2ab8c8, [s * 0.06, 0.18, 0.05], [0, 0, s * 0.25], undefined, false);
+      w.add(halo(tongueCol, 0.24, [0, 0.5, 0], out, 0.2));
+      if (rank >= 2) w.add(gem(glowCol, 0.04, [0, 0.62, 0.19], out));
+      break;
+    }
     case 'crossbow': {
       // Ложа с металлическими накладками
       P(G.box(0.1, 0.08, 0.72), WOOD, [0, 0, 0.15], undefined, undefined, 0.015);

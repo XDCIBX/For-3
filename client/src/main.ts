@@ -413,8 +413,11 @@ class App {
           const p = this.st.players.get(e.pid);
           if (!p) break;
           const id = CLASSES[p.c].skills[e.s].id;
-          if (id === 'slash' || id === 'whirl') sfx.swing();
-          else if (id === 'bolt') sfx.magic();
+          if (id === 'slash' || id === 'whirl' || id === 'twin' || id === 'glaive') sfx.swing();
+          else if (id === 'bolt' || id === 'spiritbolt') sfx.magic();
+          else if (id === 'wolves' || id === 'golem' || id === 'totem') sfx.bell();
+          else if (id === 'shadowdash') sfx.dash();
+          else if (id === 'demon') sfx.shout();
           else if (id === 'fireball') sfx.fireball();
           else if (id === 'shot' || id === 'multishot') sfx.bow();
           else if (id === 'charge' || id === 'roll') sfx.dash();
@@ -428,6 +431,7 @@ class App {
             this.haptic(ImpactStyle.Heavy);
           } else if (e.k === 'nova') sfx.freeze();
           else if (e.k === 'warcry') sfx.shout();
+          else if (e.k === 'gslam') sfx.slam();
           else if (e.k === 'slam') {
             sfx.slam();
             this.haptic(ImpactStyle.Heavy);

@@ -16,6 +16,8 @@ export const CLASS_BG: Record<string, string> = {
   warrior: 'linear-gradient(180deg,#ff8a6a,#c8412f)',
   mage: 'linear-gradient(180deg,#b08aff,#6a3ad8)',
   archer: 'linear-gradient(180deg,#7ae07a,#2f9a3f)',
+  hunter: 'linear-gradient(180deg,#4a3a5a,#1a1622)',
+  summoner: 'linear-gradient(180deg,#6ae0e8,#1f7f8a)',
 };
 
 export const RARITY_CSS: Record<string, string> = {

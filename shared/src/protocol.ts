@@ -1,4 +1,4 @@
-import type { Equip, HeroClass, Item, MobKind, Phase, ProjKind, Stats, ZoneKind } from './types';
+import type { Equip, HeroClass, Item, MinionKind, MobKind, Phase, ProjKind, Stats, ZoneKind } from './types';
 
 /** Сообщения клиент → сервер (внутри комнаты). */
 export type GameMsg =
@@ -38,7 +38,7 @@ export interface PlayerSnap {
   rs: number;
   cd: number[];
   cdm: number[];
-  /** Флаги состояния: s — оглушён, f — заморожен, w — вихрь, i — неуязвим, c — боевой клич, h — ускорение, r — ярость, d — рывок, l — замедлен, x — зритель. */
+  /** Флаги состояния: s — оглушён, f — заморожен, w — вихрь, i — неуязвим, c — боевой клич, h — ускорение, r — ярость, d — рывок, l — замедлен, x — зритель, m — демоническая форма. */
   st: string;
   sp: number;
   rdy: boolean;
@@ -64,6 +64,20 @@ export interface MobSnap {
   st: string;
 }
 
+/** Призванный помощник. */
+export interface MinionSnap {
+  id: number;
+  k: MinionKind;
+  o: string;
+  x: number;
+  z: number;
+  r: number;
+  hp: number;
+  mhp: number;
+  /** Сколько секунд осталось жить. */
+  l: number;
+}
+
 export interface ProjSnap {
   id: number;
   k: ProjKind;
@@ -85,12 +99,15 @@ export interface ZoneSnap {
 }
 
 export type GameEvent =
-  | { e: 'dmg'; x: number; z: number; v: number; c: boolean; tp: 'm' | 'p'; id: string | number }
+  | { e: 'dmg'; x: number; z: number; v: number; c: boolean; tp: 'm' | 'p' | 'n'; id: string | number }
   | { e: 'heal'; x: number; z: number; v: number }
   | { e: 'gold'; pid: string; v: number; x: number; z: number; why?: string }
   | { e: 'cast'; pid: string; s: number; r: number; x?: number; z?: number }
   | { e: 'fx'; k: string; x: number; z: number; r?: number; rot?: number; pid?: string }
   | { e: 'matk'; id: number }
+  | { e: 'natk'; id: number }
+  | { e: 'summon'; id: number; k: MinionKind; x: number; z: number }
+  | { e: 'ndie'; id: number; x: number; z: number }
   | { e: 'mdie'; id: number; k: MobKind; by: string | null; x: number; z: number }
   | { e: 'pdie'; pid: string }
   | { e: 'respawn'; pid: string }
@@ -116,6 +133,8 @@ export interface Snapshot {
   mt: number;
   P: PlayerSnap[];
   M: MobSnap[];
+  /** Призванные помощники. */
+  S: MinionSnap[];
   R: ProjSnap[];
   Z: ZoneSnap[];
   E: GameEvent[];

@@ -263,7 +263,7 @@ export class LobbyScreen {
       const card = el(`
         <div class="cls-card ${me.c === c ? 'sel' : ''} ${taken ? 'taken' : ''}" style="--cc:${CLASSES[c].color}">
           <div class="ci">${classIcon(c)}</div>
-          <div class="cn stroke">${CLASSES[c].name}</div>
+          <div class="cn stroke">${CLASSES[c].name.split(' ')[0]}</div>
           <div class="owner">${owner ? esc(owner.n) : 'свободен'}</div>
         </div>`);
       card.addEventListener('click', () => {

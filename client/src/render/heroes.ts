@@ -17,7 +17,15 @@ export interface HeroAnimInput {
   dash: boolean;
   invuln: boolean;
   buff: boolean;
+  demon?: boolean;
 }
+
+const LEG_COL: Record<HeroClass, number> = { warrior: 0x5a4636, mage: 0x3a2a5a, archer: 0x5a4636, hunter: 0x2c2733, summoner: 0x3b5552 };
+const TORSO_COL: Record<HeroClass, number> = { warrior: 0xa9b4bf, mage: 0x6b3fc4, archer: 0x3f8f3a, hunter: 0x3b2f2a, summoner: 0x2a8f9a };
+const SLEEVE_COL: Record<HeroClass, number> = { warrior: 0x8e9aa6, mage: 0x6b3fc4, archer: 0x3f8f3a, hunter: 0xe8b890, summoner: 0x2a8f9a };
+const DEFAULT_WEAPON: Record<HeroClass, string> = { warrior: 'sword', mage: 'staff', archer: 'bow', hunter: 'glaives', summoner: 'totemstaff' };
+const FEL = 0x5dff8a;
+const SPIRIT = 0x6ff0ff;
 
 const HELM_COLORS: Record<string, Record<Rarity, number>> = {
   helm: { common: 0x9aa6b2, rare: 0x5b8fd0, epic: 0x8a5ac7, legendary: 0xf0c04a },
@@ -58,6 +66,10 @@ export class HeroModel {
   private bootR!: THREE.Mesh;
   private headgear = new THREE.Group();
   private weapon = new THREE.Group();
+  private weapon2: THREE.Group | null = null;
+  private demonG = new THREE.Group();
+  private wings: THREE.Group[] = [];
+  private spiritOrbs: THREE.Group | null = null;
   private built: Built = { parts: [], glow: [], spin: [] };
   private sleeves: THREE.Mesh[] = [];
   private baseSleeveColor = 0;
@@ -100,7 +112,7 @@ export class HeroModel {
     ] as const) {
       leg.position.x = x;
       this.hips.add(leg);
-      const l = part(G.capsule(0.1, 0.22), cls === 'mage' ? 0x3a2a5a : 0x5a4636, { pos: [0, -0.25, 0], outline: 0.025 });
+      const l = part(G.capsule(0.1, 0.22), LEG_COL[cls], { pos: [0, -0.25, 0], outline: 0.025 });
       leg.add(l);
       const boot = part(G.sphere(0.14, 12, 8), 0x6a4428, { pos: [0, -0.47, 0.04], scale: [1, 0.7, 1.35], outline: 0.025 });
       leg.add(boot);
@@ -109,7 +121,7 @@ export class HeroModel {
     }
 
     // Торс
-    this.baseTorsoColor = cls === 'warrior' ? 0xa9b4bf : cls === 'mage' ? 0x6b3fc4 : 0x3f8f3a;
+    this.baseTorsoColor = TORSO_COL[cls];
     this.torso = part(G.capsule(0.3, 0.26), this.baseTorsoColor, { pos: [0, 0.32, 0], scale: [1, 1, 0.85], outline: 0.035 });
     this.torsoG.add(this.torso);
     const belt = part(G.cyl(0.31, 0.31, 0.09, 16), 0x5a3a22, { pos: [0, 0.12, 0], scale: [1, 1, 0.86], outline: 0.02 });
@@ -123,12 +135,12 @@ export class HeroModel {
     ] as const) {
       arm.position.set(x, 0.6, 0);
       this.torsoG.add(arm);
-      const sleeve = cls === 'mage' ? 0x6b3fc4 : cls === 'warrior' ? 0x8e9aa6 : 0x3f8f3a;
+      const sleeve = SLEEVE_COL[cls];
       this.baseSleeveColor = sleeve;
       const sl = part(G.capsule(0.085, 0.22), sleeve, { pos: [0, -0.2, 0], outline: 0.022 });
       this.sleeves.push(sl);
       arm.add(sl);
-      const h = part(G.sphere(0.1, 12, 8), cls === 'warrior' ? 0x7d8894 : SKIN, { pos: [0, -0.42, 0], outline: 0.022 });
+      const h = part(G.sphere(0.1, 12, 8), cls === 'warrior' ? 0x7d8894 : cls === 'hunter' ? 0x2c2733 : SKIN, { pos: [0, -0.42, 0], outline: 0.022 });
       arm.add(h);
       hand.position.set(0, -0.42, 0);
       arm.add(hand);
@@ -141,9 +153,10 @@ export class HeroModel {
     const headM = part(G.sphere(0.4, 20, 16), SKIN, { outline: 0.035 });
     headM.scale.set(1.05, 0.97, 1);
     this.head.add(headM);
-    this.eyes = [eye(-0.14), eye(0.14)];
+    // У охотника глаза скрыты повязкой
+    this.eyes = cls === 'hunter' ? [] : [eye(-0.14), eye(0.14)];
     for (const e of this.eyes) e.userData.anim = true;
-    this.head.add(...this.eyes);
+    if (this.eyes.length) this.head.add(...this.eyes);
     const cheek = toon(0xff9a8a, { transparent: true, opacity: 0.6 });
     for (const x of [-0.23, 0.23]) {
       const c = new THREE.Mesh(G.sphere(0.06, 8, 6), cheek);
@@ -226,6 +239,10 @@ export class HeroModel {
       this.head.add(mous);
       // Брови
       for (const x of [-0.14, 0.14]) this.head.add(part(G.box(0.14, 0.035, 0.04), 0xf3f1ec, { pos: [x, 0.16, 0.36], rot: [0, 0, x * -1.2], outline: false }));
+    } else if (cls === 'hunter') {
+      this.buildHunter();
+    } else if (cls === 'summoner') {
+      this.buildSummoner();
     } else {
       // Плащ лучника и колчан
       const cape = part(G.box(0.6, 0.85, 0.05), 0x2f6b2c, { pos: [0, 0.22, -0.3], rot: [0.14, 0, 0], outline: 0.025 });
@@ -253,6 +270,150 @@ export class HeroModel {
     }
   }
 
+  /** Охотник на демонов: повязка на глазах, рожки, татуировки скверны, демонические крылья. */
+  private buildHunter() {
+    const T = this.torsoG;
+    const H = this.head;
+    // Повязка на глазах со светящимися прорезями
+    H.add(part(G.torus(0.395, 0.07, Math.PI * 2, 6, 28), 0x1c1820, { pos: [0, 0.02, 0], rot: [Math.PI / 2 - 0.08, 0, 0], scale: [1.03, 1, 1], outline: 0.02 }));
+    for (const x of [-0.14, 0.14]) {
+      const slit = new THREE.Mesh(G.box(0.13, 0.03, 0.03), toon(FEL, { emissive: FEL, emissiveIntensity: 1 }));
+      slit.position.set(x, 0.02, 0.4);
+      slit.rotation.y = x * 0.9;
+      H.add(slit);
+      this.glowParts.push(slit);
+    }
+    // Концы повязки развеваются сзади
+    for (const s of [-1, 1]) H.add(part(G.box(0.07, 0.3, 0.02), 0x1c1820, { pos: [s * 0.06, -0.12, -0.42], rot: [0.4, 0, s * 0.25], outline: 0.012 }));
+    // Брови хмурые
+    for (const x of [-0.14, 0.14]) H.add(part(G.box(0.15, 0.035, 0.04), 0x1a1210, { pos: [x, 0.15, 0.37], rot: [0, 0, x * 2], outline: false }));
+    // Татуировки скверны на груди
+    for (const s of [-1, 1]) {
+      const tat = new THREE.Mesh(G.box(0.03, 0.22, 0.02), toon(FEL, { emissive: FEL, emissiveIntensity: 0.8 }));
+      tat.position.set(s * 0.12, 0.45, 0.27);
+      tat.rotation.z = s * 0.35;
+      T.add(tat);
+      this.glowParts.push(tat);
+    }
+    // Кожаный жилет с ремнями и шипастыми наплечниками
+    for (const a of [-0.55, 0.55]) T.add(part(G.box(0.06, 0.6, 0.03), 0x1c1820, { pos: [0, 0.38, 0.28], rot: [0, 0, a], outline: 0.01 }));
+    for (const x of [-0.37, 0.37]) {
+      const pad = part(G.halfSphere(0.16), 0x2c2733, { pos: [x, 0.62, 0], scale: [1.1, 0.75, 1], outline: 0.022 });
+      T.add(pad);
+      this.trimMeshes.push(pad);
+      for (const z of [-0.07, 0.07]) {
+        const spike = part(G.cone(0.04, 0.16, 5), 0xd8d2c8, { pos: [x * 1.12, 0.72, z], rot: [0, 0, -Math.sign(x) * 0.6], outline: 0.012 });
+        T.add(spike);
+        this.trimMeshes.push(spike);
+      }
+    }
+    // Рваная набедренная повязка
+    for (const a of [-0.5, 0, 0.5]) T.add(part(G.box(0.15, 0.3, 0.03), 0x2c2733, { pos: [Math.sin(a) * 0.3, -0.08, Math.cos(a) * 0.27], rot: [0.12, a, 0], outline: 0.012 }));
+    // Светящиеся полосы татуировок на руках
+    for (const arm of [this.armL, this.armR]) {
+      for (const y of [-0.12, -0.22]) {
+        const band = new THREE.Mesh(G.torus(0.088, 0.012, Math.PI * 2, 4, 14), toon(FEL, { emissive: FEL, emissiveIntensity: 0.8 }));
+        band.position.y = y;
+        band.rotation.x = Math.PI / 2;
+        arm.add(band);
+      }
+      arm.add(part(G.cyl(0.1, 0.09, 0.13, 10), 0x1c1820, { pos: [0, -0.33, 0], outline: 0.012 }));
+    }
+    // Демонические крылья и пламя скверны — видны в демонической форме
+    this.demonG.userData.anim = true;
+    // Крыло летучей мыши: перепонка-силуэт и костяные пальцы
+    const shape = new THREE.Shape();
+    const pts: [number, number][] = [[0, 0.05], [0.35, 0.32], [0.75, 0.52], [1.05, 0.42], [0.92, 0.1], [0.98, -0.25], [0.72, -0.08], [0.6, -0.42], [0.42, -0.14], [0.22, -0.38], [0.12, -0.08]];
+    shape.moveTo(...pts[0]);
+    for (const p of pts.slice(1)) shape.lineTo(...p);
+    const membGeo = new THREE.ShapeGeometry(shape);
+    const membMat = toon(0x4a1a5a, { emissive: 0x13602e, emissiveIntensity: 0.35, side: THREE.DoubleSide });
+    for (const s of [-1, 1]) {
+      const wing = new THREE.Group();
+      wing.userData.anim = true;
+      const wm = new THREE.Group();
+      const memb = new THREE.Mesh(membGeo, membMat);
+      memb.userData.noBake = true;
+      wm.add(memb);
+      for (const [x, y] of [[1.05, 0.42], [0.98, -0.25], [0.6, -0.42], [0.22, -0.38]] as const) {
+        const len = Math.hypot(x, y);
+        const bone = part(G.cyl(0.018, 0.03, len, 5), 0x1a1220, { outline: 0.01 });
+        bone.position.set(x / 2, y / 2, 0.01);
+        bone.rotation.z = Math.atan2(y, x) - Math.PI / 2;
+        wm.add(bone);
+      }
+      wm.add(part(G.cone(0.035, 0.12, 5), 0xd8d2c8, { pos: [0.78, 0.55, 0.01], rot: [0, 0, -0.3], outline: 0.008 }));
+      wm.scale.set(s * 1.25, 1.25, 1);
+      wing.add(wm);
+      wing.position.set(s * 0.12, 1.05, -0.3);
+      this.wings.push(wing);
+      this.demonG.add(wing);
+    }
+    const flame = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.95, 32).rotateX(-Math.PI / 2), glow(FEL, 0.55));
+    flame.position.y = 0.06;
+    this.demonG.add(flame);
+    for (const s of [-1, 1]) {
+      const horn = part(G.cone(0.07, 0.38, 8), 0x1a1210, { pos: [s * 0.25, 1.38, 0.05], rot: [-0.5, 0, -s * 0.35], outline: 0.015 });
+      this.demonG.add(horn);
+    }
+    this.demonG.visible = false;
+    this.body.add(this.demonG);
+  }
+
+  /** Призыватель: перья, раскраска, меховая накидка, бусы из клыков, парящие огоньки духов. */
+  private buildSummoner() {
+    const T = this.torsoG;
+    const H = this.head;
+    // Юбка-тотем с узором
+    const skirt = part(G.cyl(0.31, 0.47, 0.5, 16), 0x2a8f9a, { pos: [0, -0.13, 0], outline: 0.03 });
+    T.add(skirt);
+    this.trimMeshes.push(skirt);
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      T.add(part(G.box(0.08, 0.08, 0.02), i % 2 ? 0xd9a441 : 0xe94b3c, { pos: [Math.sin(a) * 0.45, -0.3, Math.cos(a) * 0.45], rot: [0.25, a, Math.PI / 4], outline: false }));
+    }
+    T.add(part(G.torus(0.46, 0.03, Math.PI * 2, 5, 28), 0xd9a441, { pos: [0, -0.37, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+    // Меховая накидка
+    for (let i = 0; i < 9; i++) {
+      const a = (i / 9) * Math.PI * 2;
+      T.add(part(G.ico(0.11, 1), 0xe8dcc8, { pos: [Math.sin(a) * 0.25, 0.7, Math.cos(a) * 0.2], outline: 0.012 }));
+    }
+    // Бусы из клыков
+    for (let i = 0; i < 5; i++) {
+      const a = -0.7 + i * 0.35;
+      T.add(part(G.cone(0.025, 0.09, 5), 0xfff6e0, { pos: [Math.sin(a) * 0.22, 0.52 - Math.cos(a * 1.4) * 0.04, 0.24], rot: [Math.PI, 0, a * 0.3], outline: 0.008 }));
+    }
+    const amulet = new THREE.Mesh(G.ico(0.06, 0), toon(SPIRIT, { emissive: SPIRIT, emissiveIntensity: 0.9 }));
+    amulet.position.set(0, 0.44, 0.29);
+    T.add(amulet);
+    this.glowParts.push(amulet);
+    // Раскраска на щеках и брови
+    for (const x of [-0.24, 0.24]) {
+      for (const y of [-0.06, -0.12]) H.add(part(G.box(0.1, 0.022, 0.02), SPIRIT, { pos: [x, y, 0.3], rot: [0, x * 1.6, 0], outline: false }));
+      H.add(part(G.box(0.13, 0.032, 0.04), 0x2a1a10, { pos: [x * 0.6, 0.16, 0.36], rot: [0, 0, -x * 0.8], outline: false }));
+    }
+    // Тёмные волосы с косичками
+    H.add(part(G.sphere(0.41, 18, 12), 0x2a1a10, { pos: [0, 0.07, -0.06], scale: [1.03, 0.95, 1], outline: 0.025 }));
+    for (const s of [-1, 1]) {
+      H.add(part(G.capsule(0.05, 0.32), 0x2a1a10, { pos: [s * 0.36, -0.3, -0.02], outline: 0.015 }));
+      H.add(part(G.sphere(0.04, 6, 4), SPIRIT, { pos: [s * 0.36, -0.52, -0.02], outline: false }));
+    }
+    // Огоньки-духи, кружащие вокруг призывателя
+    const orbs = new THREE.Group();
+    orbs.userData.anim = true;
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      const o = new THREE.Mesh(G.sphere(0.07, 10, 8), toon(SPIRIT, { emissive: SPIRIT, emissiveIntensity: 1 }));
+      o.position.set(Math.cos(a) * 0.75, 0, Math.sin(a) * 0.75);
+      const h = new THREE.Mesh(G.sphere(0.15, 10, 8), glow(SPIRIT, 0.3));
+      o.add(h);
+      orbs.add(o);
+    }
+    orbs.position.y = 1.25;
+    this.spiritOrbs = orbs;
+    this.root.add(orbs);
+  }
+
   private buildHeadgear(it: Item | null) {
     this.headgear.clear();
     const r = it?.rarity ?? 'common';
@@ -271,6 +432,24 @@ export class HeroModel {
         const plume = part(G.capsule(0.07, 0.3), RARITY_HEX[r], { pos: [0, 0.48, -0.1], rot: [-0.7, 0, 0], outline: 0.02 });
         this.headgear.add(plume);
       }
+    } else if (this.cls === 'hunter') {
+      // Тёмные волосы, изогнутые рога и ирокез
+      this.headgear.add(part(G.sphere(0.415, 18, 12), 0x1a1612, { pos: [0, 0.08, -0.07], scale: [1.03, 0.92, 1], outline: 0.025 }));
+      for (const s of [-1, 1]) {
+        this.headgear.add(part(G.cone(0.1, 0.34, 8), 0x3a2e3e, { pos: [s * 0.3, 0.38, 0.02], rot: [-0.25, 0, -s * 0.7], outline: 0.018 }));
+        this.headgear.add(part(G.cone(0.065, 0.24, 6), 0x3a2e3e, { pos: [s * 0.44, 0.56, -0.08], rot: [-0.9, 0, -s * 0.15], outline: 0.014 }));
+      }
+      for (let i = 0; i < 5; i++) this.headgear.add(part(G.cone(0.08, 0.24, 5), 0x1a1612, { pos: [0, 0.42 - i * 0.03, 0.18 - i * 0.13], rot: [-0.4 - i * 0.3, 0, 0], outline: 0.012 }));
+    } else if (this.cls === 'summoner') {
+      // Головная повязка с перьями
+      this.headgear.add(part(G.torus(0.4, 0.045, Math.PI * 2, 6, 24), 0xc9343a, { pos: [0, 0.13, 0], rot: [Math.PI / 2 - 0.1, 0, 0], outline: 0.015 }));
+      const fc = [0xffffff, 0xd9a441, SPIRIT, 0xd9a441, 0xffffff];
+      for (let i = 0; i < 5; i++) {
+        const a = -0.6 + i * 0.3;
+        const f = part(G.capsule(0.045, 0.3), fc[i], { pos: [Math.sin(a) * 0.32, 0.42, -Math.cos(a) * 0.25], rot: [-0.35, 0, -a * 0.8], scale: [1, 1, 0.4], outline: 0.012 });
+        this.headgear.add(f);
+      }
+      this.headgear.add(part(G.sphere(0.05, 8, 6), SPIRIT, { pos: [0, 0.16, 0.4], outline: 0.01 }));
     } else if (this.cls === 'mage') {
       const col = it ? (it.tpl === 'helm' ? HELM_COLORS.helm[r] : HELM_COLORS.hood[r]) : 0x4e2a9a;
       const brim = part(G.cyl(0.62, 0.62, 0.05, 24), col, { pos: [0, 0.22, 0], outline: 0.025 });
@@ -324,6 +503,8 @@ export class HeroModel {
     // Снимаем всё, что было надето
     for (const o of this.built.parts) o.removeFromParent();
     this.weapon.removeFromParent();
+    this.weapon2?.removeFromParent();
+    this.weapon2 = null;
     this.built = { parts: [], glow: [], spin: [] };
     const rig: Rig = { torso: this.torsoG, head: this.head, armL: this.armL, armR: this.armR, legL: this.legL, legR: this.legR };
 
@@ -355,10 +536,26 @@ export class HeroModel {
 
     // Оружие
     const wIt = eq?.weapon ?? null;
-    const tpl = wIt?.tpl ?? (this.cls === 'warrior' ? 'sword' : this.cls === 'mage' ? 'staff' : 'bow');
+    const tpl = wIt?.tpl ?? DEFAULT_WEAPON[this.cls];
     this.weaponTpl = tpl;
     this.weapon = buildWeapon(tpl, wIt?.rarity ?? 'common', this.built);
-    if (this.cls === 'archer') {
+    if (this.cls === 'hunter') {
+      // Парное оружие: по клинку в каждой руке
+      this.weapon2 = buildWeapon(tpl, wIt?.rarity ?? 'common', this.built);
+      for (const [w, hand, s] of [
+        [this.weapon, this.handR, 1],
+        [this.weapon2, this.handL, -1],
+      ] as const) {
+        hand.add(w);
+        w.rotation.set(Math.PI / 2 - 0.35, 0, 0);
+        w.scale.set(s, 1, 1);
+        w.position.set(0, 0, 0.02);
+      }
+    } else if (this.cls === 'summoner' && tpl === 'tome') {
+      this.handR.add(this.weapon);
+      this.weapon.rotation.set(0.3, 0, 0);
+      this.weapon.position.set(0, -0.05, 0.08);
+    } else if (this.cls === 'archer') {
       this.handL.add(this.weapon);
       this.weapon.rotation.set(tpl === 'crossbow' ? 0 : Math.PI / 2, 0, 0);
     } else {
@@ -372,7 +569,7 @@ export class HeroModel {
 
     // Фактура ткани на плащах, мантиях и шляпах, дерево на щите
     const cloth = clothTex();
-    texturize(this.root, { 0xc8412f: cloth, 0x2f6b2c: cloth, 0x6b3fc4: cloth, 0x3f8f3a: cloth, 0x4e2a9a: cloth, 0x5a4636: cloth, 0x3a2a5a: cloth, 0xb5452f: woodTex() }, (hex, map) => toon(hex, { map }));
+    texturize(this.root, { 0x2a8f9a: cloth, 0x3b2f2a: cloth, 0x2c2733: cloth, 0x3b5552: cloth, 0xc8412f: cloth, 0x2f6b2c: cloth, 0x6b3fc4: cloth, 0x3f8f3a: cloth, 0x4e2a9a: cloth, 0x5a4636: cloth, 0x3a2a5a: cloth, 0xb5452f: woodTex() }, (hex, map) => toon(hex, { map }));
     bake(this.body);
 
     const legendaryCount = eq ? Object.values(eq).filter((i) => i?.rarity === 'legendary').length : 0;
@@ -388,6 +585,8 @@ export class HeroModel {
       warrior: [0.32, 0.4, 0.3, 0.7],
       mage: [0.3, 0.4, 0.45, 0.8],
       archer: [0.28, 0.35, 0.35, 0.6],
+      hunter: [0.22, 0.25, 0.32, 0.7],
+      summoner: [0.3, 0.55, 0.6, 0.45],
     };
     this.castDur = durs[this.cls][s];
   }
@@ -436,8 +635,14 @@ export class HeroModel {
     if (this.cls === 'warrior') {
       armRx = Math.min(armRx, 0) - 0.35;
       armLx = -0.5 + armLx * 0.3;
-    } else if (this.cls === 'mage') {
+    } else if (this.cls === 'mage' || this.cls === 'summoner') {
       armRx = -0.25 + swing * 0.3;
+    } else if (this.cls === 'hunter') {
+      // Клинки наготове
+      armRx = -0.45 + swing * 0.4;
+      armLx = -0.45 - swing * 0.4;
+      armLz = -0.3;
+      armRz = 0.3;
     } else {
       armLx = -0.3 + armLx * 0.5;
     }
@@ -476,6 +681,47 @@ export class HeroModel {
           armRx = armLx = -2.9 * e;
           headTilt = -0.5 * e;
         }
+      } else if (this.cls === 'hunter') {
+        if (this.castS === 0) {
+          // Удар правым, затем левым клинком
+          const k1 = Math.min(1, k * 2);
+          const k2 = Math.max(0, k * 2 - 1);
+          armRx = -2.3 + (1 - Math.pow(1 - k1, 3)) * 2.5;
+          armRz = 0.6 - k1 * 0.9;
+          armLx = k < 0.5 ? -1.2 : -2.3 + (1 - Math.pow(1 - k2, 3)) * 2.5;
+          armLz = k < 0.5 ? -0.6 : -0.6 + k2 * 0.9;
+          torsoYaw = k < 0.5 ? 0.5 - k1 : -0.5 + k2;
+        } else if (this.castS === 1) {
+          armLx = armRx = 0.9;
+          armLz = -0.4;
+          armRz = 0.4;
+          lean = 0.6 * e;
+        } else if (this.castS === 2) {
+          armRx = -1.4;
+          armRz = 1.4 - ease * 2.2;
+          torsoYaw = 0.8 - ease * 1.4;
+        } else {
+          armLz = -1.8 * e;
+          armRz = 1.8 * e;
+          armLx = armRx = -0.4 * e;
+          headTilt = -0.5 * e;
+          bodyY += 0.2 * e;
+        }
+      } else if (this.cls === 'summoner') {
+        if (this.castS === 0) {
+          armRx = -1.7 * e - 0.2;
+          lean = -0.08 * e;
+        } else if (this.castS === 1 || this.castS === 2) {
+          armLx = armRx = -2.6 * e;
+          armLz = -0.4 * e;
+          armRz = 0.4 * e;
+          headTilt = -0.35 * e;
+          bodyY += 0.15 * e;
+        } else {
+          armRx = -1.5 * e;
+          armLx = -0.8 * e;
+          lean = 0.15 * e;
+        }
       } else {
         if (this.castS === 0 || this.castS === 1) {
           armLx = -1.55;
@@ -495,7 +741,12 @@ export class HeroModel {
       armRz = 1.4;
       armRx = -0.2;
     } else this.whirlA = 0;
-    if (st.dash) lean = this.cls === 'warrior' ? 0.55 : 0;
+    if (st.dash) lean = this.cls === 'warrior' ? 0.55 : this.cls === 'hunter' ? 0.7 : 0;
+    if (this.cls === 'hunter' && st.dash) {
+      armLx = armRx = 1.0;
+      armLz = -0.5;
+      armRz = 0.5;
+    }
     if (this.cls === 'archer' && st.dash) {
       // Кувырок
       bodyRoll = (this.castT / 0.3) * Math.PI * 2;
@@ -543,6 +794,20 @@ export class HeroModel {
       this.aura.scale.setScalar(1 + Math.sin(t * 3) * 0.06);
     }
     for (const g of this.glowParts) g.scale.setScalar(1 + Math.sin(t * 4 + g.id) * 0.15);
+    // Демоническая форма охотника
+    const demon = !!st.demon && !st.dead;
+    this.demonG.visible = demon;
+    if (demon) {
+      const flap = Math.sin(t * 7) * 0.35;
+      if (this.wings[0]) this.wings[0].rotation.y = 0.4 + flap;
+      if (this.wings[1]) this.wings[1].rotation.y = -0.4 - flap;
+      this.demonG.children[2]?.scale.setScalar(1 + Math.sin(t * 9) * 0.08);
+    }
+    if (this.spiritOrbs) {
+      this.spiritOrbs.visible = !st.dead;
+      this.spiritOrbs.rotation.y += dt * 1.6;
+      this.spiritOrbs.children.forEach((o, i) => (o.position.y = Math.sin(t * 2.5 + i * 2.1) * 0.15));
+    }
     for (const sp of this.spinParts) {
       if (sp.userData.spinAxis === 'z') sp.rotation.z += dt * 2.5;
       else sp.rotation.y += dt * 1.8;
@@ -554,10 +819,15 @@ export class HeroModel {
     return (this.cls === 'archer' ? this.handL : this.handR).getWorldPosition(target);
   }
 
+  /** Вторая рука — для эффектов парного оружия. */
+  offHandWorld(target: THREE.Vector3): THREE.Vector3 {
+    return this.handL.getWorldPosition(target);
+  }
+
   dispose() {
     this.root.removeFromParent();
   }
 }
 
-export const HERO_COLORS: Record<HeroClass, number> = { warrior: 0xe0533d, mage: 0x8a5cff, archer: 0x3dbb5a };
+export const HERO_COLORS: Record<HeroClass, number> = { warrior: 0xe0533d, mage: 0x8a5cff, archer: 0x3dbb5a, hunter: 0x2fd07a, summoner: 0x2ab8c8 };
 export { DARK };

@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MOBS, type GameEvent, type HeroClass, type MobSnap, type Phase } from '@game/shared';
+import { MOBS, type GameEvent, type HeroClass, type MinionSnap, type MobSnap, type Phase } from '@game/shared';
 import type { ClientState, PlayerInfo } from '../net/state';
 import { ArenaStage } from './arena';
 import { HpBar, nameSprite } from './bars';
@@ -7,6 +7,7 @@ import { Effects, ProjView, ZoneView } from './effects';
 import type { Stage } from './env';
 import { HeroModel } from './heroes';
 import { IslandStage } from './island';
+import { MinionModel } from './minions';
 import { MobModel } from './mobs';
 import { Particles } from './particles';
 import { TavernStage } from './tavern';
@@ -80,6 +81,33 @@ class MobView {
   }
 }
 
+/** Помощник призывателя. */
+class MinionView {
+  model: MinionModel;
+  bar: HpBar;
+  fx = 0;
+  fz = 0;
+  tx = 0;
+  tz = 0;
+  rot = 0;
+  trot = 0;
+  t0 = 0;
+  info: MinionSnap;
+  lastHp: number;
+  constructor(n: MinionSnap) {
+    this.model = new MinionModel(n.k);
+    this.bar = new HpBar(n.k === 'golem' ? 1.4 : 0.9, 0x6ff0ff, 0.11);
+    this.bar.group.position.y = this.model.height + 0.35;
+    this.model.root.add(this.bar.group);
+    this.info = n;
+    this.lastHp = n.hp;
+    this.fx = this.tx = n.x;
+    this.fz = this.tz = n.z;
+    this.rot = this.trot = n.r;
+    this.model.root.position.set(n.x, 0, n.z);
+  }
+}
+
 export interface AimState {
   active: boolean;
   aim: 'dir' | 'point' | 'self';
@@ -108,6 +136,8 @@ export class Engine {
   private dying: MobView[] = [];
   /** Пул моделей мобов по видам — без рывков при появлении новой волны. */
   private mobPool = new Map<string, MobView[]>();
+  minions = new Map<number, MinionView>();
+  private fading: MinionView[] = [];
   projs = new Map<number, ProjView>();
   zones = new Map<number, ZoneView>();
   myId = '';
@@ -211,6 +241,9 @@ export class Engine {
     this.projs.clear();
     for (const z of this.zones.values()) z.obj.removeFromParent();
     this.zones.clear();
+    for (const n of [...this.minions.values(), ...this.fading]) n.model.root.removeFromParent();
+    this.minions.clear();
+    this.fading = [];
     for (const d of this.dying) {
       d.model.root.removeFromParent();
       this.releaseMob(d);
@@ -368,6 +401,39 @@ export class Engine {
         this.dying.push(v);
       }
     }
+    // Помощники
+    const nseen = new Set<number>();
+    for (const n of s.S ?? []) {
+      nseen.add(n.id);
+      let v = this.minions.get(n.id);
+      if (!v) {
+        v = new MinionView(n);
+        this.minions.set(n.id, v);
+        this.stage.scene.add(v.model.root);
+      }
+      v.fx = v.model.root.position.x;
+      v.fz = v.model.root.position.z;
+      v.tx = n.x;
+      v.tz = n.z;
+      v.trot = n.r;
+      v.t0 = now;
+      if (n.hp < v.lastHp) v.model.pop();
+      v.lastHp = n.hp;
+      v.info = n;
+      const mine = n.o === this.myId;
+      const enemy = st.phase.startsWith('duel') && !mine;
+      v.bar.setColor(enemy ? 0xe8463a : mine ? 0x6ff0ff : 0x4aa8ff);
+      v.bar.set(n.hp / Math.max(1, n.mhp));
+      v.bar.group.visible = n.k !== 'totem' && n.hp < n.mhp;
+    }
+    for (const [id, v] of this.minions) {
+      if (!nseen.has(id)) {
+        this.minions.delete(id);
+        v.model.dying = 0.001;
+        v.bar.group.visible = false;
+        this.fading.push(v);
+      }
+    }
     // Снаряды
     const pseen = new Set<number>();
     for (const p of s.R) {
@@ -466,6 +532,19 @@ export class Engine {
             case 'roll':
               this.effects.dust(e.x, e.z, 8);
               break;
+            case 'twin':
+              this.effects.twin(e.x, e.z, e.rot ?? 0);
+              break;
+            case 'shadow':
+              this.effects.shadowDash(e.x, e.z, e.rot ?? 0);
+              break;
+            case 'demon':
+              this.effects.demon(e.x, e.z, e.r ?? 3);
+              if (this.arenaStage) this.arenaStage.excitement = 1;
+              break;
+            case 'gslam':
+              this.effects.golemSlam(e.x, e.z, e.r ?? 2.2);
+              break;
             case 'spawn':
               this.effects.spawn(e.x, e.z);
               break;
@@ -478,6 +557,15 @@ export class Engine {
         case 'matk':
           this.mobs.get(e.id)?.model.playAttack();
           break;
+        case 'natk':
+          this.minions.get(e.id)?.model.playAttack();
+          break;
+        case 'summon':
+          this.effects.summon(e.x, e.z, e.k !== 'wolf');
+          break;
+        case 'ndie':
+          this.effects.unsummon(e.x, e.z);
+          break;
         case 'hit':
           this.effects.hit(e.x, e.z, e.k);
           break;
@@ -485,6 +573,8 @@ export class Engine {
           if (e.tp === 'p') {
             this.heroes.get(String(e.id))?.model.pop();
             this.effects.blood(e.x, e.z, 'hero');
+          } else if (e.tp === 'n') {
+            this.minions.get(Number(e.id))?.model.pop();
           } else {
             const m = this.mobs.get(Number(e.id));
             if (m) this.effects.blood(e.x, e.z, m.info.k);
@@ -618,7 +708,9 @@ export class Engine {
         dash: p.st.includes('d'),
         invuln: p.st.includes('i'),
         buff: p.st.includes('c') || p.st.includes('r'),
+        demon: p.st.includes('m'),
       });
+      if (p.st.includes('m') && Math.random() < dt * 18) this.fx.glow({ x: root.position.x + (Math.random() - 0.5) * 0.8, y: 0.3 + Math.random() * 1.4, z: root.position.z + (Math.random() - 0.5) * 0.8, vy: 2, life: 0.5, size: 0.2, grow: -0.3, color: Math.random() < 0.7 ? 0x5dff8a : 0xb070ff });
       v.bar.update(dt);
       if (p.st.includes('h') && Math.random() < dt * 20) this.fx.glow({ x: root.position.x, y: 0.3 + Math.random(), z: root.position.z, vy: 1.5, life: 0.4, size: 0.15, color: 0x7aff9a });
       if (p.st.includes('l') && Math.random() < dt * 12) this.fx.glow({ x: root.position.x + (Math.random() - 0.5), y: 0.2, z: root.position.z + (Math.random() - 0.5), vy: 0.5, life: 0.5, size: 0.15, color: 0x7ac8ff });
@@ -654,6 +746,31 @@ export class Engine {
         v.model.root.removeFromParent();
         this.dying.splice(i, 1);
         this.releaseMob(v);
+      }
+    }
+    // Помощники
+    for (const v of this.minions.values()) {
+      const root = v.model.root;
+      root.position.set(v.fx + (v.tx - v.fx) * k, 0, v.fz + (v.tz - v.fz) * k);
+      v.rot = lerpAngle(v.rot, v.trot, Math.min(1, dt * 12));
+      root.rotation.y = v.rot;
+      v.bar.group.rotation.y = -v.rot;
+      const moving = Math.hypot(v.tx - v.fx, v.tz - v.fz) > 0.02 && now - v.t0 < 200;
+      v.model.update(dt, moving);
+      v.bar.update(dt);
+      if (v.info.k === 'wolf' && Math.random() < dt * 6) this.fx.glow({ x: root.position.x + (Math.random() - 0.5) * 0.5, y: 0.4 + Math.random() * 0.5, z: root.position.z + (Math.random() - 0.5) * 0.5, vy: 0.8, life: 0.6, size: 0.14, color: 0x6ff0ff });
+      if (v.info.k === 'totem' && Math.random() < dt * 5) {
+        const a = Math.random() * Math.PI * 2;
+        const d = Math.random() * 5;
+        this.fx.glow({ x: root.position.x + Math.cos(a) * d, y: 0.15, z: root.position.z + Math.sin(a) * d, vy: 1.4, life: 0.8, size: 0.16, color: 0x7aff9a });
+      }
+    }
+    for (let i = this.fading.length - 1; i >= 0; i--) {
+      const v = this.fading[i];
+      v.model.update(dt, false);
+      if (v.model.dying > 0.45) {
+        v.model.root.removeFromParent();
+        this.fading.splice(i, 1);
       }
     }
     for (const p of this.projs.values()) p.update(dt, now, this.fx);

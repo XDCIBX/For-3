@@ -49,7 +49,8 @@ export function updateBot(g: Game, p: Player, dt: number) {
   const dist = Math.hypot(dx, dz) || 0.01;
   const nx = dx / dist;
   const nz = dz / dist;
-  const desired = p.cls === 'warrior' ? 1.4 : p.cls === 'mage' ? 7.5 : 9;
+  const melee = p.cls === 'warrior' || p.cls === 'hunter';
+  const desired = melee ? 1.4 : p.cls === 'mage' || p.cls === 'summoner' ? 7.5 : 9;
 
   // Опасность рядом: сколько врагов близко
   const all = g.targetsFor(p);
@@ -60,11 +61,11 @@ export function updateBot(g: Game, p: Player, dt: number) {
   if (dist > desired + 1) {
     mx = nx;
     mz = nz;
-  } else if (dist < desired - 2 && p.cls !== 'warrior') {
+  } else if (dist < desired - 2 && !melee) {
     mx = -nx;
     mz = -nz;
   }
-  if (p.cls !== 'warrior' && dist < desired + 1.5) {
+  if (!melee && dist < desired + 1.5) {
     // кружим вокруг цели
     mx += -nz * p.ai.strafe * 0.7;
     mz += nx * p.ai.strafe * 0.7;
@@ -95,7 +96,7 @@ export function updateBot(g: Game, p: Player, dt: number) {
       else if (ready(0) && dist - target.rad < sk[0].range) cast(0);
       break;
     case 'mage':
-      if (ready(2) && near(4.5) >= 2) cast(2);
+      if (ready(2) && (near(4.5) >= 2 || (target.kind === 'p' && dist < 4.5))) cast(2);
       else if (ready(3) && dist < sk[3].range && (near(10) >= 3 || target.kind === 'p')) cast(3, aim(0.05), dist);
       else if (ready(1) && dist < sk[1].range) cast(1);
       else if (ready(0) && dist < sk[0].range) cast(0);
@@ -108,5 +109,19 @@ export function updateBot(g: Game, p: Player, dt: number) {
       else if (ready(1) && dist < sk[1].range) cast(1);
       else if (ready(0) && dist < sk[0].range) cast(0);
       break;
+    case 'hunter':
+      if (ready(3) && (near(5) >= 3 || target.kind === 'p')) cast(3);
+      else if (ready(1) && dist > 3 && dist < 7) cast(1);
+      else if (ready(2) && dist < sk[2].range) cast(2);
+      else if (ready(0) && dist - target.rad < sk[0].range) cast(0);
+      break;
+    case 'summoner': {
+      const mine = [...g.minions.values()].filter((n) => n.owner === p.id);
+      if (ready(1) && !mine.some((n) => n.kind === 'wolf')) cast(1);
+      else if (ready(2) && !mine.some((n) => n.kind === 'golem') && (near(10) >= 2 || target.kind === 'p')) cast(2);
+      else if (ready(3) && dist < sk[3].range && (near(9) >= 2 || target.kind === 'p')) cast(3, aim(0.05), dist);
+      else if (ready(0) && dist < sk[0].range) cast(0);
+      break;
+    }
   }
 }

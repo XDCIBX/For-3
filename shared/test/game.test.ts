@@ -151,3 +151,34 @@ test('полная симуляция с ботами до ПвП раунда �
   });
   assert.ok(sawDuel || g.phase === 'gameover', `phase=${g.phase} round=${g.round}`);
 });
+
+test('охотник бьёт двумя клинками, призыватель призывает помощников, которые атакуют мобов', () => {
+  const [g, a, b] = threePlayers();
+  g.handle(a.id, { t: 'pick', cls: 'hunter' });
+  g.handle(b.id, { t: 'pick', cls: 'summoner' });
+  assert.equal(a.cls, 'hunter');
+  assert.equal(b.cls, 'summoner');
+  g.startGame();
+  run(g, 3.2);
+  assert.equal(g.phase, 'battle');
+  for (const m of g.mobs.values()) m.hp = 0;
+  g.mobs.clear();
+  // Двойной удар: два попадания по одному мобу
+  const m = g.spawnMob('orc', a.x + 1.2, a.z);
+  m.spawnT = 0;
+  a.rot = Math.atan2(m.x - a.x, m.z - a.z);
+  g.castSkill(a, 0, (m.x - a.x) / 1.2, 0, 1.2);
+  const hits = g.snapshot().E.filter((e) => e.e === 'dmg' && e.tp === 'm' && e.id === m.id);
+  assert.equal(hits.length, 2);
+  // Волки появляются и наносят урон мобу
+  g.castSkill(b, 1, 1, 0, 0);
+  const wolves = [...g.minions.values()].filter((n) => n.owner === b.id && n.kind === 'wolf');
+  assert.equal(wolves.length, 2);
+  const target = g.spawnMob('troll', b.x + 3, b.z);
+  target.spawnT = 0;
+  target.dmg = 0;
+  const hp0 = target.hp;
+  run(g, 3);
+  assert.ok(target.hp < hp0, 'помощники атакуют мобов');
+  assert.ok(g.snapshot().S.length >= 2);
+});

@@ -1,5 +1,5 @@
-export type HeroClass = 'warrior' | 'mage' | 'archer';
-export const HERO_CLASSES: HeroClass[] = ['warrior', 'mage', 'archer'];
+export type HeroClass = 'warrior' | 'mage' | 'archer' | 'hunter' | 'summoner';
+export const HERO_CLASSES: HeroClass[] = ['warrior', 'mage', 'archer', 'hunter', 'summoner'];
 
 export type Slot = 'weapon' | 'helmet' | 'armor' | 'boots' | 'amulet' | 'ring';
 export const SLOTS: Slot[] = ['weapon', 'helmet', 'armor', 'boots', 'amulet', 'ring'];
@@ -46,5 +46,8 @@ export type Phase =
 
 export type MobKind = 'slime' | 'goblin' | 'skeleton' | 'orc' | 'troll';
 
-export type ProjKind = 'arrow' | 'bolt' | 'fireball' | 'earrow' | 'rock';
+export type ProjKind = 'arrow' | 'bolt' | 'fireball' | 'earrow' | 'rock' | 'glaive' | 'spirit';
+
+/** Призванные помощники призывателя. */
+export type MinionKind = 'wolf' | 'golem' | 'totem';
 export type ZoneKind = 'rain' | 'meteor' | 'burn' | 'slam';

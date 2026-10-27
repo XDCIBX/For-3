@@ -280,6 +280,84 @@ export class Effects {
     this.shake = Math.max(this.shake, 0.8);
   }
 
+  /** Двойной удар охотника: два перекрещённых серпа цвета скверны. */
+  twin(x: number, z: number, rot: number) {
+    for (const [c, size, op, off] of [
+      [0x5dff8a, 2.7, 0.7, 0.35],
+      [0xb070ff, 2.5, 0.6, -0.35],
+    ] as const) {
+      const mat = texMat(slashTex(), c, op);
+      const m = new THREE.Mesh(flatGeo, mat);
+      m.position.set(x, 0.9 + off * 0.3, z);
+      m.scale.setScalar(size / 2);
+      this.add(m, 0.2, (k) => {
+        m.rotation.y = rot - Math.PI / 2 + off * 2 * (0.5 - easeOut(k));
+        m.rotation.z = off * 0.6;
+        mat.opacity = op * (1 - k * k);
+      });
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = rot + (Math.random() - 0.5) * 1.2;
+      const d = 1.2 + Math.random() * 0.8;
+      this.fx.glow({ x: x + Math.sin(a) * d, y: 0.9 + Math.random() * 0.3, z: z + Math.cos(a) * d, vx: Math.sin(a) * 2.5, vy: 0.8, vz: Math.cos(a) * 2.5, life: 0.3, size: 0.15, color: Math.random() < 0.5 ? 0x5dff8a : 0xd0ffe0, drag: 3 });
+    }
+  }
+
+  /** Теневой рывок: тёмные полосы и зелёные искры. */
+  shadowDash(x: number, z: number, rot: number) {
+    this.ring(x, z, 1.3, 0x5dff8a, 0.3);
+    for (let i = 0; i < 4; i++) {
+      const mat = texMat(trailTex(), i % 2 ? 0x5dff8a : 0x7a3aff, 0.7);
+      const m = new THREE.Mesh(trailGeo, mat);
+      const side = (i - 1.5) * 0.28;
+      m.position.set(x + Math.cos(rot) * side, 0.6 + Math.abs(side), z - Math.sin(rot) * side);
+      m.rotation.y = rot;
+      m.scale.set(0.16, 1, 3 + Math.random() * 2);
+      this.add(m, 0.35, (k) => {
+        mat.opacity = 0.7 * (1 - k);
+        m.position.x += Math.sin(rot) * 0.5;
+        m.position.z += Math.cos(rot) * 0.5;
+      });
+    }
+    this.fx.burst(x, 0.8, z, { n: 14, speed: 1.5, up: 1, life: 0.7, size: 0.5, grow: 0.6, colors: [0x2a1a3a, 0x3a2a4a], drag: 2, alpha: 0.6 }, false);
+  }
+
+  /** Превращение в демона: столб пламени скверны. */
+  demon(x: number, z: number, r: number) {
+    this.ring(x, z, r, 0x5dff8a, 0.6, 0.1);
+    this.ring(x, z, r * 0.6, 0xb070ff, 0.45, 0.1);
+    this.decal(runeTex(), x, z, 2.2, 0x5dff8a, 1.0, { spin: -3, grow: 0.15 });
+    this.flash(x, 1.4, z, 0x5dff8a, 2.4, 0.4);
+    for (let i = 0; i < 26; i++) {
+      const a = (i / 26) * Math.PI * 2;
+      this.fx.glow({ x: x + Math.cos(a) * 0.8, y: 0.2, z: z + Math.sin(a) * 0.8, vx: Math.cos(a) * 1.2, vy: 4 + Math.random() * 3, vz: Math.sin(a) * 1.2, life: 0.8, size: 0.3, grow: -0.3, color: i % 3 ? 0x5dff8a : 0xb070ff, drag: 1.2 });
+    }
+    this.shake = Math.max(this.shake, 0.35);
+  }
+
+  /** Удар голема о землю. */
+  golemSlam(x: number, z: number, r: number) {
+    this.ring(x, z, r * 1.1, 0x9fe8ff, 0.45);
+    this.decal(scorchTex(), x, z, r * 0.6, 0xa89880, 1.6, { additive: false, grow: 0.05, opacity: 0.45 });
+    this.fx.burst(x, 0.2, z, { n: 16, speed: r * 2, up: 4, life: 0.7, size: 0.28, colors: [0x7a7268, 0x9a9288, 0x6ff0ff], gravity: 12 }, false);
+    this.shake = Math.max(this.shake, 0.2);
+  }
+
+  /** Появление помощника: круг рун и всполох духов. */
+  summon(x: number, z: number, big = false) {
+    const r = big ? 1.8 : 1.1;
+    this.decal(runeTex(), x, z, r, 0x6ff0ff, 0.9, { spin: 3, grow: 0.2 });
+    this.ring(x, z, r * 1.2, 0x6ff0ff, 0.6, 0.08, 0.2);
+    this.flash(x, 0.8, z, 0x6ff0ff, big ? 2.4 : 1.5, 0.35);
+    this.fx.burst(x, 0.3, z, { n: big ? 26 : 14, speed: 1.5, up: 4, life: 0.8, size: 0.2, colors: [0x6ff0ff, 0xffffff, 0x2ab8c8], drag: 1.5, radius: r * 0.5 });
+  }
+
+  /** Исчезновение помощника. */
+  unsummon(x: number, z: number) {
+    this.flash(x, 0.7, z, 0x6ff0ff, 1.2, 0.3);
+    this.fx.burst(x, 0.6, z, { n: 14, speed: 1.2, up: 3, life: 0.8, size: 0.22, colors: [0x6ff0ff, 0xd0ffff], drag: 1.5 });
+  }
+
   /** Подсветка при применении умения: магический круг под ногами. */
   cast(cls: HeroClass, s: number, x: number, z: number) {
     if (cls === 'mage' && s >= 1) {
@@ -289,6 +367,14 @@ export class Effects {
         const a = Math.random() * Math.PI * 2;
         this.fx.glow({ x: x + Math.cos(a) * 1.2, y: 0.1, z: z + Math.sin(a) * 1.2, vy: 2 + Math.random() * 2, life: 0.6, size: 0.16, color: col });
       }
+    } else if (cls === 'summoner' && s >= 1) {
+      this.decal(runeTex(), x, z, 1.6, 0x6ff0ff, 0.7, { spin: 3, grow: 0.2 });
+      for (let i = 0; i < 10; i++) {
+        const a = Math.random() * Math.PI * 2;
+        this.fx.glow({ x: x + Math.cos(a) * 1.1, y: 0.1, z: z + Math.sin(a) * 1.1, vy: 2 + Math.random() * 2, life: 0.6, size: 0.16, color: 0x6ff0ff });
+      }
+    } else if (cls === 'hunter' && s === 2) {
+      this.flash(x, 1.1, z, 0x5dff8a, 1.4, 0.2);
     } else if (cls === 'archer' && s === 3) {
       this.decal(runeTex(), x, z, 1.4, 0x7aff9a, 0.6, { spin: -3, grow: 0.2 });
     } else if (cls === 'archer' && s === 1) {
@@ -309,11 +395,13 @@ export class Effects {
     const colors: Record<string, number[]> = {
       arrow: [0xffffff, 0xfff0a0],
       bolt: [0xc8a0ff, 0x8a5cff, 0xffffff],
+      glaive: [0x5dff8a, 0xffffff],
+      spirit: [0x6ff0ff, 0xffffff, 0x2ab8c8],
       earrow: [0xff6a5a, 0xffffff],
       slime: [0x8aff6a],
     };
     const c = colors[kind] ?? [0xffffff, 0xffd080];
-    this.flash(x, 0.95, z, c[0], kind === 'bolt' ? 1.2 : 0.8, 0.15);
+    this.flash(x, 0.95, z, c[0], kind === 'bolt' || kind === 'spirit' ? 1.2 : 0.8, 0.15);
     this.fx.burst(x, 0.9, z, { n: 9, speed: 3.2, up: 1.5, life: 0.32, size: 0.2, colors: c });
   }
 
@@ -418,6 +506,7 @@ export class ProjView {
   private emitT = 0;
   private glows: THREE.Sprite[] = [];
   private t = Math.random() * 10;
+  private spin: THREE.Group | null = null;
   constructor(kind: ProjKind) {
     this.kind = kind;
     const o = this.obj;
@@ -461,6 +550,34 @@ export class ProjView {
         o.add(g);
       }
       trail(0xff7020, 0.8, 3.2, 0.9);
+    } else if (kind === 'glaive') {
+      // Вращающаяся глефа: два серпа и сияние скверны
+      const spin = new THREE.Group();
+      for (const a of [0, Math.PI]) {
+        const blade = new THREE.Mesh(G.torus(0.42, 0.06, Math.PI * 0.75, 4, 14), toon(0xd8e8e0, { emissive: 0x2a8a4a, emissiveIntensity: 0.4 }));
+        blade.rotation.set(Math.PI / 2, 0, a);
+        blade.scale.set(1, 1, 0.4);
+        addOutline(blade, 0.015);
+        spin.add(blade);
+      }
+      spin.add(new THREE.Mesh(G.cyl(0.1, 0.1, 0.06, 10), toon(0x2c2733)));
+      this.spin = spin;
+      o.add(spin);
+      const g = glowSprite(0x5dff8a, 1.4, 0.6);
+      this.glows.push(g);
+      o.add(g);
+      trail(0x5dff8a, 0.5, 1.6, 0.5);
+    } else if (kind === 'spirit') {
+      o.add(new THREE.Mesh(G.sphere(0.13, 12, 8), new THREE.MeshBasicMaterial({ color: 0xe8ffff })));
+      for (const [c, s] of [
+        [0x2ab8c8, 1.3],
+        [0x6ff0ff, 0.8],
+      ] as const) {
+        const g = glowSprite(c, s);
+        this.glows.push(g);
+        o.add(g);
+      }
+      trail(0x6ff0ff, 0.4, 2.2, 0.75);
     } else {
       o.add(new THREE.Mesh(G.dodeca(0.4), toon(0x8a7a6a)));
     }
@@ -472,14 +589,17 @@ export class ProjView {
     this.obj.position.set(this.x + this.vx * t, 1.0, this.z + this.vz * t);
     this.obj.rotation.y = Math.atan2(this.vx, this.vz);
     this.glows.forEach((g, i) => {
-      const base = (this.kind === 'fireball' ? [2.0, 1.2] : [1.3, 0.8])[i];
+      const base = (this.kind === 'fireball' ? [2.0, 1.2] : this.kind === 'glaive' ? [1.4] : [1.3, 0.8])[i];
       g.scale.setScalar(base * (1 + Math.sin(this.t * (20 + i * 7)) * 0.12));
     });
+    if (this.spin) this.spin.rotation.y += dt * 22;
     this.emitT -= dt;
     if (this.emitT <= 0) {
       this.emitT = this.kind === 'fireball' ? 0.015 : 0.03;
       const p = this.obj.position;
-      if (this.kind === 'bolt') fx.glow({ x: p.x, y: p.y, z: p.z, vx: Math.random() - 0.5, vy: Math.random() - 0.5, vz: Math.random() - 0.5, life: 0.35, size: 0.22, color: Math.random() < 0.5 ? 0x9a6aff : 0x6ab8ff });
+      if (this.kind === 'spirit') fx.glow({ x: p.x, y: p.y, z: p.z, vx: Math.random() - 0.5, vy: Math.random() * 0.8, vz: Math.random() - 0.5, life: 0.4, size: 0.2, color: Math.random() < 0.5 ? 0x6ff0ff : 0xffffff });
+      else if (this.kind === 'glaive') fx.glow({ x: p.x, y: p.y, z: p.z, vx: Math.random() - 0.5, vy: 0.3, vz: Math.random() - 0.5, life: 0.3, size: 0.18, color: 0x5dff8a });
+      else if (this.kind === 'bolt') fx.glow({ x: p.x, y: p.y, z: p.z, vx: Math.random() - 0.5, vy: Math.random() - 0.5, vz: Math.random() - 0.5, life: 0.35, size: 0.22, color: Math.random() < 0.5 ? 0x9a6aff : 0x6ab8ff });
       else if (this.kind === 'fireball') {
         fx.glow({ x: p.x, y: p.y, z: p.z, vx: Math.random() - 0.5, vy: Math.random(), vz: Math.random() - 0.5, life: 0.4, size: 0.45, grow: -0.6, color: Math.random() < 0.5 ? 0xff7020 : 0xffd040 });
         if (Math.random() < 0.15) fx.puff({ x: p.x, y: p.y, z: p.z, vy: 0.6, life: 0.7, size: 0.4, grow: 0.6, color: 0xd0c8c0, alpha: 0.25 });

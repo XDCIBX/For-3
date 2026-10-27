@@ -365,12 +365,13 @@ input.field:focus {
 }
 .classes {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
 }
 .cls-card {
   position: relative;
-  padding: 8px;
+  min-width: 0;
+  padding: 6px 4px;
   border-radius: 16px;
   border: 3px solid var(--ink);
   background: linear-gradient(180deg, var(--cc), color-mix(in srgb, var(--cc) 55%, #1b1330));
@@ -380,13 +381,17 @@ input.field:focus {
   transition: transform 0.12s;
 }
 .cls-card .ci {
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   margin: 0 auto;
 }
 .cls-card .cn {
   font-weight: 900;
-  font-size: 17px;
+  font-size: 11.5px;
+  letter-spacing: -0.3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cls-card.sel {
   transform: translateY(-4px) scale(1.03);
@@ -400,6 +405,9 @@ input.field:focus {
   font-size: 11px;
   font-weight: 700;
   opacity: 0.9;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 .cls-info {
   padding: 10px 12px;
@@ -1341,8 +1349,8 @@ input.field:focus {
   .lobby .btn { padding: 7px 12px; font-size: 15px; }
   .cls-card { padding: 5px; border-radius: 12px; }
   .cls-card .ci { width: 32px; height: 32px; }
-  .cls-card .cn { font-size: 14px; }
-  .cls-card .owner { font-size: 10px; }
+  .cls-card .cn { display: none; }
+  .cls-card .owner { font-size: 9px; }
   .cls-info { padding: 6px 10px; }
   .cls-info h3 { font-size: 16px; }
   .skill-row .d { display: none; }

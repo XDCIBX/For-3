@@ -54,6 +54,36 @@ export function itemIcon(tpl: string, rarity: Rarity): string {
         `<path d="M20 56 H44 L40 48 H24 Z" fill="${wood}" ${O}/><circle cx="32" cy="28" r="19" fill="${M}" ${O}/><path d="M22 30 C26 18 40 18 42 28 C40 36 30 36 32 28" fill="none" stroke="#fff" stroke-opacity=".75" stroke-width="3"/><circle cx="25" cy="20" r="4" fill="#fff" opacity=".85"/>`,
         defs,
       );
+    case 'glaives':
+      return svg(
+        `<g transform="rotate(-20 32 32)"><path d="M30 44 V12 L36 4 L37 14 V44 Z" fill="${M}" ${O}/><path d="M30 40 C14 38 10 24 16 14 C18 24 24 30 30 30 Z" fill="${M}" ${O}/><path d="M17 16 C16 26 22 34 30 36" fill="none" stroke="#5dff8a" stroke-width="2.5"/><rect x="27" y="44" width="12" height="5" rx="2" fill="${gold}" ${O}/><rect x="30" y="49" width="6" height="10" fill="#2c2733" ${O}/></g>`,
+        defs,
+      );
+    case 'daggers':
+      return svg(
+        `<g transform="rotate(35 32 32)"><path d="M23 38 V14 L26 8 L29 14 V38 Z" fill="${M}" ${O}/><rect x="18" y="37" width="16" height="4" rx="2" fill="${gold}" ${O}/><rect x="24" y="41" width="4" height="10" fill="#4a3020" ${O}/></g><g transform="rotate(-35 32 32)"><path d="M35 38 V14 L38 8 L41 14 V38 Z" fill="${M}" ${O}/><rect x="30" y="37" width="16" height="4" rx="2" fill="${gold}" ${O}/><rect x="36" y="41" width="4" height="10" fill="#4a3020" ${O}/></g>`,
+        defs,
+      );
+    case 'warblades':
+      return svg(
+        `<g transform="rotate(30 32 32)"><path d="M29 44 C28 30 30 18 40 6 C42 18 38 30 36 44 Z" fill="${M}" ${O}/><path d="M30 34 L25 32 M30 26 L25 23 M32 18 L27 15" ${O}/><rect x="24" y="43" width="18" height="5" rx="2" fill="${gold}" ${O}/><rect x="30" y="48" width="6" height="11" fill="#5a2a2a" ${O}/></g>`,
+        defs,
+      );
+    case 'tome':
+      return svg(
+        `<rect x="12" y="10" width="38" height="46" rx="4" fill="${M}" ${O}/><rect x="46" y="13" width="7" height="40" fill="#f3ead2" ${O}/><rect x="12" y="10" width="7" height="46" fill="#2a1b14" opacity=".35"/><circle cx="32" cy="32" r="9" fill="none" stroke="#6ff0ff" stroke-width="3.5"/><circle cx="32" cy="32" r="3.5" fill="#6ff0ff"/><rect x="46" y="28" width="9" height="8" rx="2" fill="${gold}" ${O}/>`,
+        defs,
+      );
+    case 'totemstaff':
+      return svg(
+        `<rect x="29" y="26" width="6" height="36" rx="3" fill="${wood}" ${O}/><rect x="23" y="16" width="18" height="14" rx="3" fill="#8a5a2b" ${O}/><circle cx="28" cy="22" r="2" fill="#c9343a"/><circle cx="36" cy="22" r="2" fill="#c9343a"/><path d="M22 10 C22 0 42 0 42 10 C42 16 22 16 22 10 Z" fill="#f3ead2" ${O}/><circle cx="28" cy="9" r="2.5" fill="${M}"/><circle cx="36" cy="9" r="2.5" fill="${M}"/><path d="M20 6 L12 2 M44 6 L52 2" ${O}/><path d="M24 30 L18 44" stroke="#e94b3c" stroke-width="4" stroke-linecap="round"/><path d="M40 30 L46 44" stroke="#2ab8c8" stroke-width="4" stroke-linecap="round"/>`,
+        defs,
+      );
+    case 'bell':
+      return svg(
+        `<rect x="29" y="40" width="6" height="20" rx="3" fill="#5a3a22" ${O}/><path d="M18 40 C18 22 24 12 32 12 C40 12 46 22 46 40 Z" fill="${M}" ${O}/><rect x="14" y="38" width="36" height="6" rx="3" fill="${gold}" ${O}/><circle cx="32" cy="47" r="4" fill="#6ff0ff" ${O}/><circle cx="32" cy="9" r="4" fill="${gold}" ${O}/><path d="M24 22 C26 18 28 17 30 16" stroke="#fff" stroke-opacity=".7" stroke-width="3" fill="none"/>`,
+        defs,
+      );
     case 'bow':
     case 'recurve':
       return svg(
@@ -124,6 +154,22 @@ export function skillIcon(id: string): string {
       return svg(`<g ${O}><path d="M10 54 L50 8"/><path d="M10 54 L58 26"/><path d="M10 54 L32 4"/></g><g fill="#e0e8f0" ${O}><path d="M54 4 L44 8 L50 14 Z"/><path d="M60 24 L50 22 L52 30 Z"/><path d="M34 0 L26 6 L34 10 Z"/></g>`);
     case 'roll':
       return svg(`<path d="M50 30 A18 18 0 1 1 38 14" fill="none" stroke="#2a1b14" stroke-width="9" stroke-linecap="round"/><path d="M50 30 A18 18 0 1 1 38 14" fill="none" stroke="#7aff9a" stroke-width="5" stroke-linecap="round"/><path d="M34 6 L46 12 L36 22 Z" fill="#7aff9a" ${O}/>`);
+    case 'twin':
+      return svg(`<g transform="rotate(40 32 32)"><path d="M29 44 V10 L32 4 L35 10 V44 Z" fill="#e4eaee" ${O}/><rect x="25" y="44" width="14" height="5" fill="#2c2733" ${O}/></g><g transform="rotate(-40 32 32)"><path d="M29 44 V10 L32 4 L35 10 V44 Z" fill="#e4eaee" ${O}/><rect x="25" y="44" width="14" height="5" fill="#2c2733" ${O}/></g><path d="M10 30 C20 20 44 20 54 30" fill="none" stroke="#5dff8a" stroke-width="4" stroke-linecap="round"/>`);
+    case 'shadowdash':
+      return svg(`<path d="M6 22 H30 M4 34 H26 M8 46 H30" stroke="#7a3aff" stroke-width="5" stroke-linecap="round"/><path d="M30 14 C44 14 56 24 58 32 C56 40 44 50 30 50 C38 42 38 22 30 14 Z" fill="#2c2733" ${O}/><circle cx="44" cy="30" r="3.5" fill="#5dff8a"/>`);
+    case 'glaive':
+      return svg(`<circle cx="32" cy="32" r="22" fill="none" stroke="#5dff8a" stroke-width="3" stroke-dasharray="6 6" opacity=".7"/><path d="M32 12 C46 14 52 26 50 34 C46 26 40 22 32 22 Z" fill="#e4eaee" ${O}/><path d="M32 52 C18 50 12 38 14 30 C18 38 24 42 32 42 Z" fill="#e4eaee" ${O}/><circle cx="32" cy="32" r="7" fill="#2c2733" ${O}/><circle cx="32" cy="32" r="2.5" fill="#5dff8a"/>`);
+    case 'demon':
+      return svg(`<path d="M32 22 C20 8 8 10 2 18 C10 18 12 24 10 30 C16 26 20 28 22 34 Z" fill="#4a1a5a" ${O}/><path d="M32 22 C44 8 56 10 62 18 C54 18 52 24 54 30 C48 26 44 28 42 34 Z" fill="#4a1a5a" ${O}/><circle cx="32" cy="36" r="13" fill="#2c2733" ${O}/><path d="M22 28 L18 14 L28 26 M42 28 L46 14 L36 26" fill="#1a1612" ${O}/><path d="M25 36 H30 M34 36 H39" stroke="#5dff8a" stroke-width="3.5" stroke-linecap="round"/>`);
+    case 'spiritbolt':
+      return svg(`<path d="M8 56 C18 46 22 40 30 34" stroke="#6ff0ff" stroke-width="5" stroke-linecap="round" opacity=".6"/><circle cx="40" cy="24" r="14" fill="#6ff0ff" ${O}/><circle cx="40" cy="24" r="7" fill="#e8ffff"/><circle cx="36" cy="20" r="3" fill="#fff"/>`);
+    case 'wolves':
+      return svg(`<path d="M10 52 L14 22 L24 32 L32 26 L40 32 L50 22 L54 52 C46 60 18 60 10 52 Z" fill="#8af4ff" ${O}/><path d="M32 44 L26 50 H38 Z" fill="#1a3a44"/><circle cx="24" cy="40" r="3" fill="#fff" ${O}/><circle cx="40" cy="40" r="3" fill="#fff" ${O}/><path d="M16 26 L18 8 L26 22 M48 26 L46 8 L38 22" fill="#4ad0e0" ${O}/>`);
+    case 'golem':
+      return svg(`<path d="M14 24 L22 10 H42 L50 24 L54 46 L42 58 H22 L10 46 Z" fill="#8a8478" ${O}/><path d="M22 30 H30 M34 30 H42" stroke="#6ff0ff" stroke-width="4.5" stroke-linecap="round"/><path d="M24 44 L32 40 L40 44" stroke="#2a1b14" stroke-width="3" fill="none"/><path d="M18 14 L26 18 M46 14 L38 18" stroke="#5aa04a" stroke-width="4" stroke-linecap="round"/>`);
+    case 'totem':
+      return svg(`<rect x="22" y="18" width="20" height="42" rx="3" fill="#8a5a2b" ${O}/><path d="M22 38 H42" ${O}/><rect x="26" y="24" width="4" height="4" fill="#c9343a"/><rect x="34" y="24" width="4" height="4" fill="#c9343a"/><rect x="26" y="44" width="4" height="4" fill="#2ab8c8"/><rect x="34" y="44" width="4" height="4" fill="#2ab8c8"/><path d="M8 22 L22 26 M56 22 L42 26" stroke="#d9a441" stroke-width="6" stroke-linecap="round"/><circle cx="32" cy="10" r="7" fill="#6ff0ff" ${O}/>`);
     case 'rain':
       return svg(`<path d="M8 8 H56" stroke="#8ad0ff" stroke-width="5" stroke-linecap="round"/><g ${O}><path d="M14 16 V46 M30 14 V52 M46 16 V44"/></g><g fill="#e0e8f0" ${O}><path d="M10 44 L14 54 L18 44 Z"/><path d="M26 50 L30 60 L34 50 Z"/><path d="M42 42 L46 52 L50 42 Z"/></g>`);
   }
@@ -136,6 +182,10 @@ export function classIcon(cls: HeroClass): string {
       return svg(`<path d="M12 40 C12 18 52 18 52 40 V48 H12 Z" fill="#b8c4ce" ${O}/><rect x="10" y="42" width="44" height="8" rx="3" fill="#ffc93c" ${O}/><rect x="29" y="30" width="6" height="22" fill="#b8c4ce" ${O}/><path d="M12 32 C4 26 6 14 10 8 C12 18 16 22 18 24" fill="#fff2d6" ${O}/><path d="M52 32 C60 26 58 14 54 8 C52 18 48 22 46 24" fill="#fff2d6" ${O}/>`);
     case 'mage':
       return svg(`<path d="M6 50 C20 44 44 44 58 50 C50 56 14 56 6 50 Z" fill="#6b3fc4" ${O}/><path d="M18 48 L30 6 C36 10 40 12 46 12 L44 48 Z" fill="#7b4fd4" ${O}/><path d="M19 42 H45" stroke="#ffc93c" stroke-width="5"/><path d="M34 22 L36 27 L41 27 L37 30 L39 35 L34 32 L30 35 L31 30 L27 27 L32 27 Z" fill="#ffe14a"/>`);
+    case 'hunter':
+      return svg(`<g transform="rotate(35 32 32)"><path d="M29 46 V10 L32 3 L35 10 V46 Z" fill="#d8e8e0" ${O}/><rect x="26" y="46" width="12" height="10" fill="#2c2733" ${O}/></g><g transform="rotate(-35 32 32)"><path d="M29 46 V10 L32 3 L35 10 V46 Z" fill="#d8e8e0" ${O}/><rect x="26" y="46" width="12" height="10" fill="#2c2733" ${O}/></g><path d="M20 30 H44" stroke="#5dff8a" stroke-width="4" stroke-linecap="round"/>`);
+    case 'summoner':
+      return svg(`<path d="M14 52 C14 30 50 30 50 52 Z" fill="#2a8f9a" ${O}/><path d="M16 26 L12 6 L22 22 M26 22 L26 2 L32 20 M38 20 L42 2 L42 22 M48 22 L54 6 L50 26" fill="#fff" ${O}/><rect x="14" y="22" width="36" height="7" rx="3" fill="#c9343a" ${O}/><circle cx="32" cy="42" r="6" fill="#6ff0ff" ${O}/>`);
     case 'archer':
       return svg(`<path d="M18 4 C52 12 52 52 18 60" fill="none" stroke="#2a1b14" stroke-width="9" stroke-linecap="round"/><path d="M18 4 C52 12 52 52 18 60" fill="none" stroke="#9a6a3a" stroke-width="5" stroke-linecap="round"/><path d="M18 4 V60" stroke="#f5f0e0" stroke-width="2"/><path d="M8 32 H58" ${O}/><path d="M58 32 L50 26 M58 32 L50 38" ${O} fill="none"/><path d="M8 32 L4 26 M8 32 L4 38" stroke="#e94b3c" stroke-width="3" stroke-linecap="round"/>`);
   }

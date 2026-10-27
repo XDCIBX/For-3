@@ -14,9 +14,9 @@ import {
 import { CLASSES } from '../data/classes';
 import { computeStats, emptyEquip, generateShop, sellValue } from '../data/items';
 import { MOBS, mobScale, roundComposition } from '../data/mobs';
-import type { GameEvent, GameMsg, MobSnap, PlayerSnap, Snapshot } from '../protocol';
+import type { GameEvent, GameMsg, MinionSnap, MobSnap, PlayerSnap, Snapshot } from '../protocol';
 import { Rng } from '../rng';
-import type { Equip, HeroClass, Item, MobKind, Phase, ProjKind, Stats, ZoneKind } from '../types';
+import type { Equip, HeroClass, Item, MinionKind, MobKind, Phase, ProjKind, Stats, ZoneKind } from '../types';
 import { HERO_CLASSES } from '../types';
 import { ARENA_OBSTACLES, generateWorld, hitsSolid, resolveCollision, type Obstacle, type WorldData } from '../world';
 import { updateBot } from './bot';
@@ -58,9 +58,11 @@ export interface Player {
   hasteT: number;
   whirlT: number;
   whirlTick: number;
+  /** Демоническая форма охотника. */
+  demonT: number;
   faceT: number;
   lastHurt: number;
-  dash: { vx: number; vz: number; t: number; hit: Set<number | string>; kind: 'charge' | 'roll' } | null;
+  dash: { vx: number; vz: number; t: number; hit: Set<number | string>; kind: 'charge' | 'roll' | 'shadow' } | null;
   /** Внутреннее состояние ИИ ботов. */
   ai: { think: number; tavernT: number; strafe: number; aimErr: number };
 }
@@ -108,6 +110,30 @@ export interface Proj {
   r: number;
   explodeR: number;
   hit: Set<number | string>;
+  /** Сколько раз снаряд ещё отскочит к новой цели (глефа). */
+  bounces?: number;
+  /** Выпущен помощником (тотемом). */
+  fromMinion?: boolean;
+}
+
+/** Призванный помощник (волк, голем, тотем). */
+export interface Minion {
+  id: number;
+  kind: MinionKind;
+  owner: string;
+  x: number;
+  z: number;
+  rot: number;
+  hp: number;
+  maxHp: number;
+  armor: number;
+  speed: number;
+  radius: number;
+  life: number;
+  atkCd: number;
+  pulse: number;
+  retarget: number;
+  target: number | string | null;
 }
 
 export interface Zone {
@@ -125,7 +151,19 @@ export interface Zone {
   dmg: number;
 }
 
-type Target = { kind: 'm'; m: Mob; x: number; z: number; rad: number } | { kind: 'p'; p: Player; x: number; z: number; rad: number };
+type Target =
+  | { kind: 'm'; m: Mob; x: number; z: number; rad: number }
+  | { kind: 'p'; p: Player; x: number; z: number; rad: number }
+  | { kind: 'n'; n: Minion; x: number; z: number; rad: number };
+
+/** Кого атакует моб: героя или призванного помощника. */
+interface Victim {
+  id: string;
+  x: number;
+  z: number;
+  p?: Player;
+  n?: Minion;
+}
 
 const BOT_NAMES = ['Борис', 'Глаша', 'Тихон', 'Варя', 'Фрол', 'Злата', 'Ерёма', 'Луша'];
 
@@ -158,6 +196,7 @@ export class Game {
   mobs = new Map<number, Mob>();
   projs = new Map<number, Proj>();
   zones = new Map<number, Zone>();
+  minions = new Map<number, Minion>();
   events: GameEvent[] = [];
   shop: Item[] = [];
   spawnQueue: MobKind[] = [];
@@ -170,6 +209,8 @@ export class Game {
   startRound = 1;
   private nextId = 1;
   private pidCounter = 1;
+  /** Удар наносит помощник (в ПвП их урон по героям снижен). */
+  private minionStrike = false;
   private dirty = true;
 
   constructor(seed = (Math.random() * 2 ** 31) | 0) {
@@ -224,6 +265,7 @@ export class Game {
       hasteT: 0,
       whirlT: 0,
       whirlTick: 0,
+      demonT: 0,
       faceT: 0,
       lastHurt: 99,
       dash: null,
@@ -364,9 +406,9 @@ export class Game {
     p.spectator = false;
     p.stats = computeStats(p.cls, p.equip);
     p.hp = p.stats.maxHp;
-    p.shield = p.cls === 'mage' ? p.stats.maxHp * 0.25 : 0;
+    p.shield = p.cls === 'mage' ? p.stats.maxHp * 0.3 : 0;
     p.cds = [0, 0, 0, 0];
-    p.stunT = p.frozenT = p.slowT = p.invulnT = p.warcryT = p.rageT = p.hasteT = p.whirlT = 0;
+    p.stunT = p.frozenT = p.slowT = p.invulnT = p.warcryT = p.rageT = p.hasteT = p.whirlT = p.demonT = 0;
     p.dash = null;
     p.input = { mx: 0, mz: 0 };
     p.lastHurt = 99;
@@ -384,6 +426,7 @@ export class Game {
     this.mobs.clear();
     this.projs.clear();
     this.zones.clear();
+    this.minions.clear();
     for (const p of this.players.values()) p.ready = false;
     this.placeAtCamp();
     this.setPhase('intro', INTRO_TIME);
@@ -423,6 +466,7 @@ export class Game {
     this.mobs.clear();
     this.projs.clear();
     this.zones.clear();
+    this.minions.clear();
     const classes = this.active().map((p) => p.cls);
     this.shop = generateShop(this.rng, this.round + 1, classes);
     for (const p of this.players.values()) {
@@ -441,6 +485,7 @@ export class Game {
     this.mobs.clear();
     this.projs.clear();
     this.zones.clear();
+    this.minions.clear();
     this.setPhase('gameover', -1);
     this.msg(win ? 'Победа! Вы прошли все раунды!' : 'Все герои пали…', win ? 'good' : 'bad');
   }
@@ -458,6 +503,7 @@ export class Game {
     this.mobs.clear();
     this.projs.clear();
     this.zones.clear();
+    this.minions.clear();
     for (const p of this.players.values()) {
       if (p.id === a) this.resetHero(p, -6.5, 0, Math.PI / 2);
       else if (p.id === b) this.resetHero(p, 6.5, 0, -Math.PI / 2);
@@ -498,6 +544,7 @@ export class Game {
     this.events.push({ e: 'duel', a, b, winner: winnerId, win, lose: lost });
     this.projs.clear();
     this.zones.clear();
+    this.minions.clear();
     this.setPhase('duel_end', DUEL_END_TIME);
   }
 
@@ -594,6 +641,7 @@ export class Game {
 
     if (canMovePhase(this.phase) || isCombatPhase(this.phase)) {
       this.updatePlayers(dt);
+      this.updateMinions(dt);
       this.updateMobs(dt);
       this.updateProjectiles(dt);
       this.updateZones(dt);
@@ -678,20 +726,25 @@ export class Game {
     } else if (this.phase === 'duel') {
       const [a, b] = this.duels[this.duelIdx];
       const o = this.players.get(p.id === a ? b : p.id === b ? a : '');
-      if (o && o.alive) out.push({ kind: 'p', p: o, x: o.x, z: o.z, rad: PLAYER_RADIUS });
+      if (o && o.alive) {
+        out.push({ kind: 'p', p: o, x: o.x, z: o.z, rad: PLAYER_RADIUS });
+        // Помощники соперника тоже враги (кроме тотема)
+        for (const n of this.minions.values()) if (n.owner === o.id && n.kind !== 'totem') out.push({ kind: 'n', n, x: n.x, z: n.z, rad: n.radius });
+      }
     }
     return out;
   }
 
   private targetId(t: Target): number | string {
-    return t.kind === 'm' ? t.m.id : t.p.id;
+    return t.kind === 'm' ? t.m.id : t.kind === 'p' ? t.p.id : `n${t.n.id}`;
   }
 
   nearestTarget(p: Player, maxDist: number): Target | null {
     let best: Target | null = null;
     let bd = maxDist;
     for (const t of this.targetsFor(p)) {
-      const d = Math.hypot(t.x - p.x, t.z - p.z) - t.rad;
+      // В дуэли автоприцел предпочитает героя, а не его помощников
+      const d = Math.hypot(t.x - p.x, t.z - p.z) - t.rad - (t.kind === 'p' ? 2.5 : 0);
       if (d < bd) {
         bd = d;
         best = t;
@@ -704,6 +757,7 @@ export class Game {
     let v = p.stats.damage * mult * this.rng.range(0.9, 1.1);
     if (p.warcryT > 0) v *= 1.3;
     else if (p.rageT > 0) v *= 1.25;
+    if (p.demonT > 0) v *= 1.1;
     const crit = this.rng.next() < p.stats.crit;
     if (crit) v *= p.cls === 'archer' ? 2.2 : 2;
     return { v, crit };
@@ -721,6 +775,8 @@ export class Game {
         m.slowAmt = Math.max(m.slowAmt, fx.slow);
       }
       dealt = this.damageMob(m, v, crit, p.id);
+    } else if (t.kind === 'n') {
+      dealt = this.damageMinion(t.n, v * 0.75, crit);
     } else {
       const o = t.p;
       // В ПвП контроль слабее
@@ -734,11 +790,12 @@ export class Game {
         o.slowT = Math.max(o.slowT, fx.slowT ?? 1);
         o.slowAmt = Math.max(o.slowAmt, fx.slow);
       }
-      dealt = this.damagePlayer(o, v * 0.75, crit, p.id);
+      dealt = this.damagePlayer(o, v * 0.75 * (this.minionStrike ? 0.5 : 1), crit, p.id);
     }
     p.dmgDealt += dealt;
-    if (p.stats.lifesteal > 0 && dealt > 0 && p.alive) {
-      const h = dealt * p.stats.lifesteal;
+    const ls = (p.stats.lifesteal + (p.demonT > 0 ? 0.15 : 0)) * (this.phase === 'duel' ? 0.5 : 1);
+    if (ls > 0 && dealt > 0 && p.alive) {
+      const h = dealt * ls;
       p.hp = Math.min(p.stats.maxHp, p.hp + h);
     }
   }
@@ -769,6 +826,24 @@ export class Game {
   damagePlayer(t: Player, v: number, crit: boolean, src: string | null): number {
     if (!t.alive || t.invulnT > 0 || t.spectator || !canMovePhase(this.phase)) return 0;
     if (t.warcryT > 0) v *= 0.6;
+    if (t.demonT > 0) v *= 0.9;
+    if (t.cls === 'summoner') {
+      // Связь душ: четверть урона забирает на себя ближайший помощник
+      let link: Minion | null = null;
+      let bd = 12;
+      for (const n of this.minions.values()) {
+        if (n.owner !== t.id || n.kind === 'totem') continue;
+        const d = Math.hypot(n.x - t.x, n.z - t.z);
+        if (d < bd) {
+          bd = d;
+          link = n;
+        }
+      }
+      if (link) {
+        this.damageMinion(link, v * 0.25, false);
+        v *= 0.75;
+      }
+    }
     v *= 50 / (50 + t.stats.armor);
     let dmg = Math.max(1, Math.round(v));
     const total = dmg;
@@ -784,13 +859,33 @@ export class Game {
     return total;
   }
 
+  /** Урон помощнику. */
+  damageMinion(n: Minion, v: number, crit: boolean): number {
+    if (n.hp <= 0 || !this.minions.has(n.id)) return 0;
+    const dealt = Math.max(1, Math.round(v * (50 / (50 + n.armor))));
+    n.hp -= dealt;
+    this.events.push({ e: 'dmg', x: r2(n.x), z: r2(n.z), v: dealt, c: crit, tp: 'n', id: n.id });
+    if (n.hp <= 0) this.killMinion(n, true);
+    return dealt;
+  }
+
+  private killMinion(n: Minion, slain: boolean) {
+    this.minions.delete(n.id);
+    this.events.push({ e: 'ndie', id: n.id, x: r2(n.x), z: r2(n.z) });
+    // Пассивка призывателя: гибель помощника лечит хозяина
+    const o = this.players.get(n.owner);
+    if (slain && o && o.alive) o.hp = Math.min(o.stats.maxHp, o.hp + o.stats.maxHp * 0.1);
+  }
+
   private playerDie(p: Player, killer: string | null) {
     p.hp = 0;
     p.alive = false;
     p.dash = null;
     p.whirlT = 0;
+    p.demonT = 0;
     p.input = { mx: 0, mz: 0 };
     this.events.push({ e: 'pdie', pid: p.id });
+    for (const n of [...this.minions.values()]) if (n.owner === p.id) this.killMinion(n, false);
     if (this.phase === 'duel') {
       const [a, b] = this.duels[this.duelIdx];
       this.endDuel(p.id === a ? b : a);
@@ -840,7 +935,7 @@ export class Game {
       p.faceT = 0.45;
     }
 
-    const atkSpd = p.stats.attackSpeed * (p.hasteT > 0 ? 1.6 : 1);
+    const atkSpd = p.stats.attackSpeed * (p.hasteT > 0 ? 1.6 : 1) * (p.demonT > 0 ? 1.4 : 1);
     p.cdMax[s] = s === 0 ? def.cd / atkSpd : def.cd * (1 - p.stats.cdr);
     p.cds[s] = p.cdMax[s];
     this.events.push({ e: 'cast', pid: p.id, s, r: r2(p.rot), x: r2(tx), z: r2(tz) });
@@ -856,7 +951,7 @@ export class Game {
           const d = Math.hypot(ox, oz);
           if (d - t.rad > reach) continue;
           if (d > 0.8 && (ox * dx + oz * dz) / d < Math.cos((65 * Math.PI) / 180)) continue;
-          this.hit(p, t, 1.0);
+          this.hit(p, t, 1.1);
         }
         this.events.push({ e: 'fx', k: 'slash', x: r2(p.x), z: r2(p.z), rot: r2(p.rot), pid: p.id });
         break;
@@ -902,7 +997,7 @@ export class Game {
         this.events.push({ e: 'fx', k: 'nova', x: r2(p.x), z: r2(p.z), r: 5, pid: p.id });
         break;
       case 'mage:3':
-        this.addZone('meteor', p.id, tx, tz, 3.5, 0, 1.0, 3.5);
+        this.addZone('meteor', p.id, tx, tz, 3.5, 0, 1.0, 3.2);
         break;
       // ---------------- Лучник
       case 'archer:0':
@@ -926,10 +1021,212 @@ export class Game {
       case 'archer:3':
         this.addZone('rain', p.id, tx, tz, 3.5, 3, 0.25, 0.4);
         break;
+      // ---------------- Охотник на демонов
+      case 'hunter:0': {
+        for (const t of this.targetsFor(p)) {
+          const ox = t.x - p.x;
+          const oz = t.z - p.z;
+          const d = Math.hypot(ox, oz);
+          if (d - t.rad > def.range) continue;
+          if (d > 0.8 && (ox * dx + oz * dz) / d < Math.cos((60 * Math.PI) / 180)) continue;
+          // Два клинка — два удара, у каждого свой шанс крита
+          this.hit(p, t, 0.52);
+          if (t.kind !== 'm' || t.m.hp > 0) this.hit(p, t, 0.52);
+        }
+        this.events.push({ e: 'fx', k: 'twin', x: r2(p.x), z: r2(p.z), rot: r2(p.rot), pid: p.id });
+        break;
+      }
+      case 'hunter:1':
+        p.dash = { vx: dx * 30, vz: dz * 30, t: 0.22, hit: new Set(), kind: 'shadow' };
+        p.invulnT = Math.max(p.invulnT, 0.3);
+        this.events.push({ e: 'fx', k: 'shadow', x: r2(p.x), z: r2(p.z), rot: r2(p.rot), pid: p.id });
+        break;
+      case 'hunter:2': {
+        const pr = this.fireProj(p, 'glaive', dx, dz, 20, def.range, 1.0, 0.45, 0);
+        pr.bounces = 3;
+        break;
+      }
+      case 'hunter:3':
+        p.demonT = 7;
+        this.events.push({ e: 'fx', k: 'demon', x: r2(p.x), z: r2(p.z), r: 3, pid: p.id });
+        break;
+      // ---------------- Призыватель
+      case 'summoner:0':
+        this.fireProj(p, 'spirit', dx, dz, 17, def.range, 0.95, 0.4, 0);
+        // Помощники переключаются на цель в направлении выстрела
+        {
+          const t = this.nearestTarget(p, def.range);
+          if (t) for (const n of this.minions.values()) if (n.owner === p.id && n.kind !== 'totem') n.target = this.targetId(t);
+        }
+        break;
+      case 'summoner:1': {
+        for (const n of [...this.minions.values()]) if (n.owner === p.id && n.kind === 'wolf') this.killMinion(n, false);
+        for (const side of [-1, 1]) this.summon(p, 'wolf', p.x + Math.cos(p.rot) * side * 1.2, p.z - Math.sin(p.rot) * side * 1.2);
+        break;
+      }
+      case 'summoner:2': {
+        for (const n of [...this.minions.values()]) if (n.owner === p.id && n.kind === 'golem') this.killMinion(n, false);
+        this.summon(p, 'golem', p.x + dx * 1.6, p.z + dz * 1.6);
+        break;
+      }
+      case 'summoner:3': {
+        for (const n of [...this.minions.values()]) if (n.owner === p.id && n.kind === 'totem') this.killMinion(n, false);
+        this.summon(p, 'totem', tx, tz);
+        break;
+      }
     }
   }
 
-  private fireProj(p: Player, kind: ProjKind, dx: number, dz: number, speed: number, range: number, mult: number, r: number, explodeR: number) {
+  /** Характеристики помощников растут вместе со снаряжением призывателя. */
+  private summon(p: Player, kind: MinionKind, x: number, z: number): Minion {
+    const st = p.stats;
+    // В дуэли помощники хрупче, чтобы бой шёл между героями
+    const hpm = this.phase === 'duel' ? 0.6 : 1;
+    const spec = {
+      wolf: { hp: st.maxHp * 0.32 * hpm, armor: st.armor, speed: 6.2, radius: 0.45, life: 14 },
+      golem: { hp: st.maxHp * 1.1 * hpm, armor: st.armor + 12, speed: 3.6, radius: 0.85, life: 16 },
+      totem: { hp: 9999, armor: 999, speed: 0, radius: 0.5, life: 8 },
+    }[kind];
+    const pos = { x, z };
+    resolveCollision(pos, spec.radius, this.obstacles, this.bound);
+    const n: Minion = {
+      id: this.nextId++,
+      kind,
+      owner: p.id,
+      x: pos.x,
+      z: pos.z,
+      rot: p.rot,
+      hp: spec.hp,
+      maxHp: spec.hp,
+      armor: spec.armor,
+      speed: spec.speed,
+      radius: spec.radius,
+      life: spec.life,
+      atkCd: 0.4,
+      pulse: 0,
+      retarget: 0,
+      target: null,
+    };
+    this.minions.set(n.id, n);
+    this.events.push({ e: 'summon', id: n.id, k: kind, x: r2(n.x), z: r2(n.z) });
+    return n;
+  }
+
+  /** Поведение помощников: волки и голем преследуют врагов, тотем стреляет и лечит. */
+  private updateMinions(dt: number) {
+    const obs = this.obstacles;
+    const bound = this.bound;
+    for (const n of [...this.minions.values()]) {
+      const owner = this.players.get(n.owner);
+      n.life -= dt;
+      if (!owner || n.life <= 0) {
+        this.killMinion(n, false);
+        continue;
+      }
+      n.atkCd -= dt;
+      n.pulse -= dt;
+      n.retarget -= dt;
+      const enemies = this.targetsFor(owner);
+      if (n.kind === 'totem') {
+        // Лечение союзников рядом
+        for (const q of this.players.values()) {
+          if (!q.alive || q.spectator) continue;
+          if (this.phase === 'duel' && q.id !== owner.id) continue;
+          if (Math.hypot(q.x - n.x, q.z - n.z) < 5.5) q.hp = Math.min(q.stats.maxHp, q.hp + q.stats.maxHp * (this.phase === 'duel' ? 0.012 : 0.025) * dt);
+        }
+        if (n.atkCd <= 0) {
+          let best: Target | null = null;
+          let bd = 9;
+          for (const t of enemies) {
+            const d = Math.hypot(t.x - n.x, t.z - n.z) - t.rad;
+            if (d < bd) {
+              bd = d;
+              best = t;
+            }
+          }
+          if (best) {
+            n.atkCd = 0.8;
+            const ddx = best.x - n.x;
+            const ddz = best.z - n.z;
+            const l = Math.hypot(ddx, ddz) || 1;
+            this.minionStrike = true;
+            const pr = this.fireProj(owner, 'spirit', ddx / l, ddz / l, 16, 10, 0.55, 0.35, 0);
+            this.minionStrike = false;
+            pr.fromMinion = true;
+            pr.x = n.x + (ddx / l) * 0.5;
+            pr.z = n.z + (ddz / l) * 0.5;
+            n.rot = Math.atan2(ddx, ddz);
+            this.events.push({ e: 'natk', id: n.id });
+          }
+        }
+        continue;
+      }
+      // Выбор цели
+      let tgt: Target | undefined = n.target !== null ? enemies.find((t) => this.targetId(t) === n.target) : undefined;
+      if (!tgt || n.retarget <= 0) {
+        n.retarget = 0.5;
+        let bd = 11;
+        for (const t of enemies) {
+          const d = Math.hypot(t.x - n.x, t.z - n.z) - t.rad;
+          if (d < bd) {
+            bd = d;
+            tgt = t;
+          }
+        }
+        if (n.target !== null && !enemies.some((t) => this.targetId(t) === n.target)) n.target = null;
+        if (tgt && n.target === null) n.target = this.targetId(tgt);
+      }
+      // Голем провоцирует мобов вокруг
+      if (n.kind === 'golem' && n.pulse <= 0) {
+        n.pulse = 2;
+        for (const m of this.mobs.values()) {
+          if (Math.hypot(m.x - n.x, m.z - n.z) < 6.5) {
+            m.tauntT = 2.2;
+            m.tauntBy = `n${n.id}`;
+          }
+        }
+      }
+      const pos = { x: n.x, z: n.z };
+      if (tgt) {
+        const ddx = tgt.x - n.x;
+        const ddz = tgt.z - n.z;
+        const d = Math.hypot(ddx, ddz) || 0.01;
+        n.rot = Math.atan2(ddx, ddz);
+        const reach = n.radius + tgt.rad + (n.kind === 'golem' ? 0.7 : 0.45);
+        if (d > reach) {
+          pos.x += (ddx / d) * n.speed * dt;
+          pos.z += (ddz / d) * n.speed * dt;
+        } else if (n.atkCd <= 0) {
+          this.events.push({ e: 'natk', id: n.id });
+          this.minionStrike = true;
+          if (n.kind === 'wolf') {
+            n.atkCd = 0.75;
+            this.hit(owner, tgt, 0.7, { slow: 0.2, slowT: 0.6 });
+          } else {
+            n.atkCd = 1.5;
+            for (const t of enemies) if (Math.hypot(t.x - n.x, t.z - n.z) - t.rad < 2.2) this.hit(owner, t, 0.75, { slow: 0.3, slowT: 1 });
+            this.events.push({ e: 'fx', k: 'gslam', x: r2(n.x), z: r2(n.z), r: 2.2 });
+          }
+          this.minionStrike = false;
+        }
+      } else {
+        // Следуем за хозяином
+        const ddx = owner.x - n.x;
+        const ddz = owner.z - n.z;
+        const d = Math.hypot(ddx, ddz);
+        if (d > 2.5) {
+          pos.x += (ddx / d) * n.speed * dt;
+          pos.z += (ddz / d) * n.speed * dt;
+          n.rot = Math.atan2(ddx, ddz);
+        }
+      }
+      resolveCollision(pos, n.radius, obs, bound);
+      n.x = pos.x;
+      n.z = pos.z;
+    }
+  }
+
+  private fireProj(p: Player, kind: ProjKind, dx: number, dz: number, speed: number, range: number, mult: number, r: number, explodeR: number): Proj {
     const roll = mult > 0 ? this.rollDamage(p, mult) : { v: 0, crit: false };
     const pr: Proj = {
       id: this.nextId++,
@@ -948,6 +1245,7 @@ export class Game {
       hit: new Set(),
     };
     this.projs.set(pr.id, pr);
+    return pr;
   }
 
   private addZone(kind: ZoneKind, owner: string | null, x: number, z: number, r: number, dur: number, delay: number, dmg: number): Zone {
@@ -964,6 +1262,7 @@ export class Game {
     let s = p.stats.speed;
     if (p.slowT > 0) s *= 1 - p.slowAmt;
     if (p.whirlT > 0) s *= 0.75;
+    if (p.demonT > 0) s *= 1.25;
     return s;
   }
 
@@ -983,6 +1282,7 @@ export class Game {
       p.warcryT = Math.max(0, p.warcryT - dt);
       p.rageT = Math.max(0, p.rageT - dt);
       p.hasteT = Math.max(0, p.hasteT - dt);
+      p.demonT = Math.max(0, p.demonT - dt);
       p.faceT = Math.max(0, p.faceT - dt);
       p.lastHurt += dt;
 
@@ -1003,7 +1303,7 @@ export class Game {
       // Регенерация и щит мага
       p.hp = Math.min(p.stats.maxHp, p.hp + p.stats.regen * dt);
       if (p.cls === 'mage') {
-        const shm = p.stats.maxHp * 0.25;
+        const shm = p.stats.maxHp * 0.3;
         if (p.lastHurt > 4) p.shield = Math.min(shm, p.shield + shm * 0.15 * dt);
       }
 
@@ -1022,13 +1322,15 @@ export class Game {
         pos.x += p.dash.vx * dt;
         pos.z += p.dash.vz * dt;
         p.dash.t -= dt;
-        if (p.dash.kind === 'charge') {
+        if (p.dash.kind === 'charge' || p.dash.kind === 'shadow') {
+          const shadow = p.dash.kind === 'shadow';
           for (const t of this.targetsFor(p)) {
             const tid = this.targetId(t);
             if (p.dash.hit.has(tid)) continue;
             if (Math.hypot(t.x - pos.x, t.z - pos.z) < t.rad + 1.3) {
               p.dash.hit.add(tid);
-              this.hit(p, t, 1.3, { stun: 1.1 });
+              if (shadow) this.hit(p, t, 1.2, { slow: 0.4, slowT: 1.5 });
+              else this.hit(p, t, 1.3, { stun: 1.1 });
             }
           }
         }
@@ -1047,10 +1349,14 @@ export class Game {
 
   // ------------------------------------------------------------------ мобы
 
-  private validTarget(id: string | null): Player | null {
+  private validTarget(id: string | null): Victim | null {
     if (!id) return null;
+    if (id.startsWith('n')) {
+      const n = this.minions.get(Number(id.slice(1)));
+      return n && n.kind !== 'totem' ? { id, x: n.x, z: n.z, n } : null;
+    }
     const p = this.players.get(id);
-    return p && p.alive && !p.spectator && (p.connected || p.bot) ? p : null;
+    return p && p.alive && !p.spectator && (p.connected || p.bot) ? { id, x: p.x, z: p.z, p } : null;
   }
 
   private updateMobs(dt: number) {
@@ -1081,14 +1387,23 @@ export class Game {
       if (m.tauntT > 0 && this.validTarget(m.tauntBy)) tgt = this.validTarget(m.tauntBy);
       else if (!tgt || m.retarget <= 0) {
         m.retarget = 0.7;
-        let best: Player | null = null;
+        let best: Victim | null = null;
         let bd = Infinity;
         for (const p of this.players.values()) {
-          if (!this.validTarget(p.id)) continue;
+          const v = this.validTarget(p.id);
+          if (!v) continue;
           const d = Math.hypot(p.x - m.x, p.z - m.z) * (p.cls === 'warrior' ? 0.85 : 1);
           if (d < bd) {
             bd = d;
-            best = p;
+            best = v;
+          }
+        }
+        for (const n of this.minions.values()) {
+          if (n.kind === 'totem') continue;
+          const d = Math.hypot(n.x - m.x, n.z - m.z) * (n.kind === 'golem' ? 0.6 : 1);
+          if (d < bd) {
+            bd = d;
+            best = { id: `n${n.id}`, x: n.x, z: n.z, n };
           }
         }
         tgt = best;
@@ -1113,7 +1428,7 @@ export class Game {
         const nx = dx / dist;
         const nz = dz / dist;
         m.rot = Math.atan2(nx, nz);
-        const reach = def.range + m.radius + PLAYER_RADIUS;
+        const reach = def.range + m.radius + (tgt.n ? tgt.n.radius : PLAYER_RADIUS);
 
         if (def.boss && m.slamCd <= 0 && dist < 6) {
           m.slamCd = 7;
@@ -1216,7 +1531,7 @@ export class Game {
     }
   }
 
-  private mobAttack(m: Mob, tgt: Player) {
+  private mobAttack(m: Mob, tgt: Victim) {
     const def = MOBS[m.kind];
     const dx = tgt.x - m.x;
     const dz = tgt.z - m.z;
@@ -1241,9 +1556,12 @@ export class Game {
       };
       this.projs.set(pr.id, pr);
     } else {
-      const reach = def.range + m.radius + PLAYER_RADIUS + 0.6;
+      const reach = def.range + m.radius + (tgt.n ? tgt.n.radius : PLAYER_RADIUS) + 0.6;
       this.events.push({ e: 'hit', x: r2(m.x + (dx / dist) * m.radius), z: r2(m.z + (dz / dist) * m.radius), k: m.kind });
-      if (dist <= reach) this.damagePlayer(tgt, m.dmg * this.rng.range(0.9, 1.1), false, null);
+      if (dist > reach) return;
+      const v = m.dmg * this.rng.range(0.9, 1.1);
+      if (tgt.p) this.damagePlayer(tgt.p, v, false, null);
+      else if (tgt.n) this.damageMinion(tgt.n, v, false);
     }
   }
 
@@ -1269,10 +1587,34 @@ export class Game {
             pr.hit.add(tid);
             if (pr.explodeR > 0) this.explode(pr, owner);
             else {
+              this.minionStrike = !!pr.fromMinion;
               this.hit(owner, t, 0, undefined, { v: pr.dmg, crit: pr.crit });
+              this.minionStrike = false;
               this.events.push({ e: 'hit', x: r2(pr.x), z: r2(pr.z), k: pr.kind });
             }
             done = true;
+            // Глефа отскакивает к ближайшему новому врагу
+            if (pr.bounces && pr.bounces > 0) {
+              let next: Target | null = null;
+              let bd = 6.5;
+              for (const q of this.targetsFor(owner)) {
+                if (pr.hit.has(this.targetId(q))) continue;
+                const d = Math.hypot(q.x - pr.x, q.z - pr.z);
+                if (d < bd) {
+                  bd = d;
+                  next = q;
+                }
+              }
+              if (next) {
+                const sp = Math.hypot(pr.vx, pr.vz);
+                pr.vx = ((next.x - pr.x) / bd) * sp;
+                pr.vz = ((next.z - pr.z) / bd) * sp;
+                pr.life = bd / sp + 0.2;
+                pr.bounces--;
+                pr.dmg *= 0.85;
+                done = false;
+              }
+            }
             break;
           }
         }
@@ -1289,6 +1631,17 @@ export class Game {
             this.events.push({ e: 'hit', x: r2(pr.x), z: r2(pr.z), k: pr.kind });
             done = true;
             break;
+          }
+        }
+        if (!done) {
+          for (const n of this.minions.values()) {
+            if (n.kind === 'totem') continue;
+            if (Math.hypot(n.x - pr.x, n.z - pr.z) < n.radius + pr.r) {
+              this.damageMinion(n, pr.dmg, false);
+              this.events.push({ e: 'hit', x: r2(pr.x), z: r2(pr.z), k: pr.kind });
+              done = true;
+              break;
+            }
           }
         }
         if (!done && (hitsSolid(pr.x, pr.z, pr.r * 0.5, obs) || pr.life <= 0)) done = true;
@@ -1327,6 +1680,9 @@ export class Game {
                 this.damagePlayer(p, zn.dmg, false, null);
                 p.stunT = Math.max(p.stunT, 0.6);
               }
+            }
+            for (const n of [...this.minions.values()]) {
+              if (n.kind !== 'totem' && Math.hypot(n.x - zn.x, n.z - zn.z) < zn.r + n.radius) this.damageMinion(n, zn.dmg, false);
             }
             this.events.push({ e: 'fx', k: 'slam', x: r2(zn.x), z: r2(zn.z), r: zn.r });
           }
@@ -1371,6 +1727,7 @@ export class Game {
       if (p.dash) st += 'd';
       if (p.slowT > 0) st += 'l';
       if (p.spectator) st += 'x';
+      if (p.demonT > 0) st += 'm';
       const ps: PlayerSnap = {
         id: p.id,
         n: p.name,
@@ -1381,7 +1738,7 @@ export class Game {
         hp: Math.ceil(p.hp),
         mhp: Math.round(p.stats.maxHp),
         sh: Math.round(p.shield),
-        shm: p.cls === 'mage' ? Math.round(p.stats.maxHp * 0.25) : 0,
+        shm: p.cls === 'mage' ? Math.round(p.stats.maxHp * 0.3) : 0,
         g: p.gold,
         k: p.kills,
         al: p.alive,
@@ -1425,6 +1782,9 @@ export class Game {
       mt: this.mobsTotal,
       P,
       M,
+      S: [...this.minions.values()].map(
+        (n): MinionSnap => ({ id: n.id, k: n.kind, o: n.owner, x: r2(n.x), z: r2(n.z), r: r2(n.rot), hp: Math.max(0, Math.ceil(n.hp)), mhp: Math.round(n.maxHp), l: r2(n.life) }),
+      ),
       R: [...this.projs.values()].map((p) => ({ id: p.id, k: p.kind, x: r2(p.x), z: r2(p.z), vx: r2(p.vx), vz: r2(p.vz) })),
       Z: [...this.zones.values()].map((z) => ({ id: z.id, k: z.kind, x: r2(z.x), z: r2(z.z), r: z.r, t: r2(z.t), dur: z.dur, delay: z.delay })),
       E: this.events,
