@@ -4,6 +4,7 @@ import { sfx } from '../audio/sfx';
 import { CLASS_BG, el, esc } from './dom';
 import { classIcon, skillIcon } from './icons';
 import type { Settings } from '../settings';
+import { autoFullscreen, fullscreenButton } from './fullscreen';
 
 export interface MenuActions {
   create(): void;
@@ -48,6 +49,7 @@ export function menuScreen(settings: Settings, act: MenuActions, error = ''): HT
     sfx.unlock();
     sfx.click();
     saveName();
+    autoFullscreen();
     act.create();
   });
   root.querySelector('#join')!.addEventListener('click', () => {
@@ -59,6 +61,7 @@ export function menuScreen(settings: Settings, act: MenuActions, error = ''): HT
       err.textContent = 'Введите код комнаты из 4 символов';
       return;
     }
+    autoFullscreen();
     act.join(c);
   });
   code.addEventListener('keydown', (e) => {
@@ -68,6 +71,7 @@ export function menuScreen(settings: Settings, act: MenuActions, error = ''): HT
     sfx.unlock();
     sfx.click();
     saveName();
+    autoFullscreen();
     act.solo();
   });
   root.querySelector('#settings')!.addEventListener('click', () => {
@@ -80,6 +84,8 @@ export function menuScreen(settings: Settings, act: MenuActions, error = ''): HT
     sfx.click();
     root.appendChild(helpModal());
   });
+  const fs = fullscreenButton('btn ghost small', false, (t) => (err.textContent = t));
+  if (fs) root.querySelector('.corner-btns')!.prepend(fs);
   if (import.meta.env.VITE_DEMO) {
     // Веб-демо: только одиночная игра с ботами (сетевой режим — в приложении или через свой сервер)
     (root.querySelector('#create') as HTMLElement).style.display = 'none';
@@ -177,6 +183,7 @@ export class LobbyScreen {
               <div class="code">${local ? 'СОЛО' : '----'}</div>
             </div>
             ${local ? '' : '<button class="btn small ghost" id="share">📋 Копировать</button>'}
+            <span class="fs-slot"></span>
           </div>
           <div class="slots"></div>
           <div class="lobby-actions">
@@ -194,6 +201,8 @@ export class LobbyScreen {
           </div>
         </div>
       </div>`);
+    const fs = fullscreenButton('btn small ghost', true);
+    if (fs) this.el.querySelector('.fs-slot')!.replaceWith(fs);
     this.el.querySelector('#leave')!.addEventListener('click', () => {
       sfx.click();
       act.leave();

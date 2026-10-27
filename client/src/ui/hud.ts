@@ -3,6 +3,7 @@ import type { ClientState } from '../net/state';
 import type { Engine } from '../render/engine';
 import { CLASS_BG, el, esc } from './dom';
 import { COIN, SWORDS, classIcon } from './icons';
+import { fullscreenButton } from './fullscreen';
 
 interface Floater {
   el: HTMLElement;
@@ -68,6 +69,8 @@ export class Hud {
     this.mini = this.el.querySelector('.minimap')!;
     this.miniCtx = this.mini.getContext('2d')!;
     this.el.querySelector('#pause')!.addEventListener('click', () => this.onPause());
+    const fs = fullscreenButton('icon-btn tap', true, (t) => this.toast(t, 'info'));
+    if (fs) this.el.querySelector('#pause')!.before(fs);
   }
 
   showBanner(text: string, sub = '', color = 'var(--gold)') {

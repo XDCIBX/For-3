@@ -462,7 +462,7 @@ input.field:focus {
 .hud {
   position: absolute;
   inset: 0;
-  pointer-events: none;
+  pointer-events: none !important;
 }
 .hud * {
   pointer-events: none;
@@ -794,8 +794,12 @@ input.field:focus {
   position: absolute;
   inset: 0;
   touch-action: none;
+  /* Слой пропускает касания к кнопкам HUD и к сцене; ловят только джойстик и умения */
+  pointer-events: none !important;
 }
 .joy-zone {
+  pointer-events: auto;
+  touch-action: none;
   position: absolute;
   left: 0;
   top: 22%;
@@ -1378,4 +1382,26 @@ input.field:focus {
   .lobby-mid { display: none; }
   .tavern { flex-direction: column; }
   .side { flex: 0 0 auto; }
+}
+
+/* ---------- Полный экран ---------- */
+.fs-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+.fs-btn svg {
+  display: block;
+}
+.fs-btn .fs-off,
+.fs-btn[data-on='1'] .fs-on {
+  display: none;
+}
+.fs-btn[data-on='1'] .fs-off {
+  display: inline;
+}
+.icon-btn.fs-btn {
+  font-family: inherit;
+  padding: 0;
 }
