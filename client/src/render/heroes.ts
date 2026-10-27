@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { Equip, HeroClass, Item, Rarity } from '@game/shared';
 import { G, RARITY_HEX, addOutline, blobShadow, glow, part, toon } from './toon';
 import { clothTex, texturize, woodTex } from './textures';
+import { bake, unbake } from './bake';
 
 const SKIN = 0xffd3ac;
 const DARK = 0x24160f;
@@ -88,6 +89,8 @@ export class HeroModel {
 
   constructor(cls: HeroClass) {
     this.cls = cls;
+    // Группы с собственной анимацией (остальные склеиваются с родителем)
+    for (const g of [this.torsoG, this.head, this.armL, this.armR, this.legL, this.legR]) g.userData.anim = true;
     this.root.add(blobShadow(1.4));
     this.root.add(this.body);
     this.body.add(this.hips, this.torsoG);
@@ -140,6 +143,7 @@ export class HeroModel {
     headM.scale.set(1.05, 0.97, 1);
     this.head.add(headM);
     this.eyes = [eye(-0.14), eye(0.14)];
+    for (const e of this.eyes) e.userData.anim = true;
     this.head.add(...this.eyes);
     const cheek = toon(0xff9a8a, { transparent: true, opacity: 0.6 });
     for (const x of [-0.23, 0.23]) {
@@ -436,6 +440,7 @@ export class HeroModel {
     const key = eq ? Object.values(eq).map((i) => (i ? i.id : '-')).join('|') : 'none';
     if (key === this.equipKey) return;
     this.equipKey = key;
+    unbake(this.body);
     this.glowParts = [];
     this.extras.clear();
     this.extras.removeFromParent();
@@ -494,6 +499,7 @@ export class HeroModel {
     // Фактура ткани на плащах, мантиях и шляпах, дерево на щите
     const cloth = clothTex();
     texturize(this.root, { 0xc8412f: cloth, 0x2f6b2c: cloth, 0x6b3fc4: cloth, 0x3f8f3a: cloth, 0x4e2a9a: cloth, 0x5a4636: cloth, 0x3a2a5a: cloth, 0xb5452f: woodTex() }, (hex, map) => toon(hex, { map }));
+    bake(this.body);
     this.buildWeapon(eq?.weapon ?? null);
 
     const legendaryCount = eq ? Object.values(eq).filter((i) => i?.rarity === 'legendary').length : 0;

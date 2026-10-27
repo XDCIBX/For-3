@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { G, glow, part, toon } from './toon';
 import { repeated, rockTex, sandTex, stoneTex, texturize, woodTex } from './textures';
+import { bakeStatic } from './bake';
 import { Flame, canvasLabel, makeSun, type Stage } from './env';
 import type { Particles } from './particles';
 
@@ -248,6 +249,9 @@ export class TavernStage implements Stage {
       },
       (hex, map) => toon(hex, { map }),
     );
+    this.keeper.userData.dynamic = true;
+    this.cat.userData.dynamic = true;
+    bakeStatic(s, 6);
   }
 
   private mug(x: number, y: number, z: number) {

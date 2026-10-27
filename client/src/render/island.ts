@@ -3,6 +3,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 import { Rng, type Obstacle, type WorldData, type Vec2 } from '@game/shared';
 import { G, addOutline, faceted, glow, instancedOutline, part, swayToon, toon } from './toon';
 import { barkTex, clothTex, grassTex, leafTex, rockTex, sandTex, stoneTex, woodTex } from './textures';
+import { bakeStatic } from './bake';
 import { Flame, makeSun, portalMaterial, skyTexture, waterMaterial, type Stage } from './env';
 import type { Particles } from './particles';
 
@@ -73,6 +74,9 @@ export class IslandStage implements Stage {
     for (const s of world.spawns) this.buildPortal(s);
     this.buildCamp(rng);
     this.buildDistant(rng);
+
+    // Неподвижные декорации склеиваем по участкам карты
+    bakeStatic(this.scene, 12);
 
     this.fireLight = new THREE.PointLight(0xff8a3a, 6, 9, 1.6);
     this.fireLight.position.set(0, 1.2, 0);

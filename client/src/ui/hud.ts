@@ -31,6 +31,28 @@ export class Hud {
   private lastGold = -1;
   private teamKey = '';
   private scr = { x: 0, y: 0, vis: false };
+  /** Статичный слой мини-карты (остров, деревья) рисуется один раз. */
+  private miniBase: HTMLCanvasElement | null = null;
+  private miniT = 0;
+  private qCache = new Map<string, HTMLElement>();
+  private lastVals = new Map<string, string>();
+
+  /** querySelector с кэшем — update() вызывается каждый кадр. */
+  private q<T extends HTMLElement = HTMLElement>(sel: string): T {
+    let e = this.qCache.get(sel);
+    if (!e || !e.isConnected) {
+      e = this.el.querySelector(sel) as HTMLElement;
+      this.qCache.set(sel, e);
+    }
+    return e as T;
+  }
+
+  /** Пишем в DOM только при изменении значения (меньше перерисовок). */
+  private set(key: string, val: string, apply: (v: string) => void) {
+    if (this.lastVals.get(key) === val) return;
+    this.lastVals.set(key, val);
+    apply(val);
+  }
   onPause: () => void = () => {};
 
   constructor(engine: Engine) {
@@ -90,7 +112,10 @@ export class Hud {
 
   /** Всплывающее число/текст над точкой мира. */
   float(text: string, cls: string, x: number, y: number, z: number, dur = 0.9) {
-    if (this.floaters.length > 60) return;
+    if (this.floaters.length > 40) return;
+    // Цифры урона за пределами экрана не создаём
+    this.engine.worldToScreen(x, y, z, this.scr);
+    if (!this.scr.vis || this.scr.x < -40 || this.scr.y < -40 || this.scr.x > window.innerWidth + 40 || this.scr.y > window.innerHeight + 40) return;
     const e = this.pool.pop() ?? document.createElement('div');
     e.className = `fl ${cls}`;
     e.textContent = text;
@@ -129,29 +154,29 @@ export class Hud {
     if (!me) return;
 
     // Портрет и здоровье
-    const portrait = this.el.querySelector<HTMLElement>('.portrait')!;
+    const portrait = this.q('.portrait')!;
     if (portrait.dataset.c !== me.c) {
       portrait.dataset.c = me.c;
       portrait.style.background = CLASS_BG[me.c];
       portrait.innerHTML = classIcon(me.c);
     }
     const hpFrac = Math.max(0, me.hp / Math.max(1, me.mhp));
-    (this.el.querySelector('.bar .hp') as HTMLElement).style.width = `${hpFrac * 100}%`;
-    (this.el.querySelector('.bar .lag') as HTMLElement).style.width = `${hpFrac * 100}%`;
-    (this.el.querySelector('.bar .sh') as HTMLElement).style.width = `${me.shm ? Math.min(1, me.sh / me.mhp) * 100 : 0}%`;
-    (this.el.querySelector('.bar span') as HTMLElement).textContent = `${Math.max(0, Math.ceil(me.hp))} / ${me.mhp}`;
+    this.set('hp', `${(hpFrac * 100).toFixed(1)}%`, (v) => (this.q('.bar .hp').style.width = v));
+    this.set('lag', `${(hpFrac * 100).toFixed(1)}%`, (v) => (this.q('.bar .lag').style.width = v));
+    this.set('sh', `${me.shm ? (Math.min(1, me.sh / me.mhp) * 100).toFixed(1) : 0}%`, (v) => (this.q('.bar .sh').style.width = v));
+    this.set('hpt', `${Math.max(0, Math.ceil(me.hp))} / ${me.mhp}`, (v) => (this.q('.bar span').textContent = v));
     if (me.g !== this.lastGold) {
-      (this.el.querySelector('.gold-box b') as HTMLElement).textContent = String(me.g);
+      this.q('.gold-box b').textContent = String(me.g);
       if (this.lastGold >= 0 && me.g > this.lastGold) this.bumpGold();
       this.lastGold = me.g;
     }
 
     // Раунд
-    const rt = this.el.querySelector<HTMLElement>('.rt')!;
-    const rs = this.el.querySelector<HTMLElement>('.rs')!;
-    const mobbar = this.el.querySelector<HTMLElement>('.mobbar')!;
+    const rt = this.q('.rt')!;
+    const rs = this.q('.rs')!;
+    const mobbar = this.q('.mobbar')!;
     const pvp = st.round % PVP_EVERY === 0;
-    rt.textContent = `Раунд ${st.round}/${MAX_ROUNDS}${pvp ? ' · ПвП' : ''}`;
+    this.set('rt', `Раунд ${st.round}/${MAX_ROUNDS}${pvp ? ' · ПвП' : ''}`, (v) => (rt.textContent = v));
     if (st.phase === 'battle') {
       rs.textContent = `Врагов осталось: ${st.mobsLeft}`;
       mobbar.style.display = '';
@@ -208,7 +233,42 @@ export class Hud {
       }
     } else vs.style.display = 'none';
 
-    this.drawMinimap(st);
+    // Мини-карту обновляем 10 раз в секунду — этого достаточно
+    this.miniT -= dt;
+    if (this.miniT <= 0) {
+      this.miniT = 0.1;
+      this.drawMinimap(st);
+    }
+  }
+
+  private drawMiniBase(world: WorldData, W: number, sc: number): HTMLCanvasElement {
+    const cv = document.createElement('canvas');
+    cv.width = cv.height = W;
+    const c = cv.getContext('2d')!;
+    c.fillStyle = '#3a8ac0';
+    c.fillRect(0, 0, W, W);
+    c.translate(W / 2, W / 2);
+    c.fillStyle = '#f0dca0';
+    c.beginPath();
+    c.arc(0, 0, 35.5 * sc, 0, Math.PI * 2);
+    c.fill();
+    c.fillStyle = '#6fbf4a';
+    c.beginPath();
+    c.arc(0, 0, 33.5 * sc, 0, Math.PI * 2);
+    c.fill();
+    for (const o of world.obstacles) {
+      c.fillStyle = o.kind === 'tree' ? '#2f7a3a' : o.kind === 'pond' ? '#3a9ad0' : o.kind === 'tent' ? '#d05a3a' : '#9a9a9a';
+      c.beginPath();
+      c.arc(o.x * sc, o.z * sc, Math.max(1.5, o.r * sc), 0, Math.PI * 2);
+      c.fill();
+    }
+    c.fillStyle = '#b06aff';
+    for (const s of world.spawns) {
+      c.beginPath();
+      c.arc(s.x * sc, s.z * sc, 4, 0, Math.PI * 2);
+      c.fill();
+    }
+    return cv;
   }
 
   private drawMinimap(st: ClientState) {
@@ -220,42 +280,28 @@ export class Hud {
     if (!arena && st.seed !== this.worldSeed) {
       this.world = generateWorld(st.seed);
       this.worldSeed = st.seed;
+      this.miniBase = null;
     }
     c.clearRect(0, 0, W, W);
     c.save();
     c.beginPath();
     c.arc(W / 2, W / 2, W / 2, 0, Math.PI * 2);
     c.clip();
-    c.fillStyle = arena ? '#c8a060' : '#3a8ac0';
-    c.fillRect(0, 0, W, W);
-    c.translate(W / 2, W / 2);
     if (!arena && this.world) {
-      c.fillStyle = '#f0dca0';
-      c.beginPath();
-      c.arc(0, 0, 35.5 * sc, 0, Math.PI * 2);
-      c.fill();
-      c.fillStyle = '#6fbf4a';
-      c.beginPath();
-      c.arc(0, 0, 33.5 * sc, 0, Math.PI * 2);
-      c.fill();
-      for (const o of this.world.obstacles) {
-        c.fillStyle = o.kind === 'tree' ? '#2f7a3a' : o.kind === 'pond' ? '#3a9ad0' : o.kind === 'tent' ? '#d05a3a' : '#9a9a9a';
+      if (!this.miniBase) this.miniBase = this.drawMiniBase(this.world, W, sc);
+      c.drawImage(this.miniBase, 0, 0);
+      c.translate(W / 2, W / 2);
+    } else {
+      c.fillStyle = arena ? '#c8a060' : '#3a8ac0';
+      c.fillRect(0, 0, W, W);
+      c.translate(W / 2, W / 2);
+      if (arena) {
+        c.strokeStyle = '#8a7a6a';
+        c.lineWidth = 6;
         c.beginPath();
-        c.arc(o.x * sc, o.z * sc, Math.max(1.5, o.r * sc), 0, Math.PI * 2);
-        c.fill();
+        c.arc(0, 0, 12.6 * sc, 0, Math.PI * 2);
+        c.stroke();
       }
-      c.fillStyle = '#b06aff';
-      for (const s of this.world.spawns) {
-        c.beginPath();
-        c.arc(s.x * sc, s.z * sc, 4, 0, Math.PI * 2);
-        c.fill();
-      }
-    } else if (arena) {
-      c.strokeStyle = '#8a7a6a';
-      c.lineWidth = 6;
-      c.beginPath();
-      c.arc(0, 0, 12.6 * sc, 0, Math.PI * 2);
-      c.stroke();
     }
     const snap = st.snap;
     if (snap) {

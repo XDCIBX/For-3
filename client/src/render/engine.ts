@@ -67,6 +67,17 @@ class MobView {
     this.fz = this.tz = m.z;
     this.rot = this.trot = m.r;
   }
+  /** Повторное использование из пула вместо создания новой модели. */
+  reuse(m: MobSnap) {
+    this.model.reset();
+    this.info = m;
+    this.lastHp = m.hp;
+    this.fx = this.tx = m.x;
+    this.fz = this.tz = m.z;
+    this.rot = this.trot = m.r;
+    this.model.root.position.set(m.x, 0, m.z);
+    this.bar.set(1);
+  }
 }
 
 export interface AimState {
@@ -95,6 +106,8 @@ export class Engine {
   heroes = new Map<string, HeroView>();
   mobs = new Map<number, MobView>();
   private dying: MobView[] = [];
+  /** Пул моделей мобов по видам — без рывков при появлении новой волны. */
+  private mobPool = new Map<string, MobView[]>();
   projs = new Map<number, ProjView>();
   zones = new Map<number, ZoneView>();
   myId = '';
@@ -158,7 +171,8 @@ export class Engine {
   resize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const dpr = this.quality === 'high' ? Math.min(window.devicePixelRatio, 2) : Math.min(window.devicePixelRatio, 1.25);
+    const base = this.quality === 'high' ? Math.min(window.devicePixelRatio, 2) : Math.min(window.devicePixelRatio, 1.25);
+    const dpr = Math.max(0.6, base * this.resScale);
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(w, h, false);
     this.camera.aspect = w / h;
@@ -188,13 +202,19 @@ export class Engine {
     this.effects.scene = s.scene;
     s.shadowsDirty = true;
     for (const h of this.heroes.values()) s.scene.add(h.model.root);
-    for (const m of this.mobs.values()) m.model.root.removeFromParent();
+    for (const m of this.mobs.values()) {
+      m.model.root.removeFromParent();
+      this.releaseMob(m);
+    }
     this.mobs.clear();
     for (const p of this.projs.values()) p.obj.removeFromParent();
     this.projs.clear();
     for (const z of this.zones.values()) z.obj.removeFromParent();
     this.zones.clear();
-    for (const d of this.dying) d.model.root.removeFromParent();
+    for (const d of this.dying) {
+      d.model.root.removeFromParent();
+      this.releaseMob(d);
+    }
     this.dying = [];
   }
 
@@ -322,7 +342,9 @@ export class Engine {
       seen.add(m.id);
       let v = this.mobs.get(m.id);
       if (!v) {
-        v = new MobView(m);
+        const pooled = this.mobPool.get(m.k)?.pop();
+        if (pooled) pooled.reuse(m);
+        v = pooled ?? new MobView(m);
         this.mobs.set(m.id, v);
         this.stage.scene.add(v.model.root);
       }
@@ -387,6 +409,12 @@ export class Engine {
         this.zones.delete(id);
       }
     }
+  }
+
+  private releaseMob(v: MobView) {
+    let pool = this.mobPool.get(v.info.k);
+    if (!pool) this.mobPool.set(v.info.k, (pool = []));
+    if (pool.length < 40) pool.push(v);
   }
 
   heroPos(id: string): THREE.Vector3 | null {
@@ -524,8 +552,28 @@ export class Engine {
 
   // ----------------------------------------------------------------- кадр
 
+  /** Динамическое разрешение: при просадке FPS рендерим в меньшем разрешении. */
+  resScale = 1;
+  private perf = { last: 0, ema: 16, t: 0 };
+
+  private adaptResolution(now: number) {
+    const p = this.perf;
+    const real = p.last ? now - p.last : 16;
+    p.last = now;
+    if (real > 250) return; // вкладка была в фоне
+    p.ema = p.ema * 0.93 + real * 0.07;
+    p.t += real;
+    if (p.t < 1200) return;
+    p.t = 0;
+    const prev = this.resScale;
+    if (p.ema > 22 && this.resScale > 0.5) this.resScale = Math.max(0.5, this.resScale - 0.15);
+    else if (p.ema < 17.5 && this.resScale < 1) this.resScale = Math.min(1, this.resScale + 0.1);
+    if (prev !== this.resScale) this.resize();
+  }
+
   frame(dt: number) {
     const now = performance.now();
+    this.adaptResolution(now);
     TIME.value += dt;
     const k = Math.min(1, (now - this.lastSnap) / Math.max(30, this.interval));
     const inTavern = this.mode === 'game' && this.phase === 'tavern';
@@ -605,6 +653,7 @@ export class Engine {
       if (v.model.dying > 0.75) {
         v.model.root.removeFromParent();
         this.dying.splice(i, 1);
+        this.releaseMob(v);
       }
     }
     for (const p of this.projs.values()) p.update(dt, now, this.fx);

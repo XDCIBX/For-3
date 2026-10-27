@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { ARENA_OBSTACLES, ARENA_RADIUS } from '@game/shared';
 import { G, addOutline, faceted, part, toon } from './toon';
 import { repeated, sandTex, stoneTex, texturize, woodTex } from './textures';
+import { bakeStatic } from './bake';
 import { Flame, makeSun, skyTexture, type Stage } from './env';
 import type { Particles } from './particles';
 
@@ -142,6 +143,8 @@ export class ArenaStage implements Stage {
 
     const stone = stoneTex();
     texturize(s, { 0xb0a494: stone, 0xa0968a: stone, 0x9a9088: stone, 0xd0c6b6: stone, 0x8a8078: stone, 0x5a3a22: woodTex() }, (hex, map) => toon(hex, { map }));
+    for (const b of this.banners) b.userData.dynamic = true;
+    bakeStatic(s, 10);
   }
 
   update(dt: number, fx: Particles) {

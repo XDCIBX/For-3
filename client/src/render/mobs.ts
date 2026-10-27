@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { MobKind } from '@game/shared';
 import { G, addOutline, blobShadow, glow, part, toon } from './toon';
+import { bake } from './bake';
 
 export interface MobAnimInput {
   moving: boolean;
@@ -77,6 +78,7 @@ function biped(o: { skin: number; torsoCol: number; legCol: number; bodyR: numbe
   const head = new THREE.Group();
   head.position.y = shoulderY + o.headR * 0.85;
   torso.add(head);
+  for (const g of [body, torso, head, armL, armR, legL, legR]) g.userData.anim = true;
   return { body, torso, head, armL, armR, legL, legR, handL, handR };
 }
 
@@ -122,6 +124,7 @@ export class MobModel {
         const mouth = part(G.torus(0.07, 0.02, Math.PI, 6, 10), 0x1a1210, { pos: [0, -0.1, 0.02], rot: [0, 0, Math.PI], outline: false });
         face.add(mouth);
         g.add(blob, core, shine, face);
+        g.userData.anim = true;
         this.slime = g;
         this.inner.add(g);
         shadow = 1.3;
@@ -272,10 +275,25 @@ export class MobModel {
     this.ice.position.y = height * 0.47;
     this.ice.visible = false;
     this.root.add(this.ice);
+    // Склеиваем детали — в разы меньше отрисовок на каждого моба
+    bake(this.inner);
   }
 
   playAttack() {
     this.atkT = 0;
+  }
+
+  /** Сброс состояния для повторного использования модели из пула. */
+  reset() {
+    this.dying = 0;
+    this.spawnK = 0;
+    this.atkT = 99;
+    this.popT = 0;
+    this.inner.rotation.set(0, 0, 0);
+    this.inner.scale.setScalar(1);
+    this.inner.position.set(0, 0, 0);
+    this.stars.visible = false;
+    this.ice.visible = false;
   }
 
   pop() {

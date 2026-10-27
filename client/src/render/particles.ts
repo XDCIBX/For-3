@@ -50,6 +50,9 @@ class ParticlePool {
   private alpha0: Float32Array;
   private baseSize: Float32Array;
   private next = 0;
+  /** Есть ли живые частицы (иначе не гоняем буферы в видеокарту). */
+  private alive = 0;
+  private uploaded = true;
   private geo: THREE.BufferGeometry;
   readonly mat: THREE.ShaderMaterial;
 
@@ -102,6 +105,7 @@ class ParticlePool {
   }
 
   emit(o: EmitOpts) {
+    this.alive++;
     const i = this.next;
     this.next = (this.next + 1) % this.cap;
     this.pos[i * 3] = o.x;
@@ -124,6 +128,13 @@ class ParticlePool {
   }
 
   update(dt: number) {
+    if (this.alive === 0) {
+      if (!this.uploaded) this.upload();
+      this.uploaded = true;
+      return;
+    }
+    this.uploaded = false;
+    let alive = 0;
     for (let i = 0; i < this.cap; i++) {
       if (this.life[i] <= 0) continue;
       this.life[i] -= dt;
@@ -148,7 +159,13 @@ class ParticlePool {
       const k = this.life[i] / this.maxLife[i];
       this.size[i] = Math.max(0, this.baseSize[i] + this.grow[i] * (this.maxLife[i] - this.life[i]));
       this.col[i * 4 + 3] = this.alpha0[i] * Math.min(1, k * 2.5);
+      alive++;
     }
+    this.alive = alive;
+    this.upload();
+  }
+
+  private upload() {
     (this.geo.attributes.position as THREE.BufferAttribute).needsUpdate = true;
     (this.geo.attributes.pcolor as THREE.BufferAttribute).needsUpdate = true;
     (this.geo.attributes.size as THREE.BufferAttribute).needsUpdate = true;
@@ -158,6 +175,8 @@ class ParticlePool {
     this.life.fill(0);
     this.col.fill(0);
     this.size.fill(0);
+    this.alive = 0;
+    this.uploaded = false;
   }
 }
 
