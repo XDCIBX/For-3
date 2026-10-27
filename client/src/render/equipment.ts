@@ -1,0 +1,574 @@
+import * as THREE from 'three';
+import type { HeroClass, Rarity } from '@game/shared';
+import { G, RARITY_HEX, addOutline, faceted, glow, part, toon } from './toon';
+import { clothTex } from './textures';
+
+/**
+ * Детальные модели экипировки, видимые на герое. Каждый шаблон предмета
+ * выглядит по-своему, а с ростом редкости добавляются детали:
+ * обычный → редкий (отделка) → эпический (украшения, свечение) → легендарный (золото, сияние).
+ */
+
+export const RANK: Record<Rarity, number> = { common: 0, rare: 1, epic: 2, legendary: 3 };
+
+export const ARMOR_COLORS: Record<string, Record<Rarity, number>> = {
+  plate: { common: 0xa9b4bf, rare: 0x7aa6d8, epic: 0x8e62c9, legendary: 0xe7b84a },
+  robe: { common: 0x8d7c62, rare: 0x3f6fcc, epic: 0x7b3fc6, legendary: 0xd2493a },
+  leather: { common: 0x8a5a33, rare: 0x2f7c6c, epic: 0x433468, legendary: 0xcf5a22 },
+};
+const TRIM: Record<Rarity, number> = { common: 0x6a4a2a, rare: 0xd8dee4, epic: 0xffc93c, legendary: 0xfff0a0 };
+const METAL: Record<Rarity, number> = { common: 0xd6dde3, rare: 0x9fd4ff, epic: 0xd4a6ff, legendary: 0xffe07a };
+const GOLD = 0xffc93c;
+const LEATHER = 0x5a3a22;
+const WOOD = 0x8a5a2b;
+const SKIN = 0xffd3ac;
+
+type V3 = [number, number, number];
+
+/** Части героя, к которым крепится экипировка. */
+export interface Rig {
+  torso: THREE.Group;
+  head: THREE.Group;
+  armL: THREE.Group;
+  armR: THREE.Group;
+  legL: THREE.Group;
+  legR: THREE.Group;
+}
+
+/** Что построено — чтобы при смене экипировки всё убрать. */
+export interface Built {
+  parts: THREE.Object3D[];
+  glow: THREE.Object3D[];
+  spin: THREE.Object3D[];
+}
+
+function add(parent: THREE.Object3D, out: Built, o: THREE.Object3D) {
+  parent.add(o);
+  out.parts.push(o);
+  return o;
+}
+
+function gem(color: number, size: number, pos: V3, out?: Built): THREE.Mesh {
+  const m = new THREE.Mesh(faceted(new THREE.OctahedronGeometry(size, 0)), toon(color, { emissive: color, emissiveIntensity: 0.75 }));
+  m.position.set(...pos);
+  addOutline(m, 0.012);
+  if (out) out.glow.push(m);
+  return m;
+}
+
+function halo(color: number, size: number, pos: V3, out: Built, opacity = 0.3): THREE.Mesh {
+  const m = new THREE.Mesh(G.sphere(size, 12, 8), glow(color, opacity));
+  m.position.set(...pos);
+  out.glow.push(m);
+  return m;
+}
+
+// ================================================================== Доспехи
+
+export function buildArmor(rig: Rig, tpl: string, r: Rarity, cls: HeroClass, out: Built): { torso: number; sleeve: number; metal: boolean } {
+  const rank = RANK[r];
+  const col = ARMOR_COLORS[tpl]?.[r] ?? 0x8a5a33;
+  const trim = TRIM[r];
+  const T = rig.torso;
+  if (tpl === 'plate') {
+    // Кираса поверх торса
+    add(T, out, part(G.sphere(0.32, 18, 12), col, { pos: [0, 0.42, 0.06], scale: [1.04, 1.12, 0.72], outline: 0.03 }));
+    // Пластины живота
+    for (const [y, rr] of [
+      [0.2, 0.31],
+      [0.1, 0.32],
+    ] as const)
+      add(T, out, part(G.torus(rr, 0.035, Math.PI * 2, 6, 24), col, { pos: [0, y, 0], rot: [Math.PI / 2, 0, 0], scale: [1, 0.88, 1], outline: 0.015 }));
+    // Горжет
+    add(T, out, part(G.torus(0.2, 0.06, Math.PI * 2, 8, 20), col, { pos: [0, 0.72, 0], rot: [Math.PI / 2, 0, 0], outline: 0.02 }));
+    // Набедренные пластины (тассеты)
+    for (const a of [-0.55, 0, 0.55]) {
+      add(T, out, part(G.box(0.17, 0.2, 0.04), col, { pos: [Math.sin(a) * 0.3, -0.02, Math.cos(a) * 0.27], rot: [0.18, a, 0], outline: 0.015 }));
+      if (rank >= 1) add(T, out, part(G.box(0.17, 0.03, 0.045), trim, { pos: [Math.sin(a) * 0.31, -0.11, Math.cos(a) * 0.285], rot: [0.18, a, 0], outline: false }));
+    }
+    // Многослойные наплечники и наручи
+    for (const arm of [rig.armL, rig.armR]) {
+      const s = arm === rig.armL ? -1 : 1;
+      add(arm, out, part(G.halfSphere(0.19), col, { pos: [0, 0.03, 0], scale: [1.15, 0.85, 1.1], rot: [0, 0, s * 0.15], outline: 0.025 }));
+      add(arm, out, part(G.halfSphere(0.17), col, { pos: [s * 0.02, -0.07, 0], scale: [1.2, 0.6, 1.15], outline: 0.02 }));
+      add(arm, out, part(G.cyl(0.105, 0.095, 0.17, 12), col, { pos: [0, -0.31, 0], outline: 0.018 }));
+      if (rank >= 1) add(arm, out, part(G.torus(0.2, 0.022, Math.PI * 2, 6, 20), trim, { pos: [0, -0.04, 0], rot: [Math.PI / 2, 0, 0], scale: [1.1, 1.05, 1], outline: false }));
+      if (rank >= 3) for (const z of [-0.08, 0.08]) add(arm, out, part(G.cone(0.04, 0.16, 6), GOLD, { pos: [s * 0.08, 0.17, z], rot: [0, 0, -s * 0.5], outline: 0.012 }));
+    }
+    // Заклёпки и отделка
+    if (rank >= 1) {
+      for (const [x, y] of [
+        [-0.2, 0.55],
+        [0.2, 0.55],
+        [-0.22, 0.3],
+        [0.22, 0.3],
+      ])
+        add(T, out, part(G.sphere(0.025, 6, 4), trim, { pos: [x, y, 0.27], outline: false }));
+    }
+    if (rank >= 2) {
+      add(T, out, part(G.box(0.05, 0.42, 0.03), trim, { pos: [0, 0.42, 0.3], outline: false }));
+      add(T, out, gem(RARITY_HEX[r], 0.07, [0, 0.5, 0.32], out));
+    }
+    if (rank >= 3) {
+      add(T, out, part(G.box(0.66, 0.9, 0.05), 0xffd54a, { pos: [0, 0.22, -0.34], rot: [0.14, 0, 0], outline: 0.025 }));
+      add(T, out, halo(0xffd54a, 0.18, [0, 0.5, 0.33], out, 0.35));
+    }
+    return { torso: col, sleeve: cls === 'mage' ? 0x6b3fc4 : col, metal: true };
+  }
+  if (tpl === 'robe') {
+    if (cls !== 'mage') {
+      // Длинная юбка мантии
+      add(T, out, part(G.cyl(0.32, 0.55, 0.7, 18), col, { pos: [0, -0.2, 0], outline: 0.03, map: clothTex() }));
+    }
+    // Пелерина на плечах и широкие рукава
+    add(T, out, part(G.cyl(0.22, 0.44, 0.17, 18), col, { pos: [0, 0.66, 0], outline: 0.025, map: clothTex() }));
+    for (const arm of [rig.armL, rig.armR]) add(arm, out, part(G.cyl(0.09, 0.16, 0.26, 12), col, { pos: [0, -0.24, 0], outline: 0.02, map: clothTex() }));
+    // Кушак с концами
+    const sash = rank >= 1 ? GOLD : 0x5a3a22;
+    add(T, out, part(G.torus(0.315, 0.045, Math.PI * 2, 6, 24), sash, { pos: [0, 0.13, 0], rot: [Math.PI / 2, 0, 0], scale: [1, 0.88, 1], outline: 0.012 }));
+    for (const x of [0.08, 0.16]) add(T, out, part(G.box(0.07, 0.3, 0.02), sash, { pos: [x, -0.04, 0.27], rot: [0.1, 0, x * 0.8], outline: 0.01 }));
+    if (rank >= 1) {
+      add(T, out, part(G.torus(0.44, 0.03, Math.PI * 2, 6, 24), GOLD, { pos: [0, 0.58, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+      if (cls !== 'mage') add(T, out, part(G.torus(0.55, 0.035, Math.PI * 2, 6, 28), GOLD, { pos: [0, -0.54, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+      for (const arm of [rig.armL, rig.armR]) add(arm, out, part(G.torus(0.155, 0.02, Math.PI * 2, 6, 16), GOLD, { pos: [0, -0.37, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+    }
+    if (rank >= 2) {
+      // Руны по подолу
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        add(T, out, gem(RARITY_HEX[r], 0.035, [Math.sin(a) * 0.5, -0.42, Math.cos(a) * 0.47], out));
+      }
+      add(T, out, gem(RARITY_HEX[r], 0.07, [0, 0.45, 0.3], out));
+    }
+    if (rank >= 3) {
+      // Звёздная мантия: сияющий воротник
+      for (let i = 0; i < 5; i++) {
+        const a = -0.9 + i * 0.45;
+        add(T, out, part(G.cone(0.05, 0.22, 5), 0xffd54a, { pos: [Math.sin(a) * 0.3, 0.82, -Math.cos(a) * 0.12 - 0.06], rot: [-0.4, a, 0], outline: 0.012 }));
+      }
+      add(T, out, halo(0xffb070, 0.2, [0, 0.45, 0.32], out, 0.35));
+    }
+    return { torso: col, sleeve: col, metal: false };
+  }
+  // Кожаный доспех
+  add(T, out, part(G.sphere(0.32, 18, 12), col, { pos: [0, 0.4, 0.04], scale: [1.03, 1.1, 0.7], outline: 0.025, map: clothTex() }));
+  // Перекрещённые ремни с пряжкой
+  for (const a of [-0.6, 0.6]) add(T, out, part(G.box(0.07, 0.62, 0.03), LEATHER, { pos: [0, 0.4, 0.29], rot: [0, 0, a], outline: 0.012 }));
+  add(T, out, part(G.box(0.1, 0.1, 0.04), GOLD, { pos: [0, 0.4, 0.31], outline: 0.012 }));
+  // Подсумки на поясе
+  for (const s of [-1, 1]) add(T, out, part(G.box(0.12, 0.12, 0.08), LEATHER, { pos: [s * 0.26, 0.06, 0.15], rot: [0, s * 0.7, 0], outline: 0.015 }));
+  // Наплечник на левом плече и наручи
+  add(rig.armL, out, part(G.halfSphere(0.17), col, { pos: [0, 0.03, 0], scale: [1.15, 0.8, 1.1], outline: 0.02, map: clothTex() }));
+  for (const arm of [rig.armL, rig.armR]) {
+    add(arm, out, part(G.cyl(0.1, 0.09, 0.16, 10), LEATHER, { pos: [0, -0.31, 0], outline: 0.015 }));
+    add(arm, out, part(G.torus(0.1, 0.015, Math.PI * 2, 4, 12), GOLD, { pos: [0, -0.31, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+  }
+  if (rank >= 1) {
+    // Меховой воротник
+    const fur = rank >= 3 ? 0xffe8c8 : rank >= 2 ? 0x3a3048 : 0xe8dcc8;
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      add(T, out, part(G.ico(0.1, 1), fur, { pos: [Math.sin(a) * 0.22, 0.73, Math.cos(a) * 0.19], outline: 0.012 }));
+    }
+  }
+  if (rank >= 2) {
+    // Кинжал на бедре
+    const dg = new THREE.Group();
+    dg.add(part(G.cyl(0.025, 0.025, 0.1, 6), LEATHER, { outline: 0.01 }));
+    dg.add(part(G.box(0.1, 0.025, 0.03), GOLD, { pos: [0, 0.06, 0], outline: 0.01 }));
+    dg.add(part(G.box(0.04, 0.2, 0.015), METAL[r], { pos: [0, 0.17, 0], outline: 0.01 }));
+    dg.position.set(0.3, -0.02, 0.05);
+    dg.rotation.set(Math.PI, 0, 0.3);
+    add(T, out, dg);
+    add(T, out, gem(RARITY_HEX[r], 0.05, [0, 0.4, 0.34], out));
+  }
+  if (rank >= 3) {
+    // Перья феникса на плече
+    for (let i = 0; i < 4; i++) add(rig.armL, out, part(G.cone(0.04, 0.28, 5), [0xff6a2a, 0xffb030, 0xffe060, 0xff6a2a][i], { pos: [-0.05, 0.1, -0.12 + i * 0.07], rot: [0.3 - i * 0.2, 0, 0.9], outline: 0.01 }));
+    add(T, out, halo(0xff8a3a, 0.18, [0, 0.4, 0.34], out, 0.35));
+  }
+  return { torso: col, sleeve: col, metal: false };
+}
+
+// ================================================================== Голова
+
+/** Шлем или капюшон вместо классового головного убора. */
+export function buildHelmet(g: THREE.Group, tpl: string, r: Rarity, out: Built) {
+  const rank = RANK[r];
+  if (tpl === 'helm') {
+    const metal = rank === 0 ? 0x8a5a33 : rank >= 3 ? 0xffcf4a : ARMOR_COLORS.plate[r];
+    const outline = 0.03;
+    add(g, out, part(G.halfSphere(0.44), metal, { pos: [0, 0.03, 0], outline }));
+    add(g, out, part(G.torus(0.43, 0.04, Math.PI * 2, 6, 24), rank === 0 ? 0x5a3a22 : TRIM[r], { pos: [0, 0.04, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+    if (rank === 0) {
+      // Кожаная шапка с пуговкой и швами
+      add(g, out, part(G.sphere(0.05, 8, 6), 0x5a3a22, { pos: [0, 0.47, 0], outline: 0.01 }));
+      for (const a of [0, Math.PI / 2]) add(g, out, part(G.torus(0.44, 0.012, Math.PI, 4, 16), 0x5a3a22, { pos: [0, 0.03, 0], rot: [0, a, 0], outline: false }));
+      return;
+    }
+    // Наносник и заклёпки
+    add(g, out, part(G.box(0.06, 0.27, 0.05), metal, { pos: [0, -0.03, 0.42], outline: 0.012 }));
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      add(g, out, part(G.sphere(0.022, 6, 4), TRIM[r], { pos: [Math.sin(a) * 0.44, 0.06, Math.cos(a) * 0.44], outline: false }));
+    }
+    if (rank >= 2) {
+      // Нащёчники, гребень и плюмаж
+      for (const s of [-1, 1]) add(g, out, part(G.box(0.13, 0.24, 0.05), metal, { pos: [s * 0.31, -0.13, 0.27], rot: [0, s * 0.65, 0], outline: 0.015 }));
+      add(g, out, part(G.box(0.05, 0.12, 0.62), TRIM[r], { pos: [0, 0.42, -0.02], outline: 0.012 }));
+      const plume = new THREE.Group();
+      for (let i = 0; i < 4; i++) plume.add(part(G.capsule(0.05, 0.22), RARITY_HEX[r], { pos: [0, 0, -i * 0.09], rot: [-0.9 - i * 0.15, 0, 0], outline: 0.012 }));
+      plume.position.set(0, 0.5, -0.05);
+      add(g, out, plume);
+    }
+    if (rank >= 3) {
+      // Корона королей
+      for (let i = 0; i < 7; i++) {
+        const a = (i / 7) * Math.PI * 2;
+        add(g, out, part(G.cone(0.055, 0.2, 6), 0xffd54a, { pos: [Math.sin(a) * 0.36, 0.3, Math.cos(a) * 0.36], rot: [Math.cos(a) * 0.3, 0, -Math.sin(a) * 0.3], outline: 0.012 }));
+      }
+      add(g, out, gem(0xff3a5a, 0.06, [0, 0.22, 0.42], out));
+      add(g, out, halo(0xffd54a, 0.2, [0, 0.4, 0], out, 0.25));
+    }
+    return;
+  }
+  // Капюшон
+  const col = { common: 0x7a6a55, rare: 0x2f6aa8, epic: 0x2a2238, legendary: 0xf2ecd8 }[r];
+  const hood = part(G.sphere(0.45, 18, 14), col, { pos: [0, 0.05, -0.06], outline: 0.03, map: clothTex() });
+  hood.scale.set(1.04, 1.02, 1.05);
+  const face = new THREE.Mesh(G.sphere(0.395, 18, 14), toon(SKIN));
+  face.position.set(0, -0.02, 0.06);
+  face.scale.set(0.98, 0.93, 0.95);
+  add(g, out, hood);
+  add(g, out, face);
+  add(g, out, part(G.cone(0.2, 0.5, 10), col, { pos: [0, 0.05, -0.5], rot: [-2.0, 0, 0], outline: 0.025, map: clothTex() }));
+  if (rank >= 1) {
+    // Окантовка лица и перо
+    add(g, out, part(G.torus(0.37, 0.03, Math.PI * 2, 6, 24), rank >= 3 ? GOLD : 0xd8c8a0, { pos: [0, -0.02, 0.2], scale: [1, 1.05, 1], outline: false }));
+    add(g, out, part(G.capsule(0.04, 0.32), RARITY_HEX[r], { pos: [0.33, 0.35, -0.2], rot: [-0.5, 0, -0.6], outline: 0.012 }));
+  }
+  if (rank === 2) {
+    // Капюшон Тени: маска на нижнюю часть лица
+    add(g, out, part(G.sphere(0.3, 14, 10), 0x2a2232, { pos: [0, -0.24, 0.16], scale: [0.95, 0.42, 0.8], outline: 0.012 }));
+  }
+  if (rank >= 3) {
+    // Венец мудрости
+    add(g, out, part(G.torus(0.4, 0.03, Math.PI * 2, 6, 24), 0xffd54a, { pos: [0, 0.2, 0.04], rot: [Math.PI / 2 - 0.25, 0, 0], outline: false }));
+    add(g, out, gem(0x5ac8ff, 0.07, [0, 0.27, 0.4], out));
+    add(g, out, halo(0x8ad8ff, 0.16, [0, 0.27, 0.4], out, 0.35));
+  }
+}
+
+// ================================================================== Обувь
+
+export function buildBoots(rig: Rig, tpl: string, r: Rarity, out: Built): number {
+  const rank = RANK[r];
+  const greaves = tpl === 'greaves';
+  const color = greaves
+    ? { common: 0x8a6a4a, rare: 0x9aa6b2, epic: 0x8e62c9, legendary: 0xe7b84a }[r]
+    : { common: 0xc8a46a, rare: 0x6a4428, epic: 0x34557f, legendary: 0xffd54a }[r];
+  for (const leg of [rig.legL, rig.legR]) {
+    const s = leg === rig.legL ? -1 : 1;
+    if (greaves) {
+      if (rank >= 1) {
+        add(leg, out, part(G.box(0.17, 0.24, 0.07), color, { pos: [0, -0.3, 0.08], outline: 0.015 }));
+        add(leg, out, part(G.sphere(0.085, 10, 8), color, { pos: [0, -0.13, 0.09], scale: [1, 0.9, 0.8], outline: 0.015 }));
+      } else {
+        // Деревянные башмаки: высокая подошва
+        add(leg, out, part(G.box(0.22, 0.06, 0.34), WOOD, { pos: [0, -0.54, 0.05], outline: 0.015 }));
+      }
+      if (rank >= 2) add(leg, out, part(G.box(0.18, 0.03, 0.08), TRIM[r], { pos: [0, -0.2, 0.11], outline: false }));
+      if (rank >= 3) add(leg, out, part(G.cone(0.04, 0.14, 6), GOLD, { pos: [s * 0.06, -0.13, 0.15], rot: [1.2, 0, 0], outline: 0.01 }));
+    } else if (rank === 0) {
+      // Лапти: плетёные ремешки
+      for (const y of [-0.42, -0.36]) add(leg, out, part(G.torus(0.12, 0.012, Math.PI * 2, 4, 14), 0x8a6a3a, { pos: [0, y, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+    } else {
+      // Сапоги с отворотом
+      add(leg, out, part(G.cyl(0.13, 0.12, 0.16, 12), color, { pos: [0, -0.37, 0], outline: 0.015 }));
+      add(leg, out, part(G.torus(0.13, 0.03, Math.PI * 2, 6, 16), rank >= 3 ? 0xffffff : 0x3a2414, { pos: [0, -0.29, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+      if (rank >= 2) add(leg, out, part(G.box(0.07, 0.05, 0.03), GOLD, { pos: [0, -0.4, 0.13], outline: 0.008 }));
+      if (rank >= 2) {
+        // Крылышки
+        const wing = new THREE.Group();
+        for (let i = 0; i < 3; i++) wing.add(part(G.box(0.025, 0.1 + i * 0.03, 0.08), 0xffffff, { pos: [0, i * 0.04, -i * 0.06], rot: [0.5 + i * 0.25, 0, 0], outline: 0.01 }));
+        wing.position.set(s * 0.15, -0.42, -0.02);
+        wing.scale.setScalar(rank >= 3 ? 1.5 : 1);
+        add(leg, out, wing);
+      }
+    }
+  }
+  return color;
+}
+
+// ================================================================== Амулет и кольцо
+
+export function buildAmulet(T: THREE.Group, tpl: string, r: Rarity, out: Built) {
+  const rank = RANK[r];
+  if (tpl === 'talisman') {
+    add(T, out, part(G.torus(0.21, 0.014, Math.PI, 4, 16), LEATHER, { pos: [0, 0.6, 0.18], rot: [Math.PI / 2 + 0.6, 0, Math.PI], outline: false }));
+    add(T, out, part(G.cone(0.045, 0.16, 6), rank >= 3 ? 0xffd54a : 0xfff6e0, { pos: [0, 0.43, 0.31], rot: [Math.PI, 0, 0], outline: 0.012 }));
+    for (const x of [-0.06, 0.06]) add(T, out, part(G.sphere(0.03, 6, 4), RARITY_HEX[r], { pos: [x, 0.5, 0.3], outline: false }));
+    if (rank >= 2) add(T, out, gem(RARITY_HEX[r], 0.04, [0, 0.52, 0.32], out));
+    return;
+  }
+  add(T, out, part(G.torus(0.21, 0.016, Math.PI, 4, 16), GOLD, { pos: [0, 0.6, 0.18], rot: [Math.PI / 2 + 0.6, 0, Math.PI], outline: false }));
+  add(T, out, part(G.torus(0.065, 0.018, Math.PI * 2, 4, 14), GOLD, { pos: [0, 0.46, 0.3], outline: false }));
+  add(T, out, gem(RARITY_HEX[r], 0.055 + rank * 0.008, [0, 0.46, 0.31], out));
+  if (rank >= 3) add(T, out, halo(RARITY_HEX[r], 0.13, [0, 0.46, 0.33], out, 0.35));
+}
+
+export function buildRing(hand: THREE.Object3D, r: Rarity, out: Built) {
+  const m = new THREE.Mesh(G.torus(0.08, 0.025, Math.PI * 2, 6, 12), toon(GOLD));
+  m.rotation.x = Math.PI / 2;
+  m.position.y = 0.04;
+  add(hand, out, m);
+  add(hand, out, gem(RARITY_HEX[r], 0.035, [0, 0.04, 0.1], out));
+}
+
+// ================================================================== Оружие
+
+/**
+ * Модель оружия. Локальная ось +y — вдоль клинка/древка (от рукояти к острию).
+ */
+export function buildWeapon(tpl: string, r: Rarity, out: Built): THREE.Group {
+  const rank = RANK[r];
+  const w = new THREE.Group();
+  const metal = METAL[r];
+  const glowCol = RARITY_HEX[r];
+  const shine = rank >= 2;
+  const metalMat = shine ? toon(metal, { emissive: glowCol, emissiveIntensity: 0.35 }) : toon(metal);
+  const M = (geo: THREE.BufferGeometry, pos: V3, rot?: V3, scale?: V3, ol = 0.018) => {
+    const m = new THREE.Mesh(geo, metalMat);
+    m.position.set(...pos);
+    if (rot) m.rotation.set(...rot);
+    if (scale) m.scale.set(...scale);
+    if (ol) addOutline(m, ol);
+    w.add(m);
+    return m;
+  };
+  const P = (geo: THREE.BufferGeometry, color: number, pos: V3, rot?: V3, scale?: V3, ol: number | false = 0.014) => {
+    const m = part(geo, color, { pos, rot, scale, outline: ol });
+    w.add(m);
+    return m;
+  };
+  const wraps = (y0: number, n: number, rad: number, step = 0.05) => {
+    for (let i = 0; i < n; i++) P(G.torus(rad, 0.012, Math.PI * 2, 4, 10), 0x3a2414, [0, y0 + i * step, 0], [Math.PI / 2, 0, 0], undefined, false);
+  };
+  const grip = rank >= 3 ? 0x8a2a2a : LEATHER;
+  const guard = rank >= 2 ? GOLD : rank === 1 ? 0xc7ced6 : 0x8a6a4a;
+
+  switch (tpl) {
+    case 'sword': {
+      const len = 0.85 + rank * 0.07;
+      P(G.cyl(0.04, 0.04, 0.24, 8), grip, [0, 0, 0]);
+      wraps(-0.08, 4, 0.043);
+      P(G.sphere(0.065, 10, 8), guard, [0, -0.15, 0]);
+      if (rank >= 2) w.add(gem(glowCol, 0.045, [0, -0.15, 0.05], out));
+      // Гарда: прямая или с загнутыми концами
+      P(G.box(0.36, 0.06, 0.09), guard, [0, 0.13, 0]);
+      for (const s of [-1, 1]) {
+        if (rank >= 1) P(G.cone(0.045, 0.14, 6), guard, [s * 0.21, 0.17, 0], [0, 0, -s * 0.9]);
+        else P(G.sphere(0.04, 6, 4), guard, [s * 0.19, 0.13, 0]);
+      }
+      // Клинок с долом
+      M(G.box(0.13 + rank * 0.01, len, 0.035), [0, 0.16 + len / 2, 0]);
+      M(G.cone(0.09 + rank * 0.007, 0.2, 4), [0, 0.16 + len + 0.1, 0], [0, Math.PI / 4, 0], [1, 1, 0.35]);
+      P(G.box(0.03, len * 0.75, 0.04), rank >= 2 ? glowCol : 0x8a96a0, [0, 0.16 + len * 0.42, 0], undefined, undefined, false);
+      if (rank >= 3) {
+        w.add(halo(glowCol, 0.16, [0, 0.16 + len * 0.5, 0], out, 0.3));
+        w.add(halo(glowCol, 0.14, [0, 0.16 + len * 0.85, 0], out, 0.3));
+      }
+      break;
+    }
+    case 'axe': {
+      P(G.cyl(0.04, 0.045, 1.0, 8), WOOD, [0, 0.35, 0], undefined, undefined, 0.015);
+      wraps(-0.05, 3, 0.048);
+      P(G.cyl(0.05, 0.05, 0.06, 8), 0x6a6a6a, [0, -0.15, 0]);
+      // Полумесяц лезвия
+      const head = (s: number) => {
+        // Сектор цилиндра, обращённый в сторону ±x, положенный плашмя
+        const blade = new THREE.Mesh(new THREE.CylinderGeometry(0.3, 0.3, 0.05, 18, 1, false, s * Math.PI / 2 - Math.PI * 0.4, Math.PI * 0.8), metalMat);
+        blade.rotation.x = Math.PI / 2;
+        blade.position.set(s * 0.04, 0.72, 0);
+        blade.scale.set(1, 1.25, 1);
+        addOutline(blade, 0.018);
+        w.add(blade);
+        // Режущая кромка
+        const edge = new THREE.Mesh(G.torus(0.3, 0.018, Math.PI * 0.8, 4, 16), toon(rank >= 2 ? glowCol : 0xffffff));
+        edge.rotation.z = s > 0 ? -Math.PI * 0.4 : Math.PI * 0.6;
+        edge.position.set(s * 0.04, 0.72, 0);
+        edge.scale.set(1, 1.25, 1);
+        w.add(edge);
+      };
+      head(1);
+      if (rank >= 2) head(-1);
+      else if (rank >= 1) M(G.cone(0.05, 0.22, 6), [-0.16, 0.72, 0], [0, 0, Math.PI / 2]);
+      M(G.box(0.12, 0.2, 0.09), [0, 0.72, 0]);
+      P(G.cone(0.04, 0.12, 6), guard, [0, 0.9, 0]);
+      if (rank >= 3) w.add(halo(glowCol, 0.22, [0.25, 0.72, 0], out, 0.3));
+      break;
+    }
+    case 'hammer': {
+      P(G.cyl(0.04, 0.045, 0.95, 8), WOOD, [0, 0.33, 0], undefined, undefined, 0.015);
+      wraps(-0.08, 4, 0.048);
+      P(G.sphere(0.055, 8, 6), guard, [0, -0.16, 0]);
+      M(G.box(0.46, 0.27, 0.27), [0, 0.82, 0]);
+      for (const s of [-1, 1]) M(G.cyl(0.16, 0.16, 0.06, 12), [s * 0.25, 0.82, 0], [0, 0, Math.PI / 2], undefined, 0.012);
+      P(G.box(0.48, 0.06, 0.29), guard, [0, 0.82, 0], undefined, undefined, false);
+      if (rank >= 1) {
+        // Заклёпки и шип сверху
+        for (const s of [-1, 1]) for (const z of [-1, 1]) P(G.sphere(0.025, 6, 4), guard, [s * 0.14, 0.93, z * 0.14], undefined, undefined, false);
+        M(G.cone(0.06, 0.2, 6), [0, 1.05, 0]);
+      }
+      if (rank >= 3) {
+        for (const s of [-1, 1]) w.add(gem(0x7ae0ff, 0.06, [s * 0.29, 0.82, 0], out));
+        w.add(halo(0x7ae0ff, 0.3, [0, 0.82, 0], out, 0.25));
+      }
+      break;
+    }
+    case 'staff': {
+      P(G.cyl(0.035, 0.05, 1.6, 8), WOOD, [0, 0.55, 0], undefined, undefined, 0.015);
+      // Спиральная обмотка
+      for (let i = 0; i < 6; i++) P(G.torus(0.05, 0.012, Math.PI, 4, 8), rank >= 1 ? GOLD : LEATHER, [0, 0.1 + i * 0.16, 0], [Math.PI / 2, i * 0.9, 0.3], undefined, false);
+      // Навершие-крюк, держащее кристалл
+      P(G.torus(0.13, 0.03, Math.PI * 1.4, 6, 14), WOOD, [0, 1.42, 0], [0, 0, -Math.PI * 0.2]);
+      const crystal = new THREE.Mesh(faceted(new THREE.OctahedronGeometry(0.11, 0)), toon(rank === 0 ? 0x7fd8ff : glowCol, { emissive: rank === 0 ? 0x4ab8ff : glowCol, emissiveIntensity: 0.9 }));
+      crystal.position.y = 1.42;
+      crystal.scale.set(0.8, 1.4, 0.8);
+      addOutline(crystal, 0.015);
+      out.glow.push(crystal);
+      w.add(crystal);
+      w.add(halo(rank === 0 ? 0x7fd8ff : glowCol, 0.22, [0, 1.42, 0], out, 0.25));
+      if (rank >= 2) {
+        // Камни, вращающиеся вокруг кристалла
+        const orbit = new THREE.Group();
+        orbit.userData.anim = true;
+        for (let i = 0; i < (rank >= 3 ? 4 : 2); i++) {
+          const a = (i / (rank >= 3 ? 4 : 2)) * Math.PI * 2;
+          orbit.add(gem(glowCol, 0.04, [Math.cos(a) * 0.24, 0, Math.sin(a) * 0.24]));
+        }
+        orbit.position.y = 1.42;
+        out.spin.push(orbit);
+        w.add(orbit);
+      }
+      break;
+    }
+    case 'wand': {
+      P(G.cyl(0.03, 0.04, 0.32, 8), grip, [0, 0, 0]);
+      wraps(-0.1, 3, 0.042, 0.06);
+      P(G.cyl(0.022, 0.03, 0.45, 8), 0xefe2c2, [0, 0.38, 0]);
+      P(G.torus(0.04, 0.012, Math.PI * 2, 4, 10), GOLD, [0, 0.16, 0], [Math.PI / 2, 0, 0], undefined, false);
+      // Звезда на кончике
+      const star = new THREE.Group();
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        star.add(new THREE.Mesh(G.cone(0.035, 0.1, 4), toon(rank === 0 ? 0xffe14a : glowCol, { emissive: rank === 0 ? 0xffb020 : glowCol, emissiveIntensity: 0.8 })));
+        const c = star.children[i];
+        c.position.set(Math.sin(a) * 0.05, Math.cos(a) * 0.05, 0);
+        c.rotation.z = -a;
+      }
+      star.position.y = 0.66;
+      star.rotation.x = Math.PI / 2;
+      star.userData.anim = true;
+      star.userData.spinAxis = 'z';
+      out.spin.push(star);
+      w.add(star);
+      w.add(halo(rank === 0 ? 0xffe14a : glowCol, 0.13, [0, 0.66, 0], out, 0.3));
+      if (rank >= 1) for (let i = 0; i < 5; i++) P(G.torus(0.035, 0.008, Math.PI, 4, 8), RARITY_HEX[r], [0, 0.22 + i * 0.07, 0], [Math.PI / 2, i * 1.2, 0], undefined, false);
+      break;
+    }
+    case 'orb': {
+      P(G.cyl(0.035, 0.045, 0.35, 8), grip, [0, 0, 0]);
+      wraps(-0.1, 3, 0.048, 0.06);
+      // Чаша-подставка с лепестками
+      for (let i = 0; i < 4; i++) {
+        const a = (i / 4) * Math.PI * 2;
+        P(G.cone(0.035, 0.22, 5), guard, [Math.cos(a) * 0.09, 0.27, Math.sin(a) * 0.09], [Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5]);
+      }
+      const orbCol = rank === 0 ? 0x9ad8ff : glowCol;
+      const orb = new THREE.Mesh(G.sphere(0.15, 16, 12), toon(orbCol, { emissive: orbCol, emissiveIntensity: 0.8 }));
+      orb.position.y = 0.42;
+      addOutline(orb, 0.015);
+      out.glow.push(orb);
+      w.add(orb);
+      w.add(halo(orbCol, 0.26, [0, 0.42, 0], out, 0.25));
+      // Вращающиеся кольца вокруг сферы
+      const rings = new THREE.Group();
+      rings.userData.anim = true;
+      for (let i = 0; i <= Math.min(2, rank); i++) {
+        const ring = new THREE.Mesh(G.torus(0.22 + i * 0.04, 0.012, Math.PI * 2, 4, 24), toon(GOLD));
+        ring.rotation.set(Math.PI / 2 + i * 0.7, i * 0.9, 0);
+        rings.add(ring);
+      }
+      rings.position.y = 0.42;
+      out.spin.push(rings);
+      w.add(rings);
+      break;
+    }
+    case 'bow':
+    case 'recurve': {
+      const arc = tpl === 'recurve' ? Math.PI * 0.8 : Math.PI * 0.75;
+      const rad = tpl === 'recurve' ? 0.52 : 0.62;
+      const limbCol = rank === 0 ? WOOD : rank === 1 ? 0x6a4428 : metal;
+      const limbG = new THREE.Group();
+      const limb = new THREE.Mesh(G.torus(rad, 0.035, arc, 6, 20), toon(limbCol, shine ? { emissive: glowCol, emissiveIntensity: 0.3 } : {}));
+      addOutline(limb, 0.018);
+      limb.rotation.z = -arc / 2;
+      limb.position.x = -rad * 0.82;
+      limbG.add(limb);
+      const tipX = rad * Math.cos(arc / 2) - rad * 0.82;
+      const tipY = rad * Math.sin(arc / 2);
+      // Загнутые концы (у рогатого лука) или наконечники
+      for (const s of [-1, 1]) {
+        if (tpl === 'recurve') {
+          const curl = new THREE.Mesh(G.torus(0.08, 0.03, Math.PI * 0.9, 5, 10), toon(limbCol));
+          curl.position.set(tipX - 0.02, s * tipY, 0);
+          curl.rotation.z = s > 0 ? Math.PI * 0.1 : Math.PI * 1.0;
+          addOutline(curl, 0.014);
+          limbG.add(curl);
+        } else limbG.add(part(G.sphere(0.035, 8, 6), GOLD, { pos: [tipX, s * tipY, 0], outline: 0.01 }));
+        // Лезвия-листья на плечах эпического лука
+        if (rank >= 2) limbG.add(part(G.cone(0.04, 0.2, 4), metal, { pos: [tipX + 0.08, s * tipY * 0.7, 0], rot: [0, 0, s > 0 ? -0.6 : -2.5], scale: [1, 1, 0.4], outline: 0.012 }));
+      }
+      const string = new THREE.Mesh(G.cyl(0.008, 0.008, tipY * 2, 4), rank >= 3 ? glow(0xfff0a0, 1, false) : toon(0xf5f0e0));
+      string.position.x = tipX;
+      limbG.add(string);
+      // Рукоять с обмоткой и накладками
+      limbG.add(part(G.cyl(0.05, 0.05, 0.2, 8), grip, { pos: [rad * 0.18, 0, 0], outline: 0.012 }));
+      for (const y of [-0.08, 0.08]) limbG.add(part(G.torus(0.052, 0.012, Math.PI * 2, 4, 10), guard, { pos: [rad * 0.18, y, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+      if (rank >= 1) for (const s of [-1, 1]) limbG.add(part(G.box(0.03, 0.14, 0.05), guard, { pos: [rad * 0.12, s * 0.2, 0], rot: [0, 0, s * 0.25], outline: 0.01 }));
+      if (rank >= 3) limbG.add(halo(glowCol, 0.18, [rad * 0.18, 0, 0], out, 0.3));
+      limbG.rotation.set(Math.PI / 2, Math.PI / 2, 0);
+      w.add(limbG);
+      break;
+    }
+    case 'crossbow': {
+      // Ложа с металлическими накладками
+      P(G.box(0.1, 0.08, 0.72), WOOD, [0, 0, 0.15], undefined, undefined, 0.015);
+      P(G.box(0.08, 0.12, 0.2), WOOD, [0, -0.07, -0.12], [0.3, 0, 0]);
+      P(G.box(0.11, 0.03, 0.3), guard, [0, 0.045, 0.25], undefined, undefined, false);
+      const arc = Math.PI * 0.7;
+      const limbs = new THREE.Mesh(G.torus(0.36, 0.03, arc, 6, 16), metalMat);
+      addOutline(limbs, 0.015);
+      limbs.rotation.z = Math.PI / 2 - arc / 2;
+      const lg = new THREE.Group();
+      lg.add(limbs);
+      lg.position.set(0, 0, 0.12);
+      lg.rotation.x = Math.PI / 2;
+      w.add(lg);
+      const span = 0.36 * Math.sin(arc / 2) * 2;
+      P(G.cyl(0.008, 0.008, span, 4), 0xf5f0e0, [0, 0, 0.12 + 0.36 * Math.cos(arc / 2)], [0, 0, Math.PI / 2], undefined, false);
+      // Заряженный болт
+      P(G.cyl(0.015, 0.015, 0.5, 4), 0xc9a36a, [0, 0.06, 0.3], [Math.PI / 2, 0, 0], undefined, false);
+      P(G.cone(0.03, 0.08, 4), metal, [0, 0.06, 0.58], [Math.PI / 2, 0, 0], undefined, false);
+      // Стремя спереди
+      P(G.torus(0.07, 0.015, Math.PI * 2, 4, 12), 0x6a6a6a, [0, 0, 0.53], [0, 0, 0], undefined, false);
+      if (rank >= 1) P(G.box(0.03, 0.08, 0.03), guard, [0, 0.09, 0.05]);
+      if (rank >= 2) w.add(gem(glowCol, 0.04, [0, 0.07, -0.02], out));
+      if (rank >= 3) w.add(halo(glowCol, 0.2, [0, 0, 0.3], out, 0.3));
+      break;
+    }
+  }
+  return w;
+}
+

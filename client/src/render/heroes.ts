@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import type { Equip, HeroClass, Item, Rarity } from '@game/shared';
-import { G, RARITY_HEX, addOutline, blobShadow, glow, part, toon } from './toon';
+import { G, RARITY_HEX, blobShadow, glow, part, toon } from './toon';
 import { clothTex, texturize, woodTex } from './textures';
 import { bake, unbake } from './bake';
+import { buildAmulet, buildArmor, buildBoots, buildHelmet, buildRing, buildWeapon, type Built, type Rig } from './equipment';
 
 const SKIN = 0xffd3ac;
 const DARK = 0x24160f;
@@ -18,18 +19,10 @@ export interface HeroAnimInput {
   buff: boolean;
 }
 
-const ARMOR_COLORS: Record<string, Record<Rarity, number>> = {
-  plate: { common: 0xa9b4bf, rare: 0x6f9ed8, epic: 0x8e62c9, legendary: 0xe7b84a },
-  robe: { common: 0x8d7c62, rare: 0x3f6fcc, epic: 0x7b3fc6, legendary: 0xd2493a },
-  leather: { common: 0x8a5a33, rare: 0x2f7c6c, epic: 0x433468, legendary: 0xcf5a22 },
-};
 const HELM_COLORS: Record<string, Record<Rarity, number>> = {
   helm: { common: 0x9aa6b2, rare: 0x5b8fd0, epic: 0x8a5ac7, legendary: 0xf0c04a },
   hood: { common: 0x7a6a55, rare: 0x2f6aa8, epic: 0x4a2f78, legendary: 0xc9343a },
 };
-const BOOT_COLORS: Record<Rarity, number> = { common: 0x6a4428, rare: 0x34557f, epic: 0x55307a, legendary: 0xd9a52a };
-const METAL: Record<Rarity, number> = { common: 0xd6dde3, rare: 0x8fd0ff, epic: 0xd4a6ff, legendary: 0xffe07a };
-
 function eye(x: number): THREE.Group {
   const g = new THREE.Group();
   const white = new THREE.Mesh(G.sphere(0.1, 14, 10), toon(0xffffff));
@@ -65,7 +58,10 @@ export class HeroModel {
   private bootR!: THREE.Mesh;
   private headgear = new THREE.Group();
   private weapon = new THREE.Group();
-  private extras = new THREE.Group();
+  private built: Built = { parts: [], glow: [], spin: [] };
+  private sleeves: THREE.Mesh[] = [];
+  private baseSleeveColor = 0;
+  private spinParts: THREE.Object3D[] = [];
   private stunStars = new THREE.Group();
   private ice: THREE.Mesh;
   private aura: THREE.Mesh;
@@ -128,7 +124,10 @@ export class HeroModel {
       arm.position.set(x, 0.6, 0);
       this.torsoG.add(arm);
       const sleeve = cls === 'mage' ? 0x6b3fc4 : cls === 'warrior' ? 0x8e9aa6 : 0x3f8f3a;
-      arm.add(part(G.capsule(0.085, 0.22), sleeve, { pos: [0, -0.2, 0], outline: 0.022 }));
+      this.baseSleeveColor = sleeve;
+      const sl = part(G.capsule(0.085, 0.22), sleeve, { pos: [0, -0.2, 0], outline: 0.022 });
+      this.sleeves.push(sl);
+      arm.add(sl);
       const h = part(G.sphere(0.1, 12, 8), cls === 'warrior' ? 0x7d8894 : SKIN, { pos: [0, -0.42, 0], outline: 0.022 });
       arm.add(h);
       hand.position.set(0, -0.42, 0);
@@ -317,190 +316,64 @@ export class HeroModel {
     }
   }
 
-  private buildWeapon(it: Item | null) {
-    this.weapon.clear();
-    this.weapon.removeFromParent();
-    const r: Rarity = it?.rarity ?? 'common';
-    const metal = METAL[r];
-    const shine = r === 'epic' || r === 'legendary';
-    const metalMat = shine ? toon(metal, { emissive: RARITY_HEX[r], emissiveIntensity: 0.45 }) : toon(metal);
-    const tpl = it?.tpl ?? (this.cls === 'warrior' ? 'sword' : this.cls === 'mage' ? 'staff' : 'bow');
-    this.weaponTpl = tpl;
-    const w = this.weapon;
-    const metalPart = (geo: THREE.BufferGeometry, pos: [number, number, number], rot?: [number, number, number], scale?: [number, number, number]) => {
-      const m = new THREE.Mesh(geo, metalMat);
-      m.position.set(...pos);
-      if (rot) m.rotation.set(...rot);
-      if (scale) m.scale.set(...scale);
-      addOutline(m, 0.02);
-      return m;
-    };
-    const wood = 0x8a5a2b;
-    switch (tpl) {
-      case 'sword': {
-        w.add(part(G.cyl(0.04, 0.04, 0.22, 8), 0x5a3a22, { pos: [0, 0, 0], outline: 0.015 }));
-        w.add(part(G.sphere(0.06, 8, 6), 0xffc93c, { pos: [0, -0.13, 0], outline: 0.015 }));
-        w.add(part(G.box(0.36, 0.06, 0.08), 0xffc93c, { pos: [0, 0.12, 0], outline: 0.015 }));
-        w.add(metalPart(G.box(0.12, 0.85, 0.035), [0, 0.57, 0]));
-        w.add(metalPart(G.cone(0.085, 0.16, 4), [0, 1.07, 0], [0, Math.PI / 4, 0], [1, 1, 0.35]));
-        break;
-      }
-      case 'axe': {
-        w.add(part(G.cyl(0.04, 0.045, 0.95, 8), wood, { pos: [0, 0.35, 0], outline: 0.015 }));
-        const blade = metalPart(G.cyl(0.32, 0.32, 0.05, 16, ), [0.16, 0.7, 0], [Math.PI / 2, 0, 0], [0.8, 1, 1.1]);
-        w.add(blade);
-        w.add(metalPart(G.box(0.1, 0.16, 0.08), [-0.08, 0.7, 0]));
-        break;
-      }
-      case 'hammer': {
-        w.add(part(G.cyl(0.04, 0.045, 0.9, 8), wood, { pos: [0, 0.32, 0], outline: 0.015 }));
-        w.add(metalPart(G.box(0.48, 0.28, 0.28), [0, 0.82, 0]));
-        w.add(part(G.box(0.5, 0.06, 0.3), 0xffc93c, { pos: [0, 0.82, 0], outline: false }));
-        break;
-      }
-      case 'staff':
-      case 'wand':
-      case 'orb': {
-        const long = tpl === 'staff';
-        const len = long ? 1.55 : tpl === 'wand' ? 0.7 : 0.5;
-        w.add(part(G.cyl(0.035, 0.045, len, 8), tpl === 'wand' ? 0xe8d9b5 : wood, { pos: [0, len / 2 - 0.25, 0], outline: 0.015 }));
-        const top = len - 0.25;
-        const orbCol = r === 'common' ? 0x7fd8ff : RARITY_HEX[r];
-        const orb = new THREE.Mesh(G.sphere(tpl === 'orb' ? 0.16 : 0.12, 16, 12), toon(orbCol, { emissive: orbCol, emissiveIntensity: 0.9 }));
-        orb.position.y = top + 0.12;
-        addOutline(orb, 0.02);
-        const halo = new THREE.Mesh(G.sphere(0.24, 12, 8), glow(orbCol, 0.25));
-        halo.position.copy(orb.position);
-        this.glowParts.push(halo);
-        w.add(orb, halo);
-        for (let i = 0; i < 3; i++) {
-          const a = (i / 3) * Math.PI * 2;
-          w.add(metalPart(G.cone(0.03, 0.2, 5), [Math.cos(a) * 0.1, top + 0.03, Math.sin(a) * 0.1], [Math.sin(a) * 0.5, 0, -Math.cos(a) * 0.5]));
-        }
-        break;
-      }
-      case 'bow':
-      case 'recurve':
-      case 'crossbow': {
-        if (tpl === 'crossbow') {
-          w.add(part(G.box(0.1, 0.08, 0.7), wood, { pos: [0, 0, 0.15], outline: 0.015 }));
-          const arc = Math.PI * 0.7;
-          const limbs = new THREE.Mesh(G.torus(0.36, 0.03, arc, 6, 16), metalMat);
-          addOutline(limbs, 0.015);
-          limbs.rotation.z = Math.PI / 2 - arc / 2;
-          const lg = new THREE.Group();
-          lg.add(limbs);
-          lg.position.set(0, 0, 0.12);
-          lg.rotation.x = Math.PI / 2;
-          w.add(lg);
-          const span = 0.36 * Math.sin(arc / 2) * 2;
-          w.add(part(G.cyl(0.008, 0.008, span, 4), 0xf5f0e0, { pos: [0, 0, 0.12 + 0.36 * Math.cos(arc / 2)], rot: [0, 0, Math.PI / 2], outline: false }));
-          w.add(part(G.cyl(0.015, 0.015, 0.5, 4), 0xc9a36a, { pos: [0, 0.06, 0.3], rot: [Math.PI / 2, 0, 0], outline: false }));
-        } else {
-          const arc = tpl === 'recurve' ? Math.PI * 0.95 : Math.PI * 0.75;
-          const rad = tpl === 'recurve' ? 0.5 : 0.62;
-          const limb = new THREE.Mesh(G.torus(rad, 0.035, arc, 6, 20), toon(r === 'common' ? wood : metal, shine ? { emissive: RARITY_HEX[r], emissiveIntensity: 0.4 } : {}));
-          addOutline(limb, 0.018);
-          limb.rotation.z = -arc / 2;
-          limb.position.x = -rad * 0.82;
-          const limbG = new THREE.Group();
-          limbG.add(limb);
-          const sx = rad * Math.cos(arc / 2) - rad * 0.82;
-          const sy = rad * Math.sin(arc / 2);
-          const string = new THREE.Mesh(G.cyl(0.008, 0.008, sy * 2, 4), toon(0xf5f0e0));
-          string.position.x = sx;
-          limbG.add(string);
-          limbG.add(part(G.cyl(0.05, 0.05, 0.18, 8), 0x5a3a22, { pos: [rad * 0.18, 0, 0], outline: 0.012 }));
-          // Лук вертикально, тетива к стрелку
-          limbG.rotation.set(Math.PI / 2, Math.PI / 2, 0);
-          w.add(limbG);
-        }
-        break;
-      }
-    }
-    if (this.cls === 'archer') {
-      this.handL.add(w);
-      w.position.set(0, 0, 0);
-      w.rotation.set(0, 0, 0);
-      w.rotation.set(tpl === 'crossbow' ? 0 : Math.PI / 2, 0, 0);
-    } else {
-      this.handR.add(w);
-      w.rotation.set(this.cls === 'warrior' ? Math.PI / 2 - 0.45 : Math.PI / 2, 0, 0);
-      w.position.set(0, 0, 0.02);
-    }
-    if (shine) {
-      const sparkle = new THREE.Mesh(G.sphere(0.12, 8, 6), glow(RARITY_HEX[r], 0.5));
-      sparkle.position.y = this.cls === 'mage' ? 1.3 : 0.7;
-      this.glowParts.push(sparkle);
-      w.add(sparkle);
-    }
-  }
-
   setEquip(eq: Equip | null) {
     const key = eq ? Object.values(eq).map((i) => (i ? i.id : '-')).join('|') : 'none';
     if (key === this.equipKey) return;
     this.equipKey = key;
     unbake(this.body);
-    this.glowParts = [];
-    this.extras.clear();
-    this.extras.removeFromParent();
-    this.torsoG.add(this.extras);
+    // Снимаем всё, что было надето
+    for (const o of this.built.parts) o.removeFromParent();
+    this.weapon.removeFromParent();
+    this.built = { parts: [], glow: [], spin: [] };
+    const rig: Rig = { torso: this.torsoG, head: this.head, armL: this.armL, armR: this.armR, legL: this.legL, legR: this.legR };
 
+    // Доспех: своя модель для лат, мантии и кожаного доспеха
     const armor = eq?.armor ?? null;
-    const torsoCol = armor ? ARMOR_COLORS[armor.tpl]?.[armor.rarity] ?? this.baseTorsoColor : this.baseTorsoColor;
-    const isMetal = this.cls === 'warrior' && (!armor || armor.tpl === 'plate');
-    this.torso.material = toon(torsoCol, isMetal ? {} : { map: clothTex() });
-    const trimCol = this.cls === 'mage' ? torsoCol : armor ? ARMOR_COLORS[armor.tpl]?.[armor.rarity] ?? 0x8e9aa6 : 0x8e9aa6;
-    for (const m of this.trimMeshes) m.material = toon(trimCol, this.cls === 'mage' ? { map: clothTex() } : {});
-    if (armor && armor.rarity !== 'common') {
-      // Наплечники/воротник цвета редкости
-      for (const x of [-0.36, 0.36]) {
-        const pad = part(G.halfSphere(0.15), RARITY_HEX[armor.rarity], { pos: [x, 0.66, 0], scale: [1.15, 0.7, 1.1], outline: 0.02 });
-        this.extras.add(pad);
-      }
-    }
-    if (armor && (armor.rarity === 'epic' || armor.rarity === 'legendary')) {
-      const emblem = new THREE.Mesh(G.ico(0.08, 0), toon(RARITY_HEX[armor.rarity], { emissive: RARITY_HEX[armor.rarity], emissiveIntensity: 0.6 }));
-      emblem.position.set(0, 0.35, 0.29);
-      this.extras.add(emblem);
+    let torsoCol = this.baseTorsoColor;
+    let sleeveCol = this.baseSleeveColor;
+    let metal = this.cls === 'warrior';
+    if (armor) ({ torso: torsoCol, sleeve: sleeveCol, metal } = buildArmor(rig, armor.tpl, armor.rarity, this.cls, this.built));
+    this.torso.material = toon(torsoCol, metal ? {} : { map: clothTex() });
+    for (const sl of this.sleeves) sl.material = toon(sleeveCol, metal ? {} : { map: clothTex() });
+    for (const m of this.trimMeshes) {
+      if (this.cls === 'mage') m.material = toon(armor?.tpl === 'robe' ? torsoCol : this.baseTorsoColor, { map: clothTex() });
+      else m.visible = !armor; // классовые наплечники воина заменяет доспех
     }
 
+    // Обувь
     const boots = eq?.boots ?? null;
-    const bc = boots ? BOOT_COLORS[boots.rarity] : 0x6a4428;
+    const bc = boots ? buildBoots(rig, boots.tpl, boots.rarity, this.built) : 0x6a4428;
     this.bootL.material = this.bootR.material = toon(bc);
-    for (const b of [this.bootL, this.bootR]) b.children.filter((c) => c.name === 'wing').forEach((c) => b.remove(c));
-    if (boots && (boots.rarity === 'legendary' || boots.rarity === 'epic')) {
-      for (const b of [this.bootL, this.bootR]) {
-        const wing = part(G.box(0.03, 0.12, 0.22), 0xffffff, { pos: [b === this.bootL ? -0.14 : 0.14, 0.12, -0.08], rot: [0.5, 0, 0], outline: 0.015 });
-        wing.name = 'wing';
-        b.add(wing);
-      }
+
+    if (eq?.amulet) buildAmulet(this.torsoG, eq.amulet.tpl, eq.amulet.rarity, this.built);
+    if (eq?.ring) buildRing(this.handR, eq.ring.rarity, this.built);
+
+    // Голова: шлем/капюшон заменяет классовый головной убор
+    this.headgear.clear();
+    if (eq?.helmet) buildHelmet(this.headgear, eq.helmet.tpl, eq.helmet.rarity, this.built);
+    else this.buildHeadgear(null);
+
+    // Оружие
+    const wIt = eq?.weapon ?? null;
+    const tpl = wIt?.tpl ?? (this.cls === 'warrior' ? 'sword' : this.cls === 'mage' ? 'staff' : 'bow');
+    this.weaponTpl = tpl;
+    this.weapon = buildWeapon(tpl, wIt?.rarity ?? 'common', this.built);
+    if (this.cls === 'archer') {
+      this.handL.add(this.weapon);
+      this.weapon.rotation.set(tpl === 'crossbow' ? 0 : Math.PI / 2, 0, 0);
+    } else {
+      this.handR.add(this.weapon);
+      this.weapon.rotation.set(this.cls === 'warrior' ? Math.PI / 2 - 0.45 : Math.PI / 2, 0, 0);
+      this.weapon.position.set(0, 0, 0.02);
     }
 
-    const am = eq?.amulet ?? null;
-    if (am) {
-      const chain = part(G.torus(0.2, 0.015, Math.PI, 4, 16), 0xffd54a, { pos: [0, 0.6, 0.18], rot: [Math.PI / 2 + 0.6, 0, Math.PI], outline: false });
-      const gem = new THREE.Mesh(G.ico(0.07, 0), toon(RARITY_HEX[am.rarity], { emissive: RARITY_HEX[am.rarity], emissiveIntensity: 0.7 }));
-      gem.position.set(0, 0.47, 0.3);
-      addOutline(gem, 0.015);
-      this.extras.add(chain, gem);
-    }
-    const ring = eq?.ring ?? null;
-    this.handR.children.filter((c) => c.name === 'ring').forEach((c) => this.handR.remove(c));
-    if (ring) {
-      const rm = new THREE.Mesh(G.torus(0.08, 0.025, Math.PI * 2, 6, 12), toon(RARITY_HEX[ring.rarity], { emissive: RARITY_HEX[ring.rarity], emissiveIntensity: 0.5 }));
-      rm.name = 'ring';
-      rm.rotation.x = Math.PI / 2;
-      rm.position.y = 0.04;
-      this.handR.add(rm);
-    }
+    this.glowParts = this.built.glow;
+    this.spinParts = this.built.spin;
 
-    this.buildHeadgear(eq?.helmet ?? null);
     // Фактура ткани на плащах, мантиях и шляпах, дерево на щите
     const cloth = clothTex();
     texturize(this.root, { 0xc8412f: cloth, 0x2f6b2c: cloth, 0x6b3fc4: cloth, 0x3f8f3a: cloth, 0x4e2a9a: cloth, 0x5a4636: cloth, 0x3a2a5a: cloth, 0xb5452f: woodTex() }, (hex, map) => toon(hex, { map }));
     bake(this.body);
-    this.buildWeapon(eq?.weapon ?? null);
 
     const legendaryCount = eq ? Object.values(eq).filter((i) => i?.rarity === 'legendary').length : 0;
     const epicCount = eq ? Object.values(eq).filter((i) => i?.rarity === 'epic').length : 0;
@@ -670,6 +543,10 @@ export class HeroModel {
       this.aura.scale.setScalar(1 + Math.sin(t * 3) * 0.06);
     }
     for (const g of this.glowParts) g.scale.setScalar(1 + Math.sin(t * 4 + g.id) * 0.15);
+    for (const sp of this.spinParts) {
+      if (sp.userData.spinAxis === 'z') sp.rotation.z += dt * 2.5;
+      else sp.rotation.y += dt * 1.8;
+    }
   }
 
   /** Позиция наконечника оружия/руки в мировых координатах — для эффектов. */

@@ -1,6 +1,7 @@
 // Просмотрщик моделей для разработки: /dev/preview.html
 import * as THREE from 'three';
 import { HeroModel } from '../src/render/heroes';
+import { buildWeapon } from '../src/render/equipment';
 import { MobModel } from '../src/render/mobs';
 import { makeItem, TEMPLATE_BY_ID, emptyEquip } from '@game/shared';
 
@@ -28,9 +29,11 @@ const heroes: HeroModel[] = [];
   h.root.rotation.y = Number(q.get('rot') ?? 0.4);
   if (q.get('eq')) {
     const eq = emptyEquip();
-    const w = { warrior: 'axe', mage: 'orb', archer: 'crossbow' }[c];
-    for (const t of [q.get('w') === '1' ? w : null, 'helm', 'plate', 'boots', 'amulet', 'ring']) {
-      if (!t) continue;
+    // ?eq=1&r=epic&armor=plate&helm=helm&boots=greaves&amulet=talisman&w=axe,orb,crossbow
+    const weapons = (q.get('w') ?? '').split(',');
+    const tpls = [weapons[i] || null, q.get('helm'), q.get('armor'), q.get('boots'), q.get('amulet'), q.get('ring') ?? 'ring'];
+    for (const t of tpls) {
+      if (!t || t === 'none') continue;
       const it = makeItem(TEMPLATE_BY_ID[t], rarity, 1);
       eq[it.slot] = it;
     }
@@ -52,6 +55,26 @@ if (q.get('mobs')) {
   });
   cam.position.set(0, 5, 12);
   cam.lookAt(0, 1.3, 0);
+}
+if (q.get('weapons')) {
+  // Сетка: 9 видов оружия × 4 редкости
+  heroes.forEach((h) => h.root.removeFromParent());
+  heroes.length = 0;
+  const tpls = ['sword', 'axe', 'hammer', 'staff', 'wand', 'orb', 'bow', 'recurve', 'crossbow'];
+  const rars = ['common', 'rare', 'epic', 'legendary'] as const;
+  tpls.forEach((t, i) =>
+    rars.forEach((r, j) => {
+      const w = buildWeapon(t, r, { parts: [], glow: [], spin: [] });
+      w.position.set((i - 4) * 1.15, 3.6 - j * 1.25 - (t === 'staff' ? 0.5 : 0), 0);
+      if (t === 'crossbow') w.rotation.set(-Math.PI / 2 + 0.4, 0, 0);
+      else if (t === 'bow' || t === 'recurve') w.rotation.set(0, 0, 0);
+      w.scale.setScalar(t === 'staff' ? 0.7 : 0.95);
+      scene.add(w);
+    }),
+  );
+  ground.visible = false;
+  cam.position.set(0, 1.6, 11.5);
+  cam.lookAt(0, 1.6, 0);
 }
 let last = performance.now();
 const cast = q.get('cast');
