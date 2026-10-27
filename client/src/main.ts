@@ -262,6 +262,11 @@ class App {
         this.st.token = m.token;
         this.st.seed = m.seed;
         if (!this.conn?.local) saveSession(m.code, m.token);
+        else {
+          // Одиночная игра: сразу два бота-напарника (их можно убрать в лобби)
+          this.conn.send({ t: 'addBot' });
+          this.conn.send({ t: 'addBot' });
+        }
         break;
       case 'err':
         if (this.screen === 'menu') {

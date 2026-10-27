@@ -10,3 +10,4 @@ client/ios/App/build/
 client/ios/DerivedData/
 .vscode/
 .idea/
+dist-demo/

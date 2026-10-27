@@ -80,6 +80,15 @@ export function menuScreen(settings: Settings, act: MenuActions, error = ''): HT
     sfx.click();
     root.appendChild(helpModal());
   });
+  if (import.meta.env.VITE_DEMO) {
+    // Веб-демо: только одиночная игра с ботами (сетевой режим — в приложении или через свой сервер)
+    (root.querySelector('#create') as HTMLElement).style.display = 'none';
+    (code.parentElement as HTMLElement).style.display = 'none';
+    err.insertAdjacentHTML(
+      'beforebegin',
+      '<div style="font-size:13px;color:var(--muted);line-height:1.35">Веб-демо: вы играете с двумя ботами. Игра на троих по сети — в приложении для iOS/Android или через свой сервер.</div>',
+    );
+  }
   return root;
 }
 

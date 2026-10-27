@@ -96,8 +96,12 @@ export class LocalConnection implements Connection {
     const r = Number(new URLSearchParams(window.location.search).get('round'));
     if (r > 1) this.room.game.startRound = r;
     queueMicrotask(() => {
-      const p = this.room.join(name, { send: (m) => this.onMessage(m) });
-      if (typeof p !== 'string') this.pid = p.id;
+      this.room.join(name, {
+        send: (m) => {
+          if (m.t === 'welcome') this.pid = m.id;
+          this.onMessage(m);
+        },
+      });
     });
     this.timer = window.setInterval(() => {
       const now = performance.now();

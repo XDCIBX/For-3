@@ -9,7 +9,8 @@
     "preview": "vite preview --host",
     "cap:sync": "npm run build && cap sync",
     "android": "npm run build && cap sync android && cap open android",
-    "ios": "npm run build && cap sync ios && cap open ios"
+    "ios": "npm run build && cap sync ios && cap open ios",
+    "build:demo": "vite build --mode demo && node scripts/build-demo.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.0.0",
