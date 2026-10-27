@@ -677,7 +677,7 @@ export class IslandStage implements Stage {
     sign.add(part(G.cyl(0.07, 0.08, 1.8, 6), 0x6a4024, { pos: [0, 0.9, 0], outline: 0.02 }));
     sign.add(part(G.box(0.9, 0.25, 0.06), 0xc79a5a, { pos: [0.3, 1.5, 0], rot: [0, 0, 0.08], outline: 0.02 }));
     sign.add(part(G.box(0.8, 0.22, 0.06), 0xc79a5a, { pos: [-0.25, 1.15, 0.02], rot: [0, 0.3, -0.06], outline: 0.02 }));
-    sign.position.set(2.2, 0, 3.3);
+    sign.position.set(2.0, 0, -2.3);
     s.add(sign);
     // Бочки и ящики у палаток
     for (const [x, z] of [

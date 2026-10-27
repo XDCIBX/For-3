@@ -23,8 +23,8 @@ export function overScreen(st: ClientState, onMenu: () => void): HTMLElement {
               (p, i) => `<tr>
               <td>${i === 0 ? '👑' : ''}</td>
               <td style="text-align:left"><div class="row"><div class="pi" style="width:28px;height:28px;border-radius:8px;border:2px solid var(--ink);padding:2px;background:${CLASS_BG[p.c]}">${classIcon(p.c)}</div>${esc(p.n)} <span style="color:var(--muted);font-size:12px">${CLASSES[p.c].name}</span></div></td>
-              <td class="${p.k === bestKills ? 'crown' : ''}">${p.k}</td>
-              <td class="${p.dmg === bestDmg ? 'crown' : ''}">${p.dmg}</td>
+              <td class="${p.k === bestKills && p.k > 0 ? 'crown' : ''}">${p.k}</td>
+              <td class="${p.dmg === bestDmg && p.dmg > 0 ? 'crown' : ''}">${p.dmg}</td>
               <td class="${p.pw === bestPvp && p.pw > 0 ? 'crown' : ''}">${p.pw}–${p.pl}</td>
               <td style="color:#ffe07a">${p.g}</td></tr>`,
             )
