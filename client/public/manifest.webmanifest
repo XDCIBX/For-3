@@ -1,0 +1,10 @@
+{
+  "name": "Три Героя",
+  "short_name": "Три Героя",
+  "display": "fullscreen",
+  "orientation": "landscape",
+  "background_color": "#1b1330",
+  "theme_color": "#1b1330",
+  "start_url": "./",
+  "icons": [{ "src": "icon.svg", "sizes": "any", "type": "image/svg+xml" }]
+}

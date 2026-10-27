@@ -1,0 +1,73 @@
+// Просмотрщик моделей для разработки: /dev/preview.html
+import * as THREE from 'three';
+import { HeroModel } from '../src/render/heroes';
+import { MobModel } from '../src/render/mobs';
+import { makeItem, TEMPLATE_BY_ID, emptyEquip } from '@game/shared';
+
+const canvas = document.getElementById('c') as HTMLCanvasElement;
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x8cc4ea);
+const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 100);
+cam.position.set(0, 4, 9);
+cam.lookAt(0, 1, 0);
+scene.add(new THREE.HemisphereLight(0xdff2ff, 0x6a8a4a, 1.6));
+const sun = new THREE.DirectionalLight(0xfff1d6, 2.2);
+sun.position.set(4, 8, 6);
+scene.add(sun);
+const ground = new THREE.Mesh(new THREE.CircleGeometry(8, 32).rotateX(-Math.PI / 2), new THREE.MeshToonMaterial({ color: 0x7cc35a }));
+scene.add(ground);
+
+const q = new URLSearchParams(location.search);
+const rarity = (q.get('r') ?? 'common') as 'common';
+const heroes: HeroModel[] = [];
+(['warrior', 'mage', 'archer'] as const).forEach((c, i) => {
+  const h = new HeroModel(c);
+  h.root.position.x = (i - 1) * 2.4;
+  h.root.rotation.y = Number(q.get('rot') ?? 0.4);
+  if (q.get('eq')) {
+    const eq = emptyEquip();
+    const w = { warrior: 'axe', mage: 'orb', archer: 'crossbow' }[c];
+    for (const t of [q.get('w') === '1' ? w : null, 'helm', 'plate', 'boots', 'amulet', 'ring']) {
+      if (!t) continue;
+      const it = makeItem(TEMPLATE_BY_ID[t], rarity, 1);
+      eq[it.slot] = it;
+    }
+    h.setEquip(eq);
+  }
+  scene.add(h.root);
+  heroes.push(h);
+});
+const mobs: MobModel[] = [];
+if (q.get('mobs')) {
+  heroes.forEach((h) => h.root.removeFromParent());
+  heroes.length = 0;
+  (['slime', 'goblin', 'skeleton', 'orc', 'troll'] as const).forEach((k, i) => {
+    const m = new MobModel(k);
+    m.root.position.set((i - 2) * 2.2 + (k === 'troll' ? 0.8 : 0), 0, k === 'troll' ? -2 : 0);
+    m.root.rotation.y = Number(q.get('rot') ?? 0.4);
+    scene.add(m.root);
+    mobs.push(m);
+  });
+  cam.position.set(0, 5, 12);
+  cam.lookAt(0, 1.3, 0);
+}
+let last = performance.now();
+const cast = q.get('cast');
+function loop(now: number) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  heroes.forEach((h) => {
+    if (cast !== null && Math.random() < 0.01) h.playCast(Number(cast));
+    h.update(dt, { speed: Number(q.get('speed') ?? 0), dead: false, stun: false, frozen: false, whirl: false, dash: false, invuln: false, buff: false });
+  });
+  mobs.forEach((m) => {
+    if (cast !== null && Math.random() < 0.01) m.playAttack();
+    m.update(dt, { moving: Number(q.get('speed') ?? 0) > 0, windup: false, stun: false, frozen: false, burn: false, slow: false, spawning: false });
+  });
+  renderer.render(scene, cam);
+  requestAnimationFrame(loop);
+}
+requestAnimationFrame(loop);
+(window as unknown as { ready: boolean }).ready = true;
