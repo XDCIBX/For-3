@@ -208,3 +208,24 @@ test('тролль-вождь бросает молот: тот ранит ге�
   assert.equal(boss.hammer, 0);
   assert.ok(boss.throwCd >= 5, 'после поимки — перезарядка');
 });
+
+test('тотем призывателя каждые полсекунды ранит врагов в круге; золото с мобов урезано на четверть', () => {
+  const [g, a] = threePlayers();
+  g.handle(a.id, { t: 'pick', cls: 'summoner' });
+  g.startGame();
+  run(g, 3.2);
+  for (const m of [...g.mobs.values()]) g.mobs.delete(m.id);
+  const mob = g.spawnMob('troll', a.x + 4, a.z);
+  mob.spawnT = 0;
+  mob.dmg = 0;
+  mob.throwCd = mob.slamCd = 99;
+  assert.ok(Math.abs(mob.gold - 120 * 0.75) < 0.01, 'добыча босса — 75%');
+  g.castSkill(a, 3, 1, 0, 4);
+  let pulses = 0;
+  for (let i = 0; i < Math.round(2.6 / DT); i++) {
+    g.update(DT);
+    for (const e of g.snapshot().E) if (e.e === 'fx' && e.k === 'tpulse') pulses++;
+  }
+  assert.ok(pulses >= 4 && pulses <= 6, `волн: ${pulses}`);
+  assert.ok(mob.hp < mob.maxHp);
+});

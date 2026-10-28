@@ -353,6 +353,16 @@ export class Effects {
     this.fx.burst(x, 0.3, z, { n: big ? 26 : 14, speed: 1.5, up: 4, life: 0.8, size: 0.2, colors: [0x6ff0ff, 0xffffff, 0x2ab8c8], drag: 1.5, radius: r * 0.5 });
   }
 
+  /** Волна духов от тотема: бирюзовое кольцо расходится до края круга. */
+  totemPulse(x: number, z: number, r: number) {
+    this.ring(x, z, r, 0x6ff0ff, 0.45, 0.1, 0.1);
+    for (let i = 0; i < 10; i++) {
+      const a = Math.random() * Math.PI * 2;
+      const d = r * (0.3 + Math.random() * 0.7);
+      this.fx.glow({ x: x + Math.cos(a) * d, y: 0.15, z: z + Math.sin(a) * d, vy: 1.6, life: 0.45, size: 0.16, color: Math.random() < 0.6 ? 0x6ff0ff : 0xe8ffff });
+    }
+  }
+
   /** Исчезновение помощника. */
   unsummon(x: number, z: number) {
     this.flash(x, 0.7, z, 0x6ff0ff, 1.2, 0.3);

@@ -125,6 +125,11 @@ export interface Proj {
   boomerang?: { mob: number; back: boolean; t: number };
 }
 
+/** Радиус круга тотема и урон его волны духов (каждые 0,5 с, доля урона призывателя). */
+const TOTEM_R = 5.5;
+const TOTEM_PULSE = 0.14;
+const TOTEM_PULSE_DUEL = 0.1;
+
 /** Призванный помощник (волк, голем, тотем). */
 export interface Minion {
   id: number;
@@ -698,7 +703,8 @@ export class Game {
       dmg: def.dmg * sc.dmg,
       speed: def.speed * this.rng.range(0.92, 1.08),
       radius: def.radius,
-      gold: Math.round(def.gold * sc.gold),
+      // Добыча с мобов и боссов урезана на четверть; округляем при выдаче
+      gold: def.gold * sc.gold * 0.75,
       target: null,
       retarget: 0,
       atkCd: 0.5,
@@ -768,13 +774,13 @@ export class Game {
     return best;
   }
 
-  rollDamage(p: Player, mult: number): { v: number; crit: boolean } {
+  rollDamage(p: Player, mult: number, canCrit = true): { v: number; crit: boolean } {
     // Сила умений от экипировки; помощники и так растут вместе со статами героя, им — половина
     let v = p.stats.damage * mult * (1 + p.stats.skillPower * (this.minionStrike ? 0.5 : 1)) * this.rng.range(0.9, 1.1);
     if (p.warcryT > 0) v *= this.phase === 'duel' ? 1.12 : 1.3;
     else if (p.rageT > 0) v *= 1.25;
     if (p.demonT > 0) v *= 1.1;
-    const crit = this.rng.next() < p.stats.crit;
+    const crit = canCrit && this.rng.next() < p.stats.crit;
     if (crit) v *= p.cls === 'archer' ? 2.2 : 2;
     return { v, crit };
   }
@@ -1014,7 +1020,7 @@ export class Game {
         this.events.push({ e: 'fx', k: 'nova', x: r2(p.x), z: r2(p.z), r: 5, pid: p.id });
         break;
       case 'mage:3':
-        this.addZone('meteor', p.id, tx, tz, 3.5, 0, this.phase === 'duel' ? 0.7 : 1.0, 3.2);
+        this.addZone('meteor', p.id, tx, tz, 3.5, 0, this.phase === 'duel' ? 0.7 : 1.0, this.phase === 'duel' ? 3.2 : 2.8);
         break;
       // ---------------- Лучник
       case 'archer:0':
@@ -1151,6 +1157,20 @@ export class Game {
           if (this.phase === 'duel' && q.id !== owner.id) continue;
           if (Math.hypot(q.x - n.x, q.z - n.z) < 5.5) q.hp = Math.min(q.stats.maxHp, q.hp + q.stats.maxHp * (this.phase === 'duel' ? 0.012 : 0.025) * dt);
         }
+        // Волна духов: каждые полсекунды ранит всех врагов в круге тотема
+        if (n.pulse <= 0) {
+          n.pulse = 0.5;
+          let any = false;
+          this.minionStrike = true;
+          for (const t of enemies) {
+            if (Math.hypot(t.x - n.x, t.z - n.z) - t.rad < TOTEM_R) {
+              this.hit(owner, t, this.phase === 'duel' ? TOTEM_PULSE_DUEL : TOTEM_PULSE);
+              any = true;
+            }
+          }
+          this.minionStrike = false;
+          if (any) this.events.push({ e: 'fx', k: 'tpulse', x: r2(n.x), z: r2(n.z), r: TOTEM_R, id: n.id });
+        }
         if (n.atkCd <= 0) {
           let best: Target | null = null;
           let bd = 9;
@@ -1167,7 +1187,7 @@ export class Game {
             const ddz = best.z - n.z;
             const l = Math.hypot(ddx, ddz) || 1;
             this.minionStrike = true;
-            const pr = this.fireProj(owner, 'spirit', ddx / l, ddz / l, 16, 10, 0.55, 0.35, 0);
+            const pr = this.fireProj(owner, 'spirit', ddx / l, ddz / l, 16, 10, 0.45, 0.35, 0);
             this.minionStrike = false;
             pr.fromMinion = true;
             pr.x = n.x + (ddx / l) * 0.5;
@@ -1797,7 +1817,8 @@ export class Game {
         case 'meteor':
           if (!zn.fired) {
             zn.fired = true;
-            if (owner) for (const t of this.targetsFor(owner)) if (Math.hypot(t.x - zn.x, t.z - zn.z) - t.rad < zn.r) this.hit(owner, t, zn.dmg, { stun: 1.2 });
+            // Метеор не критует: иначе на поздних уровнях он сносит толпу с одного удара
+            if (owner) for (const t of this.targetsFor(owner)) if (Math.hypot(t.x - zn.x, t.z - zn.z) - t.rad < zn.r) this.hit(owner, t, 0, { stun: 1.2 }, this.rollDamage(owner, zn.dmg, false));
             this.events.push({ e: 'fx', k: 'meteor', x: r2(zn.x), z: r2(zn.z), r: zn.r });
           }
           if (zn.t > zn.delay + 0.15) this.zones.delete(zn.id);

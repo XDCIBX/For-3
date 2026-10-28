@@ -602,6 +602,10 @@ export class Engine {
               this.effects.hammerCatch(hp.x, hp.y, hp.z);
               break;
             }
+            case 'tpulse':
+              this.effects.totemPulse(e.x, e.z, e.r ?? 5.5);
+              if (e.id !== undefined) this.minions.get(e.id)?.model.playAttack();
+              break;
             case 'gslam':
               this.effects.golemSlam(e.x, e.z, e.r ?? 2.2);
               break;

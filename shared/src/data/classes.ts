@@ -56,7 +56,7 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
       { id: 'bolt', name: 'Чародейская стрела', desc: 'Сгусток магии летит в цель.', cd: 0.75, aim: 'dir', range: 13 },
       { id: 'fireball', name: 'Огненный шар', desc: 'Взрывается при попадании и оставляет горящую землю.', cd: 5, aim: 'dir', range: 12, radius: 2.8 },
       { id: 'nova', name: 'Ледяная волна', desc: 'Замораживает всех врагов вокруг на 2 сек.', cd: 8, aim: 'self', range: 0, radius: 5 },
-      { id: 'meteor', name: 'Метеор', desc: 'Через секунду с неба падает метеор: огромный урон и оглушение.', cd: 14, aim: 'point', range: 11, radius: 3.5 },
+      { id: 'meteor', name: 'Метеор', desc: 'Через секунду с неба падает метеор: большой урон по площади и оглушение. Не бывает критическим.', cd: 14, aim: 'point', range: 11, radius: 3.5 },
     ],
   },
   archer: {
@@ -104,7 +104,7 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
       { id: 'spiritbolt', name: 'Духовная стрела', desc: 'Сгусток духовной энергии. Помощники атакуют цель.', cd: 0.75, aim: 'dir', range: 12 },
       { id: 'wolves', name: 'Духи-волки', desc: 'Призывает двух волков на 14 сек. Укусы замедляют.', cd: 11, aim: 'self', range: 0, radius: 2 },
       { id: 'golem', name: 'Каменный голем', desc: 'Голем на 16 сек.: принимает удары на себя и бьёт по площади, замедляя врагов.', cd: 16, aim: 'self', range: 0, radius: 2.2 },
-      { id: 'totem', name: 'Тотем духов', desc: 'Тотем на 8 сек. стреляет по врагам и лечит союзников рядом.', cd: 14, aim: 'point', range: 9, radius: 5.5 },
+      { id: 'totem', name: 'Тотем духов', desc: 'Тотем на 8 сек.: стреляет по врагам, каждые полсекунды ранит всех врагов в круге волной духов и лечит союзников рядом.', cd: 14, aim: 'point', range: 9, radius: 5.5 },
     ],
   },
 };
