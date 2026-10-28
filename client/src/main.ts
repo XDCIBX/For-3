@@ -71,6 +71,7 @@ class App {
     document.body.appendChild(rh);
     requestAnimationFrame((t) => this.loop(t));
     window.addEventListener('resize', () => this.updateTavernShift());
+    this.startPing();
     if (import.meta.env.DEV) (window as unknown as { __app: App }).__app = this;
     setTimeout(() => document.getElementById('boot')?.classList.add('hide'), 300);
     // Попытка вернуться в игру после перезагрузки страницы
@@ -316,7 +317,7 @@ class App {
     if (ph !== 'tavern' && this.tavernUi) {
       this.tavernUi.el.remove();
       this.tavernUi = null;
-      this.engine.tavernShift = 0;
+      this.engine.tavernLeft = this.engine.tavernRight = 0;
     }
     if (this.controls) this.controls.el.style.display = ph === 'tavern' || ph === 'gameover' ? 'none' : '';
     hud.el.style.display = ph === 'tavern' ? 'none' : '';
@@ -366,14 +367,17 @@ class App {
     void prev;
   }
 
-  /** Сдвигаем 3D-сцену таверны так, чтобы герои были видны справа от лавки. */
+  /** Сдвигаем 3D-сцену таверны так, чтобы герои были видны между лавкой и панелью героя. */
   private updateTavernShift() {
     const shop = this.tavernUi?.el.querySelector('.shop');
-    if (!shop || window.innerWidth < window.innerHeight) {
-      this.engine.tavernShift = 0;
+    const side = this.tavernUi?.el.querySelector('.side');
+    if (!shop || !side || window.innerWidth < window.innerHeight) {
+      this.engine.tavernLeft = this.engine.tavernRight = 0;
       return;
     }
-    this.engine.tavernShift = Math.min(0.75, shop.getBoundingClientRect().right / window.innerWidth);
+    const w = window.innerWidth;
+    this.engine.tavernLeft = Math.min(0.7, shop.getBoundingClientRect().right / w);
+    this.engine.tavernRight = Math.min(0.4, 1 - side.getBoundingClientRect().left / w);
   }
 
   private handleEvents(events: GameEvent[]) {
@@ -567,6 +571,27 @@ class App {
   }
 
   // ------------------------------------------------------------------ цикл
+
+  /** Крошечный индикатор пинга в левом верхнем углу. */
+  private startPing() {
+    const badge = el(`<div class="ping"></div>`);
+    document.body.appendChild(badge);
+    const tick = () => {
+      const c = this.conn;
+      badge.style.display = c ? '' : 'none';
+      if (!c) return;
+      if (c.local) {
+        badge.textContent = 'соло';
+        badge.className = 'ping solo';
+        return;
+      }
+      const ms = Math.round(c.rtt * 1000);
+      badge.textContent = `${ms} мс`;
+      badge.className = `ping ${ms < 90 ? '' : ms < 180 ? 'mid' : 'bad'}`;
+    };
+    tick();
+    setInterval(tick, 500);
+  }
 
   private loop(t: number) {
     const dt = Math.min(0.05, (t - this.last) / 1000);

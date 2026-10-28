@@ -1,11 +1,11 @@
-import { CLASSES, RARITY, SLOTS, SLOT_NAMES, STAT_LABELS, formatStat, sellValue, type Item, type StatKey } from '@game/shared';
+import { CLASSES, RARITY, SLOTS, SLOT_NAMES, STAT_LABELS, computeStats, formatStat, sellValue, type Item, type StatKey, type Stats } from '@game/shared';
 import type { ClientState } from '../net/state';
 import { sfx } from '../audio/sfx';
 import { CLASS_BG, el, esc } from './dom';
 import { COIN, MUG, classIcon, itemIcon } from './icons';
 
 const EMPTY_ICON: Record<string, string> = { weapon: 'weapon', helmet: 'helm', armor: 'plate', boots: 'boots', amulet: 'amulet', ring: 'ring' };
-const DEFAULT_WEAPON: Record<string, string> = { warrior: 'sword', mage: 'staff', archer: 'bow' };
+const DEFAULT_WEAPON: Record<string, string> = { warrior: 'sword', mage: 'staff', archer: 'bow', hunter: 'glaives', summoner: 'totemstaff' };
 
 const MAIN_STATS: StatKey[] = ['maxHp', 'damage', 'armor', 'speed', 'attackSpeed', 'crit', 'cdr', 'regen', 'lifesteal'];
 
@@ -18,6 +18,13 @@ export class TavernUi {
   private lastKey = '';
   private lastEquipKey = '';
   private lastPartyKey = '';
+  private lastStatsKey = '';
+  /** Статы до последней покупки и когда она была — чтобы пару секунд подсвечивать, что изменилось. */
+  private prevStats: Stats | null = null;
+  private gain: { from: Stats; t: number } | null = null;
+  /** Предмет под курсором: показываем, как изменятся статы. */
+  private preview: Item | null = null;
+  private st: ClientState | null = null;
 
   constructor(onBuy: (id: string) => void, onReady: (v: boolean) => void) {
     this.onBuy = onBuy;
@@ -35,7 +42,7 @@ export class TavernUi {
         <div class="side">
           <div class="panel equip">
             <div class="row" style="justify-content:space-between;margin-bottom:6px">
-              <div class="label">Снаряжение</div>
+              <div class="label">Мой герой</div>
               <div class="gold-box" style="font-size:18px"><span class="coin">${COIN}</span><b>0</b></div>
             </div>
             <div class="equip-grid"></div>
@@ -49,6 +56,7 @@ export class TavernUi {
   update(st: ClientState) {
     const me = st.me;
     if (!me) return;
+    this.st = st;
     const timer = this.el.querySelector<HTMLElement>('.timer')!;
     const t = Math.ceil(st.timer);
     timer.textContent = `⏳ ${t}`;
@@ -94,7 +102,18 @@ export class TavernUi {
           ? `<div class="eslot r-${it.rarity}" title="${esc(it.name)}">${itemIcon(it.tpl, it.rarity)}</div>`
           : `<div class="eslot empty" title="${SLOT_NAMES[s]}">${itemIcon(EMPTY_ICON[s] === 'weapon' ? DEFAULT_WEAPON[me.c] : EMPTY_ICON[s], 'common')}</div>`;
       }).join('');
-      this.el.querySelector('.stats')!.innerHTML = MAIN_STATS.map((k) => `<div><span>${STAT_LABELS[k]}</span><b>${formatStat(k, me.stats![k], false)}</b></div>`).join('');
+    }
+    if (this.gain && performance.now() - this.gain.t > 2400) {
+      // Подсветка покупки погасла — перерисовываем без неё
+      this.gain = null;
+      this.lastStatsKey = '';
+    }
+    if (me.stats) {
+      const sk = MAIN_STATS.map((k) => me.stats![k].toFixed(3)).join() + `|${this.preview?.id ?? ''}|${ek}`;
+      if (sk !== this.lastStatsKey) {
+        this.lastStatsKey = sk;
+        this.renderStats(me.stats);
+      }
     }
 
     // Отряд
@@ -120,14 +139,57 @@ export class TavernUi {
     };
   }
 
+  /** Характеристики героя: после покупки выросшие значения подсвечиваются, при наведении на товар — прогноз. */
+  private renderStats(cur: Stats) {
+    const me = this.st?.me;
+    const box = this.el.querySelector('.stats')!;
+    if (this.prevStats && MAIN_STATS.some((k) => Math.abs(this.prevStats![k] - cur[k]) > 1e-6)) this.gain = { from: this.prevStats, t: performance.now() };
+    this.prevStats = { ...cur };
+    const changed = this.gain && performance.now() - this.gain.t < 2400 ? this.gain.from : null;
+    const it = this.preview;
+    const pv = it && me?.eq && (!it.cls || it.cls === me.c) ? computeStats(me.c, { ...me.eq, [it.slot]: it }) : null;
+    box.innerHTML = MAIN_STATS.map((k) => {
+      let cls = '';
+      let extra = '';
+      if (pv && Math.abs(pv[k] - cur[k]) > 1e-6) {
+        const up = pv[k] > cur[k];
+        cls = up ? 'pv-up' : 'pv-down';
+        extra = `<i>→ ${formatStat(k, pv[k], false)}</i>`;
+      } else if (changed && Math.abs(changed[k] - cur[k]) > 1e-6) {
+        // Анимацию запускаем один раз, при повторной отрисовке просто держим цвет
+        if (performance.now() - this.gain!.t > 100) cls = 'kept';
+        const d = cur[k] - changed[k];
+        cls += d > 0 ? ' got-up' : ' got-down';
+        extra = `<i>(${formatStat(k, d)})</i>`;
+      }
+      return `<div class="${cls}"><span>${STAT_LABELS[k]}</span><b>${formatStat(k, cur[k], false)}${extra}</b></div>`;
+    }).join('');
+  }
+
+  private setPreview(it: Item | null) {
+    this.preview = it;
+    const me = this.st?.me;
+    if (me?.stats) {
+      this.lastStatsKey = '';
+      this.renderStats(me.stats);
+    }
+  }
+
   private makeCard(it: Item): HTMLElement {
     const card = el(`<div class="item r-${it.rarity}"></div>`);
+    card.addEventListener('pointerenter', (e) => {
+      if (e.pointerType === 'mouse') this.setPreview(it);
+    });
+    card.addEventListener('pointerleave', () => {
+      if (this.preview === it) this.setPreview(null);
+    });
     card.addEventListener('click', () => {
       if (card.classList.contains('cant') || card.classList.contains('wrong')) {
         sfx.hurt();
         card.animate([{ transform: 'translateX(-5px)' }, { transform: 'translateX(5px)' }, { transform: 'none' }], { duration: 200 });
         return;
       }
+      this.preview = null;
       this.onBuy(it.id);
     });
     return card;

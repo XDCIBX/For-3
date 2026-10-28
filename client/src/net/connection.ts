@@ -18,6 +18,7 @@ export class WsConnection implements Connection {
   private ws: WebSocket;
   private pingTimer = 0;
   private closedByUs = false;
+  private gotPong = false;
 
   private constructor(ws: WebSocket) {
     this.ws = ws;
@@ -30,7 +31,8 @@ export class WsConnection implements Connection {
       }
       if (m.t === 'pong') {
         const r = (performance.now() - m.c) / 1000;
-        this.rtt = this.rtt * 0.7 + r * 0.3;
+        this.rtt = this.gotPong ? this.rtt * 0.7 + r * 0.3 : r;
+        this.gotPong = true;
         return;
       }
       this.onMessage(m);
@@ -40,6 +42,7 @@ export class WsConnection implements Connection {
       if (!this.closedByUs) this.onClose('Соединение потеряно');
     };
     this.pingTimer = window.setInterval(() => this.send({ t: 'ping', c: performance.now() }), 2000);
+    this.send({ t: 'ping', c: performance.now() });
   }
 
   static open(url: string, timeoutMs = 8000): Promise<WsConnection> {

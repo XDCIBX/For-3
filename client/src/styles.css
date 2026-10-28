@@ -481,7 +481,7 @@ input.field:focus {
 .me-box {
   position: absolute;
   left: calc(10px + var(--sal));
-  top: calc(8px + var(--sat));
+  top: calc(13px + var(--sat));
   display: flex;
   gap: 8px;
   align-items: center;
@@ -940,9 +940,11 @@ input.field:focus {
   display: flex;
   gap: 12px;
   align-items: stretch;
+  justify-content: space-between;
 }
+/* Лавка слева, панель героя справа, герои видны в промежутке между ними */
 .shop {
-  flex: 1 1 auto;
+  flex: 0 1 clamp(250px, 44vw, 660px);
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -1103,20 +1105,24 @@ input.field:focus {
   opacity: 0.6;
 }
 .side {
-  flex: 0 0 clamp(210px, 38%, 420px);
+  flex: 0 0 clamp(140px, 21vw, 250px);
   min-width: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;
   min-height: 0;
-  justify-content: flex-end;
+  justify-content: space-between;
+}
+.side .equip {
+  min-height: 0;
+  overflow-y: auto;
 }
 .equip {
   padding: 8px;
 }
 .equip-grid {
   display: grid;
-  grid-template-columns: repeat(6, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 5px;
 }
 .eslot {
@@ -1153,8 +1159,8 @@ input.field:focus {
 }
 .stats {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(118px, 1fr));
-  gap: 2px 8px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1px;
   font-size: 11px;
   font-weight: 700;
   margin-top: 6px;
@@ -1165,6 +1171,47 @@ input.field:focus {
   gap: 4px;
   white-space: nowrap;
   min-width: 0;
+  padding: 1px 4px;
+  border-radius: 5px;
+}
+.stats i {
+  font-style: normal;
+  font-size: 0.9em;
+  margin-left: 4px;
+}
+/* Только что купленное: значение выросло/упало */
+.stats .got-up {
+  animation: stat-up 2.4s ease-out;
+}
+.stats .got-up b,
+.stats .got-up i,
+.stats .pv-up i {
+  color: #8aff7a;
+}
+.stats .got-down {
+  animation: stat-down 2.4s ease-out;
+}
+.stats .kept {
+  animation: none;
+}
+.stats .got-down b,
+.stats .got-down i,
+.stats .pv-down i {
+  color: #ff7a6a;
+}
+.stats .pv-up {
+  background: rgba(138, 255, 122, 0.14);
+}
+.stats .pv-down {
+  background: rgba(255, 122, 106, 0.14);
+}
+@keyframes stat-up {
+  0%, 20% { background: rgba(138, 255, 122, 0.45); transform: scale(1.04); }
+  100% { background: transparent; transform: none; }
+}
+@keyframes stat-down {
+  0%, 20% { background: rgba(255, 122, 106, 0.4); }
+  100% { background: transparent; }
 }
 .stats span {
   color: var(--muted);
@@ -1378,6 +1425,7 @@ input.field:focus {
   .item { padding: 4px; }
   .shop { padding: 8px 10px 10px; }
   .stats { font-size: 10px; }
+  .side .label { font-size: 11px; }
 }
 /* Узкая правая колонка таверны: ячейки снаряжения в 3 столбца, статы в 2 */
 @media (max-width: 700px) {
@@ -1389,7 +1437,10 @@ input.field:focus {
   .lobby { grid-template-columns: 1fr; overflow-y: auto; }
   .lobby-mid { display: none; }
   .tavern { flex-direction: column; }
+  .shop { flex: 1 1 auto; }
   .side { flex: 0 0 auto; }
+  .stats { grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); }
+  .equip-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 
 /* ---------- Полный экран ---------- */
@@ -1413,3 +1464,24 @@ input.field:focus {
   font-family: inherit;
   padding: 0;
 }
+
+/* ---------- Пинг ---------- */
+.ping {
+  position: fixed;
+  left: calc(3px + var(--sal));
+  top: calc(1px + var(--sat));
+  z-index: 50;
+  font-size: 9px;
+  font-weight: 800;
+  line-height: 1;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: rgba(20, 12, 30, 0.45);
+  color: #8aff7a;
+  pointer-events: none;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+.ping.mid { color: #ffd84a; }
+.ping.bad { color: #ff6a5a; }
+.ping.solo { color: #c9c0d8; }

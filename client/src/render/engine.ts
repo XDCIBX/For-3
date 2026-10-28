@@ -156,7 +156,9 @@ export class Engine {
   private aimCircle: THREE.Mesh;
   private aimRange: THREE.Mesh;
   private selfRing: THREE.Mesh;
-  tavernShift = 0;
+  /** Доли экрана слева (лавка) и справа (панель героя), закрытые интерфейсом таверны. */
+  tavernLeft = 0;
+  tavernRight = 0;
   /** Сдвиг картинки вправо, чтобы освободить место под панель меню. */
   menuShift = 0;
   private phase: Phase = 'lobby';
@@ -842,14 +844,16 @@ export class Engine {
     }
     if (this.phase === 'tavern') {
       // Отдаляем камеру, чтобы трое героев поместились в видимую часть экрана
-      const visible = Math.max(0.2, 1 - this.tavernShift);
+      const visible = Math.max(0.2, 1 - this.tavernLeft - this.tavernRight);
       const far = Math.max(10.5, 7.6 / (visible * 2 * Math.tan((cam.fov * Math.PI) / 360) * aspect));
-      cam.position.set(0, 4.6, far);
-      cam.lookAt(0, 1.6, 0);
-      if (this.tavernShift > 0) {
+      cam.position.set(0, 3.2 + far * 0.12, far);
+      cam.lookAt(0, 1.4, 0);
+      if (this.tavernLeft > 0 || this.tavernRight > 0) {
+        // Центрируем сцену в свободном промежутке между панелями
         const w = window.innerWidth;
         const h = window.innerHeight;
-        cam.setViewOffset(w, h, -w * this.tavernShift * 0.5, h * 0.2, w, h);
+        const cx = (this.tavernLeft + 1 - this.tavernRight) / 2;
+        cam.setViewOffset(w, h, -w * (cx - 0.5), h * 0.04, w, h);
       }
       return;
     }
