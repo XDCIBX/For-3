@@ -126,7 +126,7 @@ export interface Proj {
 }
 
 /** Множитель золота с мобов и боссов. */
-const GOLD_DROP = 0.75 * 1.25;
+const GOLD_DROP = 0.75 * 1.25 * 1.35;
 
 /** Радиус круга тотема и урон его волны духов (каждые 0,5 с, доля урона призывателя). */
 const TOTEM_R = 5.5;
@@ -706,7 +706,7 @@ export class Game {
       dmg: def.dmg * sc.dmg,
       speed: def.speed * this.rng.range(0.92, 1.08),
       radius: def.radius,
-      // Добыча с мобов и боссов: 75% от исходной, затем +25% (≈94%); округляем при выдаче
+      // Добыча с мобов и боссов: 75% от исходной, затем +25% и +35% (≈127%); округляем при выдаче
       gold: def.gold * sc.gold * GOLD_DROP,
       target: null,
       retarget: 0,

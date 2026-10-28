@@ -29,10 +29,13 @@ export const MOBS: Record<MobKind, MobDef> = {
   troll: { kind: 'troll', name: 'Тролль-вождь', hp: 1500, dmg: 42, speed: 3.0, radius: 1.5, gold: 120, range: 1.2, atkCd: 1.8, windup: 0.7, boss: true, minRound: 4 },
 };
 
+/** Общее усиление мобов — уравновешивает возросшую добычу золота. */
+export const MOB_POWER = { hp: 1.28, dmg: 1.12 };
+
 export function mobScale(round: number) {
   return {
-    hp: 1 + 0.32 * (round - 1) + 0.03 * (round - 1) ** 2,
-    dmg: 1 + 0.22 * (round - 1) + 0.011 * (round - 1) ** 2,
+    hp: (1 + 0.32 * (round - 1) + 0.03 * (round - 1) ** 2) * MOB_POWER.hp,
+    dmg: (1 + 0.22 * (round - 1) + 0.011 * (round - 1) ** 2) * MOB_POWER.dmg,
     gold: 1 + 0.1 * (round - 1),
   };
 }
