@@ -406,7 +406,7 @@ export class Game {
     p.spectator = false;
     p.stats = computeStats(p.cls, p.equip);
     p.hp = p.stats.maxHp;
-    p.shield = p.cls === 'mage' ? p.stats.maxHp * 0.3 : 0;
+    p.shield = p.cls === 'mage' ? this.shieldMax(p) : 0;
     p.cds = [0, 0, 0, 0];
     p.stunT = p.frozenT = p.slowT = p.invulnT = p.warcryT = p.rageT = p.hasteT = p.whirlT = p.demonT = 0;
     p.dash = null;
@@ -754,8 +754,9 @@ export class Game {
   }
 
   rollDamage(p: Player, mult: number): { v: number; crit: boolean } {
-    let v = p.stats.damage * mult * this.rng.range(0.9, 1.1);
-    if (p.warcryT > 0) v *= 1.3;
+    // Сила умений от экипировки; помощники и так растут вместе со статами героя, им — половина
+    let v = p.stats.damage * mult * (1 + p.stats.skillPower * (this.minionStrike ? 0.5 : 1)) * this.rng.range(0.9, 1.1);
+    if (p.warcryT > 0) v *= this.phase === 'duel' ? 1.12 : 1.3;
     else if (p.rageT > 0) v *= 1.25;
     if (p.demonT > 0) v *= 1.1;
     const crit = this.rng.next() < p.stats.crit;
@@ -790,7 +791,7 @@ export class Game {
         o.slowT = Math.max(o.slowT, fx.slowT ?? 1);
         o.slowAmt = Math.max(o.slowAmt, fx.slow);
       }
-      dealt = this.damagePlayer(o, v * 0.75 * (this.minionStrike ? 0.5 : 1), crit, p.id);
+      dealt = this.damagePlayer(o, v * 0.75, crit, p.id);
     }
     p.dmgDealt += dealt;
     const ls = (p.stats.lifesteal + (p.demonT > 0 ? 0.15 : 0)) * (this.phase === 'duel' ? 0.5 : 1);
@@ -825,10 +826,10 @@ export class Game {
 
   damagePlayer(t: Player, v: number, crit: boolean, src: string | null): number {
     if (!t.alive || t.invulnT > 0 || t.spectator || !canMovePhase(this.phase)) return 0;
-    if (t.warcryT > 0) v *= 0.6;
+    if (t.warcryT > 0) v *= this.phase === 'duel' ? 0.85 : 0.6;
     if (t.demonT > 0) v *= 0.9;
     if (t.cls === 'summoner') {
-      // Связь душ: четверть урона забирает на себя ближайший помощник
+      // Связь душ: треть урона забирает на себя ближайший помощник
       let link: Minion | null = null;
       let bd = 12;
       for (const n of this.minions.values()) {
@@ -840,8 +841,8 @@ export class Game {
         }
       }
       if (link) {
-        this.damageMinion(link, v * 0.25, false);
-        v *= 0.75;
+        this.damageMinion(link, v * 0.35, false);
+        v *= 0.65;
       }
     }
     v *= 50 / (50 + t.stats.armor);
@@ -935,7 +936,7 @@ export class Game {
       p.faceT = 0.45;
     }
 
-    const atkSpd = p.stats.attackSpeed * (p.hasteT > 0 ? 1.6 : 1) * (p.demonT > 0 ? 1.4 : 1);
+    const atkSpd = p.stats.attackSpeed * (p.hasteT > 0 ? 1.6 : 1) * (p.demonT > 0 ? (this.phase === 'duel' ? 1.25 : 1.4) : 1);
     p.cdMax[s] = s === 0 ? def.cd / atkSpd : def.cd * (1 - p.stats.cdr);
     p.cds[s] = p.cdMax[s];
     this.events.push({ e: 'cast', pid: p.id, s, r: r2(p.rot), x: r2(tx), z: r2(tz) });
@@ -966,7 +967,8 @@ export class Game {
         this.events.push({ e: 'fx', k: 'whirl', x: r2(p.x), z: r2(p.z), pid: p.id });
         break;
       case 'warrior:3': {
-        p.warcryT = 6;
+        // В дуэли клич короче: защищать некого
+        p.warcryT = this.phase === 'duel' ? 4 : 6;
         for (const q of this.active()) {
           if (q.id !== p.id && q.alive && Math.hypot(q.x - p.x, q.z - p.z) < 9) {
             if (this.phase !== 'duel') q.rageT = 6;
@@ -997,7 +999,7 @@ export class Game {
         this.events.push({ e: 'fx', k: 'nova', x: r2(p.x), z: r2(p.z), r: 5, pid: p.id });
         break;
       case 'mage:3':
-        this.addZone('meteor', p.id, tx, tz, 3.5, 0, 1.0, 3.2);
+        this.addZone('meteor', p.id, tx, tz, 3.5, 0, this.phase === 'duel' ? 0.7 : 1.0, 3.2);
         break;
       // ---------------- Лучник
       case 'archer:0':
@@ -1081,10 +1083,10 @@ export class Game {
   private summon(p: Player, kind: MinionKind, x: number, z: number): Minion {
     const st = p.stats;
     // В дуэли помощники хрупче, чтобы бой шёл между героями
-    const hpm = this.phase === 'duel' ? 0.6 : 1;
+    const hpm = this.phase === 'duel' ? 0.75 : 1;
     const spec = {
       wolf: { hp: st.maxHp * 0.32 * hpm, armor: st.armor, speed: 6.2, radius: 0.45, life: 14 },
-      golem: { hp: st.maxHp * 1.1 * hpm, armor: st.armor + 12, speed: 3.6, radius: 0.85, life: 16 },
+      golem: { hp: st.maxHp * (this.phase === 'duel' ? 0.9 : 1.1) * hpm, armor: st.armor + 12, speed: 3.6, radius: 0.85, life: 16 },
       totem: { hp: 9999, armor: 999, speed: 0, radius: 0.5, life: 8 },
     }[kind];
     const pos = { x, z };
@@ -1201,10 +1203,10 @@ export class Game {
           this.minionStrike = true;
           if (n.kind === 'wolf') {
             n.atkCd = 0.75;
-            this.hit(owner, tgt, 0.7, { slow: 0.2, slowT: 0.6 });
+            this.hit(owner, tgt, 0.85, { slow: 0.2, slowT: 0.6 });
           } else {
             n.atkCd = 1.5;
-            for (const t of enemies) if (Math.hypot(t.x - n.x, t.z - n.z) - t.rad < 2.2) this.hit(owner, t, 0.75, { slow: 0.3, slowT: 1 });
+            for (const t of enemies) if (Math.hypot(t.x - n.x, t.z - n.z) - t.rad < 2.2) this.hit(owner, t, 0.9, { slow: 0.3, slowT: 1 });
             this.events.push({ e: 'fx', k: 'gslam', x: r2(n.x), z: r2(n.z), r: 2.2 });
           }
           this.minionStrike = false;
@@ -1256,6 +1258,11 @@ export class Game {
 
   // ------------------------------------------------------------------ игроки
 
+  /** Магический щит мага; в дуэлях он прочнее. */
+  shieldMax(p: Player): number {
+    return p.stats.maxHp * (this.phase.startsWith('duel') ? 0.45 : 0.3);
+  }
+
   effectiveSpeed(p: Player): number {
     if (!p.alive || p.spectator || !canMovePhase(this.phase)) return 0;
     if (p.stunT > 0 || p.frozenT > 0) return 0;
@@ -1303,7 +1310,7 @@ export class Game {
       // Регенерация и щит мага
       p.hp = Math.min(p.stats.maxHp, p.hp + p.stats.regen * dt);
       if (p.cls === 'mage') {
-        const shm = p.stats.maxHp * 0.3;
+        const shm = this.shieldMax(p);
         if (p.lastHurt > 4) p.shield = Math.min(shm, p.shield + shm * 0.15 * dt);
       }
 
@@ -1738,7 +1745,7 @@ export class Game {
         hp: Math.ceil(p.hp),
         mhp: Math.round(p.stats.maxHp),
         sh: Math.round(p.shield),
-        shm: p.cls === 'mage' ? Math.round(p.stats.maxHp * 0.3) : 0,
+        shm: p.cls === 'mage' ? Math.round(this.shieldMax(p)) : 0,
         g: p.gold,
         k: p.kills,
         al: p.alive,

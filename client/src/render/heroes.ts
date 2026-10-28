@@ -28,8 +28,8 @@ const FEL = 0x5dff8a;
 const SPIRIT = 0x6ff0ff;
 
 const HELM_COLORS: Record<string, Record<Rarity, number>> = {
-  helm: { common: 0x9aa6b2, rare: 0x5b8fd0, epic: 0x8a5ac7, legendary: 0xf0c04a },
-  hood: { common: 0x7a6a55, rare: 0x2f6aa8, epic: 0x4a2f78, legendary: 0xc9343a },
+  helm: { common: 0x9aa6b2, rare: 0x5b8fd0, epic: 0x8a5ac7, legendary: 0xf0c04a, relic: 0x6a1c22 },
+  hood: { common: 0x7a6a55, rare: 0x2f6aa8, epic: 0x4a2f78, legendary: 0xc9343a, relic: 0x5a0f14 },
 };
 function eye(x: number): THREE.Group {
   const g = new THREE.Group();
@@ -417,7 +417,7 @@ export class HeroModel {
   private buildHeadgear(it: Item | null) {
     this.headgear.clear();
     const r = it?.rarity ?? 'common';
-    const glowing = r === 'legendary' || r === 'epic';
+    const glowing = r === 'relic' || r === 'legendary' || r === 'epic';
     if (this.cls === 'warrior') {
       const col = it ? HELM_COLORS[it.tpl]?.[r] ?? 0x9aa6b2 : 0x9aa6b2;
       const helm = part(G.halfSphere(0.43), col, { pos: [0, 0.03, 0], outline: 0.03 });
@@ -478,7 +478,7 @@ export class HeroModel {
       // Перо
       this.headgear.add(part(G.capsule(0.04, 0.32), it ? RARITY_HEX[r] : 0xe94b3c, { pos: [0.33, 0.35, -0.2], rot: [-0.5, 0, -0.6], outline: 0.015 }));
     }
-    if (it?.rarity === 'legendary') {
+    if (it?.rarity === 'legendary' || it?.rarity === 'relic') {
       const crown = new THREE.Group();
       for (let i = 0; i < 5; i++) {
         const a = (i / 5) * Math.PI * 2;
@@ -572,10 +572,11 @@ export class HeroModel {
     texturize(this.root, { 0x2a8f9a: cloth, 0x3b2f2a: cloth, 0x2c2733: cloth, 0x3b5552: cloth, 0xc8412f: cloth, 0x2f6b2c: cloth, 0x6b3fc4: cloth, 0x3f8f3a: cloth, 0x4e2a9a: cloth, 0x5a4636: cloth, 0x3a2a5a: cloth, 0xb5452f: woodTex() }, (hex, map) => toon(hex, { map }));
     bake(this.body);
 
+    const relicCount = eq ? Object.values(eq).filter((i) => i?.rarity === 'relic').length : 0;
     const legendaryCount = eq ? Object.values(eq).filter((i) => i?.rarity === 'legendary').length : 0;
     const epicCount = eq ? Object.values(eq).filter((i) => i?.rarity === 'epic').length : 0;
-    this.aura.visible = legendaryCount > 0 || epicCount >= 2;
-    (this.aura.material as THREE.MeshBasicMaterial) = glow(legendaryCount > 0 ? 0xffb321 : 0xbe6bff, 0.6);
+    this.aura.visible = relicCount > 0 || legendaryCount > 0 || epicCount >= 2;
+    (this.aura.material as THREE.MeshBasicMaterial) = relicCount > 0 ? glow(0xff2a2a, 0.7, false) : glow(legendaryCount > 0 ? 0xffb321 : 0xbe6bff, 0.6);
   }
 
   playCast(s: number) {

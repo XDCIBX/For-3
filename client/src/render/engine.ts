@@ -605,7 +605,7 @@ export class Engine {
           if (h) {
             h.model.cheer();
             const p = h.model.root.position;
-            const col = { common: 0xc9d3da, rare: 0x47a8ff, epic: 0xbe6bff, legendary: 0xffb321 }[e.rarity] ?? 0xffffff;
+            const col = { common: 0xc9d3da, rare: 0x47a8ff, epic: 0xbe6bff, legendary: 0xffb321, relic: 0xff3b3b }[e.rarity] ?? 0xffffff;
             this.effects.sparkle(p.x, 1.2, p.z, col);
           }
           break;

@@ -7,8 +7,9 @@ const METAL: Record<Rarity, [string, string]> = {
   rare: ['#bfe6ff', '#4aa8ff'],
   epic: ['#ecd4ff', '#a85cff'],
   legendary: ['#fff1b0', '#ffb321'],
+  relic: ['#ffb4a8', '#d0141a'],
 };
-const CLOTH: Record<Rarity, string> = { common: '#a07a52', rare: '#3f78d0', epic: '#7b3fc6', legendary: '#d2493a' };
+const CLOTH: Record<Rarity, string> = { common: '#a07a52', rare: '#3f78d0', epic: '#7b3fc6', legendary: '#d2493a', relic: '#7a0c14' };
 
 let uid = 0;
 function svg(body: string, defs = ''): string {

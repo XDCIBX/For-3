@@ -4,8 +4,8 @@ export const HERO_CLASSES: HeroClass[] = ['warrior', 'mage', 'archer', 'hunter',
 export type Slot = 'weapon' | 'helmet' | 'armor' | 'boots' | 'amulet' | 'ring';
 export const SLOTS: Slot[] = ['weapon', 'helmet', 'armor', 'boots', 'amulet', 'ring'];
 
-export type Rarity = 'common' | 'rare' | 'epic' | 'legendary';
-export const RARITIES: Rarity[] = ['common', 'rare', 'epic', 'legendary'];
+export type Rarity = 'common' | 'rare' | 'epic' | 'legendary' | 'relic';
+export const RARITIES: Rarity[] = ['common', 'rare', 'epic', 'legendary', 'relic'];
 
 export interface Stats {
   maxHp: number;
@@ -17,6 +17,8 @@ export interface Stats {
   cdr: number;
   regen: number;
   lifesteal: number;
+  /** Бонус к урону умений от экипировки. */
+  skillPower: number;
 }
 export type StatKey = keyof Stats;
 

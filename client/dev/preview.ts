@@ -63,11 +63,11 @@ if (q.get('weapons')) {
   heroes.forEach((h) => h.root.removeFromParent());
   heroes.length = 0;
   const tpls = (q.get('wl') ?? 'sword,axe,hammer,staff,wand,orb,bow,recurve,crossbow').split(',');
-  const rars = ['common', 'rare', 'epic', 'legendary'] as const;
+  const rars = ['common', 'rare', 'epic', 'legendary', 'relic'] as const;
   tpls.forEach((t, i) =>
     rars.forEach((r, j) => {
       const w = buildWeapon(t, r, { parts: [], glow: [], spin: [] });
-      w.position.set((i - (tpls.length - 1) / 2) * 1.15, 3.6 - j * 1.25 - (t === 'staff' || t === 'totemstaff' ? 0.5 : 0), 0);
+      w.position.set((i - (tpls.length - 1) / 2) * 1.15, 4.2 - j * 1.15 - (t === 'staff' || t === 'totemstaff' ? 0.5 : 0), 0);
       if (t === 'crossbow') w.rotation.set(-Math.PI / 2 + 0.4, 0, 0);
       else if (t === 'bow' || t === 'recurve') w.rotation.set(0, 0, 0);
       w.scale.setScalar(t === 'staff' || t === 'totemstaff' ? 0.7 : 0.95);

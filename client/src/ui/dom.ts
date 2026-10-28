@@ -25,4 +25,5 @@ export const RARITY_CSS: Record<string, string> = {
   rare: '#47a8ff',
   epic: '#be6bff',
   legendary: '#ffb321',
+  relic: '#ff3b3b',
 };

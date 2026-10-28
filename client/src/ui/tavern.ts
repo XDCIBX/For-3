@@ -7,7 +7,7 @@ import { COIN, MUG, classIcon, itemIcon } from './icons';
 const EMPTY_ICON: Record<string, string> = { weapon: 'weapon', helmet: 'helm', armor: 'plate', boots: 'boots', amulet: 'amulet', ring: 'ring' };
 const DEFAULT_WEAPON: Record<string, string> = { warrior: 'sword', mage: 'staff', archer: 'bow', hunter: 'glaives', summoner: 'totemstaff' };
 
-const MAIN_STATS: StatKey[] = ['maxHp', 'damage', 'armor', 'speed', 'attackSpeed', 'crit', 'cdr', 'regen', 'lifesteal'];
+const MAIN_STATS: StatKey[] = ['maxHp', 'damage', 'skillPower', 'armor', 'speed', 'attackSpeed', 'crit', 'cdr', 'regen', 'lifesteal'];
 
 /** Таверна: общий магазин, экипировка и готовность. */
 export class TavernUi {

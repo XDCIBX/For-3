@@ -9,15 +9,17 @@ import { clothTex } from './textures';
  * обычный → редкий (отделка) → эпический (украшения, свечение) → легендарный (золото, сияние).
  */
 
-export const RANK: Record<Rarity, number> = { common: 0, rare: 1, epic: 2, legendary: 3 };
+export const RANK: Record<Rarity, number> = { common: 0, rare: 1, epic: 2, legendary: 3, relic: 4 };
 
 export const ARMOR_COLORS: Record<string, Record<Rarity, number>> = {
-  plate: { common: 0xa9b4bf, rare: 0x7aa6d8, epic: 0x8e62c9, legendary: 0xe7b84a },
-  robe: { common: 0x8d7c62, rare: 0x3f6fcc, epic: 0x7b3fc6, legendary: 0xd2493a },
-  leather: { common: 0x8a5a33, rare: 0x2f7c6c, epic: 0x433468, legendary: 0xcf5a22 },
+  plate: { common: 0xa9b4bf, rare: 0x7aa6d8, epic: 0x8e62c9, legendary: 0xe7b84a, relic: 0x6a1c22 },
+  robe: { common: 0x8d7c62, rare: 0x3f6fcc, epic: 0x7b3fc6, legendary: 0xd2493a, relic: 0x8a1020 },
+  leather: { common: 0x8a5a33, rare: 0x2f7c6c, epic: 0x433468, legendary: 0xcf5a22, relic: 0x5a161c },
 };
-const TRIM: Record<Rarity, number> = { common: 0x6a4a2a, rare: 0xd8dee4, epic: 0xffc93c, legendary: 0xfff0a0 };
-const METAL: Record<Rarity, number> = { common: 0xd6dde3, rare: 0x9fd4ff, epic: 0xd4a6ff, legendary: 0xffe07a };
+const TRIM: Record<Rarity, number> = { common: 0x6a4a2a, rare: 0xd8dee4, epic: 0xffc93c, legendary: 0xfff0a0, relic: 0xff5a46 };
+const METAL: Record<Rarity, number> = { common: 0xd6dde3, rare: 0x9fd4ff, epic: 0xd4a6ff, legendary: 0xffe07a, relic: 0xff7a6a };
+/** Цвет «драгоценных» деталей: золото у легендарных, алое пламя у реликвий. */
+const LUX: Record<Rarity, number> = { common: 0xffd54a, rare: 0xffd54a, epic: 0xffd54a, legendary: 0xffd54a, relic: 0xff3b2f };
 const GOLD = 0xffc93c;
 const LEATHER = 0x5a3a22;
 const WOOD = 0x8a5a2b;
@@ -110,8 +112,8 @@ export function buildArmor(rig: Rig, tpl: string, r: Rarity, cls: HeroClass, out
       add(T, out, gem(RARITY_HEX[r], 0.07, [0, 0.5, 0.32], out));
     }
     if (rank >= 3) {
-      add(T, out, part(G.box(0.66, 0.9, 0.05), 0xffd54a, { pos: [0, 0.22, -0.34], rot: [0.14, 0, 0], outline: 0.025 }));
-      add(T, out, halo(0xffd54a, 0.18, [0, 0.5, 0.33], out, 0.35));
+      add(T, out, part(G.box(0.66, 0.9, 0.05), LUX[r], { pos: [0, 0.22, -0.34], rot: [0.14, 0, 0], outline: 0.025 }));
+      add(T, out, halo(LUX[r], 0.18, [0, 0.5, 0.33], out, 0.35));
     }
     return { torso: col, sleeve: cls === 'mage' ? 0x6b3fc4 : col, metal: true };
   }
@@ -144,9 +146,9 @@ export function buildArmor(rig: Rig, tpl: string, r: Rarity, cls: HeroClass, out
       // Звёздная мантия: сияющий воротник
       for (let i = 0; i < 5; i++) {
         const a = -0.9 + i * 0.45;
-        add(T, out, part(G.cone(0.05, 0.22, 5), 0xffd54a, { pos: [Math.sin(a) * 0.3, 0.82, -Math.cos(a) * 0.12 - 0.06], rot: [-0.4, a, 0], outline: 0.012 }));
+        add(T, out, part(G.cone(0.05, 0.22, 5), LUX[r], { pos: [Math.sin(a) * 0.3, 0.82, -Math.cos(a) * 0.12 - 0.06], rot: [-0.4, a, 0], outline: 0.012 }));
       }
-      add(T, out, halo(0xffb070, 0.2, [0, 0.45, 0.32], out, 0.35));
+      add(T, out, halo(rank >= 4 ? 0xff3b2f : 0xffb070, 0.2, [0, 0.45, 0.32], out, 0.35));
     }
     return { torso: col, sleeve: col, metal: false };
   }
@@ -185,7 +187,7 @@ export function buildArmor(rig: Rig, tpl: string, r: Rarity, cls: HeroClass, out
   if (rank >= 3) {
     // Перья феникса на плече
     for (let i = 0; i < 4; i++) add(rig.armL, out, part(G.cone(0.04, 0.28, 5), [0xff6a2a, 0xffb030, 0xffe060, 0xff6a2a][i], { pos: [-0.05, 0.1, -0.12 + i * 0.07], rot: [0.3 - i * 0.2, 0, 0.9], outline: 0.01 }));
-    add(T, out, halo(0xff8a3a, 0.18, [0, 0.4, 0.34], out, 0.35));
+    add(T, out, halo(rank >= 4 ? 0xff3b2f : 0xff8a3a, 0.18, [0, 0.4, 0.34], out, 0.35));
   }
   return { torso: col, sleeve: col, metal: false };
 }
@@ -196,7 +198,7 @@ export function buildArmor(rig: Rig, tpl: string, r: Rarity, cls: HeroClass, out
 export function buildHelmet(g: THREE.Group, tpl: string, r: Rarity, out: Built) {
   const rank = RANK[r];
   if (tpl === 'helm') {
-    const metal = rank === 0 ? 0x8a5a33 : rank >= 3 ? 0xffcf4a : ARMOR_COLORS.plate[r];
+    const metal = rank === 0 ? 0x8a5a33 : rank >= 4 ? 0x6a1c22 : rank >= 3 ? 0xffcf4a : ARMOR_COLORS.plate[r];
     const outline = 0.03;
     add(g, out, part(G.halfSphere(0.44), metal, { pos: [0, 0.03, 0], outline }));
     add(g, out, part(G.torus(0.43, 0.04, Math.PI * 2, 6, 24), rank === 0 ? 0x5a3a22 : TRIM[r], { pos: [0, 0.04, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
@@ -225,15 +227,15 @@ export function buildHelmet(g: THREE.Group, tpl: string, r: Rarity, out: Built) 
       // Корона королей
       for (let i = 0; i < 7; i++) {
         const a = (i / 7) * Math.PI * 2;
-        add(g, out, part(G.cone(0.055, 0.2, 6), 0xffd54a, { pos: [Math.sin(a) * 0.36, 0.3, Math.cos(a) * 0.36], rot: [Math.cos(a) * 0.3, 0, -Math.sin(a) * 0.3], outline: 0.012 }));
+        add(g, out, part(G.cone(0.055, 0.2, 6), LUX[r], { pos: [Math.sin(a) * 0.36, 0.3, Math.cos(a) * 0.36], rot: [Math.cos(a) * 0.3, 0, -Math.sin(a) * 0.3], outline: 0.012 }));
       }
       add(g, out, gem(0xff3a5a, 0.06, [0, 0.22, 0.42], out));
-      add(g, out, halo(0xffd54a, 0.2, [0, 0.4, 0], out, 0.25));
+      add(g, out, halo(LUX[r], 0.2, [0, 0.4, 0], out, 0.25));
     }
     return;
   }
   // Капюшон
-  const col = { common: 0x7a6a55, rare: 0x2f6aa8, epic: 0x2a2238, legendary: 0xf2ecd8 }[r];
+  const col = { common: 0x7a6a55, rare: 0x2f6aa8, epic: 0x2a2238, legendary: 0xf2ecd8, relic: 0x5a0f14 }[r];
   const hood = part(G.sphere(0.45, 18, 14), col, { pos: [0, 0.05, -0.06], outline: 0.03, map: clothTex() });
   hood.scale.set(1.04, 1.02, 1.05);
   const face = new THREE.Mesh(G.sphere(0.395, 18, 14), toon(SKIN));
@@ -253,7 +255,7 @@ export function buildHelmet(g: THREE.Group, tpl: string, r: Rarity, out: Built) 
   }
   if (rank >= 3) {
     // Венец мудрости
-    add(g, out, part(G.torus(0.4, 0.03, Math.PI * 2, 6, 24), 0xffd54a, { pos: [0, 0.2, 0.04], rot: [Math.PI / 2 - 0.25, 0, 0], outline: false }));
+    add(g, out, part(G.torus(0.4, 0.03, Math.PI * 2, 6, 24), LUX[r], { pos: [0, 0.2, 0.04], rot: [Math.PI / 2 - 0.25, 0, 0], outline: false }));
     add(g, out, gem(0x5ac8ff, 0.07, [0, 0.27, 0.4], out));
     add(g, out, halo(0x8ad8ff, 0.16, [0, 0.27, 0.4], out, 0.35));
   }
@@ -265,8 +267,8 @@ export function buildBoots(rig: Rig, tpl: string, r: Rarity, out: Built): number
   const rank = RANK[r];
   const greaves = tpl === 'greaves';
   const color = greaves
-    ? { common: 0x8a6a4a, rare: 0x9aa6b2, epic: 0x8e62c9, legendary: 0xe7b84a }[r]
-    : { common: 0xc8a46a, rare: 0x6a4428, epic: 0x34557f, legendary: 0xffd54a }[r];
+    ? { common: 0x8a6a4a, rare: 0x9aa6b2, epic: 0x8e62c9, legendary: 0xe7b84a, relic: 0x6a1c22 }[r]
+    : { common: 0xc8a46a, rare: 0x6a4428, epic: 0x34557f, legendary: LUX[r], relic: 0x8a1020 }[r];
   for (const leg of [rig.legL, rig.legR]) {
     const s = leg === rig.legL ? -1 : 1;
     if (greaves) {
@@ -306,7 +308,7 @@ export function buildAmulet(T: THREE.Group, tpl: string, r: Rarity, out: Built) 
   const rank = RANK[r];
   if (tpl === 'talisman') {
     add(T, out, part(G.torus(0.21, 0.014, Math.PI, 4, 16), LEATHER, { pos: [0, 0.6, 0.18], rot: [Math.PI / 2 + 0.6, 0, Math.PI], outline: false }));
-    add(T, out, part(G.cone(0.045, 0.16, 6), rank >= 3 ? 0xffd54a : 0xfff6e0, { pos: [0, 0.43, 0.31], rot: [Math.PI, 0, 0], outline: 0.012 }));
+    add(T, out, part(G.cone(0.045, 0.16, 6), rank >= 3 ? LUX[r] : 0xfff6e0, { pos: [0, 0.43, 0.31], rot: [Math.PI, 0, 0], outline: 0.012 }));
     for (const x of [-0.06, 0.06]) add(T, out, part(G.sphere(0.03, 6, 4), RARITY_HEX[r], { pos: [x, 0.5, 0.3], outline: false }));
     if (rank >= 2) add(T, out, gem(RARITY_HEX[r], 0.04, [0, 0.52, 0.32], out));
     return;
@@ -354,7 +356,7 @@ export function buildWeapon(tpl: string, r: Rarity, out: Built): THREE.Group {
   const wraps = (y0: number, n: number, rad: number, step = 0.05) => {
     for (let i = 0; i < n; i++) P(G.torus(rad, 0.012, Math.PI * 2, 4, 10), 0x3a2414, [0, y0 + i * step, 0], [Math.PI / 2, 0, 0], undefined, false);
   };
-  const grip = rank >= 3 ? 0x8a2a2a : LEATHER;
+  const grip = rank >= 4 ? 0x2a0a0e : rank >= 3 ? 0x8a2a2a : LEATHER;
   const guard = rank >= 2 ? GOLD : rank === 1 ? 0xc7ced6 : 0x8a6a4a;
 
   switch (tpl) {
@@ -530,7 +532,7 @@ export function buildWeapon(tpl: string, r: Rarity, out: Built): THREE.Group {
         // Лезвия-листья на плечах эпического лука
         if (rank >= 2) limbG.add(part(G.cone(0.04, 0.2, 4), metal, { pos: [tipX + 0.08, s * tipY * 0.7, 0], rot: [0, 0, s > 0 ? -0.6 : -2.5], scale: [1, 1, 0.4], outline: 0.012 }));
       }
-      const string = new THREE.Mesh(G.cyl(0.008, 0.008, tipY * 2, 4), rank >= 3 ? glow(0xfff0a0, 1, false) : toon(0xf5f0e0));
+      const string = new THREE.Mesh(G.cyl(0.008, 0.008, tipY * 2, 4), rank >= 3 ? glow(rank >= 4 ? 0xff6a5a : 0xfff0a0, 1, false) : toon(0xf5f0e0));
       string.position.x = tipX;
       limbG.add(string);
       // Рукоять с обмоткой и накладками
@@ -598,7 +600,7 @@ export function buildWeapon(tpl: string, r: Rarity, out: Built): THREE.Group {
     }
     case 'tome': {
       // Книга духов с застёжкой и сияющей руной
-      const cover = rank === 0 ? 0x2a6f78 : rank === 1 ? 0x2f4f9a : rank === 2 ? 0x5a2f8a : 0x9a2f2f;
+      const cover = [0x2a6f78, 0x2f4f9a, 0x5a2f8a, 0xb8862a, 0x6a0c14][rank];
       const runeCol = rank === 0 ? 0x7af0ff : glowCol;
       const book = new THREE.Group();
       book.add(part(G.box(0.36, 0.46, 0.05), cover, { pos: [0, 0, 0.06], outline: 0.018 }));

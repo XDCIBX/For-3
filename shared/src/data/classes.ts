@@ -34,7 +34,7 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
     desc: 'Закован в сталь, рвётся в самую гущу врагов. Держит удар и защищает союзников.',
     color: '#e0533d',
     passive: { name: 'Стойкость', desc: 'Высокая броня и быстрое восстановление здоровья.' },
-    base: { maxHp: 310, damage: 24, armor: 18, speed: 5.2, attackSpeed: 1, crit: 0.05, cdr: 0, regen: 2.5, lifesteal: 0 },
+    base: { maxHp: 310, damage: 22, armor: 18, speed: 5.2, attackSpeed: 1, crit: 0.05, cdr: 0, regen: 2.5, lifesteal: 0, skillPower: 0 },
     difficulty: 1,
     skills: [
       { id: 'slash', name: 'Удар мечом', desc: 'Широкий взмах, задевающий всех врагов перед воином.', cd: 0.6, aim: 'dir', range: 2.8 },
@@ -50,7 +50,7 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
     desc: 'Хрупкий, но смертоносный. Сжигает толпы врагов и замораживает их на месте.',
     color: '#8a5cff',
     passive: { name: 'Магический щит', desc: 'Щит поглощает урон и восстанавливается, если маг не получает урон 4 сек.' },
-    base: { maxHp: 180, damage: 26, armor: 5, speed: 5.0, attackSpeed: 1, crit: 0.05, cdr: 0.05, regen: 1.2, lifesteal: 0 },
+    base: { maxHp: 195, damage: 26, armor: 6, speed: 5.0, attackSpeed: 1, crit: 0.05, cdr: 0.05, regen: 1.2, lifesteal: 0, skillPower: 0 },
     difficulty: 3,
     skills: [
       { id: 'bolt', name: 'Чародейская стрела', desc: 'Сгусток магии летит в цель.', cd: 0.75, aim: 'dir', range: 13 },
@@ -66,7 +66,7 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
     desc: 'Быстрый и ловкий. Расстреливает врагов издалека и ускользает от ударов.',
     color: '#3dbb5a',
     passive: { name: 'Зоркий глаз', desc: '+20% шанс критического удара и повышенная скорость бега.' },
-    base: { maxHp: 195, damage: 20, armor: 7, speed: 5.8, attackSpeed: 1, crit: 0.2, cdr: 0, regen: 1.5, lifesteal: 0 },
+    base: { maxHp: 195, damage: 20, armor: 7, speed: 5.8, attackSpeed: 1, crit: 0.2, cdr: 0, regen: 1.5, lifesteal: 0, skillPower: 0 },
     difficulty: 2,
     skills: [
       { id: 'shot', name: 'Выстрел', desc: 'Быстрая стрела на большую дистанцию.', cd: 0.5, aim: 'dir', range: 15 },
@@ -82,7 +82,7 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
     desc: 'Мастер парных клинков. Бьёт стремительно, ныряет в гущу врагов и пьёт их жизнь.',
     color: '#2fd07a',
     passive: { name: 'Жажда охоты', desc: 'Каждый удар — двумя клинками. Вампиризм 6%.' },
-    base: { maxHp: 230, damage: 14, armor: 10, speed: 5.6, attackSpeed: 1, crit: 0.1, cdr: 0, regen: 1.6, lifesteal: 0.06 },
+    base: { maxHp: 230, damage: 14, armor: 10, speed: 5.6, attackSpeed: 1, crit: 0.1, cdr: 0, regen: 1.6, lifesteal: 0.06, skillPower: 0 },
     difficulty: 2,
     skills: [
       { id: 'twin', name: 'Двойной удар', desc: 'Молниеносный удар двумя клинками перед собой.', cd: 0.42, aim: 'dir', range: 2.5 },
@@ -97,8 +97,8 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
     title: 'Голос духов',
     desc: 'Призывает духов-волков, каменного голема и тотем. Помощники сражаются сами и отвлекают врагов.',
     color: '#2ab8c8',
-    passive: { name: 'Связь душ', desc: 'Помощники сильнеют вместе со снаряжением героя. Ближайший помощник забирает 25% урона по призывателю, а его гибель лечит на 10%.' },
-    base: { maxHp: 195, damage: 19, armor: 7, speed: 5.1, attackSpeed: 1, crit: 0.05, cdr: 0.05, regen: 1.4, lifesteal: 0 },
+    passive: { name: 'Связь душ', desc: 'Помощники сильнеют вместе со снаряжением героя. Ближайший помощник забирает 35% урона по призывателю, а его гибель лечит на 10%.' },
+    base: { maxHp: 205, damage: 21, armor: 8, speed: 5.1, attackSpeed: 1, crit: 0.05, cdr: 0.05, regen: 1.4, lifesteal: 0, skillPower: 0 },
     difficulty: 3,
     skills: [
       { id: 'spiritbolt', name: 'Духовная стрела', desc: 'Сгусток духовной энергии. Помощники атакуют цель.', cd: 0.75, aim: 'dir', range: 12 },
@@ -119,9 +119,10 @@ export const STAT_LABELS: Record<keyof Stats, string> = {
   cdr: 'Перезарядка',
   regen: 'Регенерация',
   lifesteal: 'Вампиризм',
+  skillPower: 'Сила умений',
 };
 
-export const PERCENT_STATS: (keyof Stats)[] = ['attackSpeed', 'crit', 'cdr', 'lifesteal'];
+export const PERCENT_STATS: (keyof Stats)[] = ['attackSpeed', 'crit', 'cdr', 'lifesteal', 'skillPower'];
 
 export function formatStat(key: keyof Stats, v: number, signed = true): string {
   const sign = signed && v > 0 ? '+' : '';

@@ -90,8 +90,8 @@ export function updateBot(g: Game, p: Player, dt: number) {
 
   switch (p.cls) {
     case 'warrior':
-      if (ready(3) && near(8) >= 4) cast(3);
-      else if (ready(2) && near(3.2) >= 2) cast(2);
+      if (ready(3) && (near(8) >= 4 || (target.kind === 'p' && dist < 6))) cast(3);
+      else if (ready(2) && (near(3.2) >= 2 || (target.kind === 'p' && dist < 3))) cast(2);
       else if (ready(1) && dist > 3 && dist < 7.5) cast(1);
       else if (ready(0) && dist - target.rad < sk[0].range) cast(0);
       break;

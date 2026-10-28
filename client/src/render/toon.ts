@@ -246,6 +246,7 @@ export const RARITY_HEX: Record<string, number> = {
   rare: 0x47a8ff,
   epic: 0xbe6bff,
   legendary: 0xffb321,
+  relic: 0xff3b3b,
 };
 
 /** Мягкая круглая тень под персонажами. */

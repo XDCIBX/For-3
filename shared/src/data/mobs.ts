@@ -31,8 +31,8 @@ export const MOBS: Record<MobKind, MobDef> = {
 
 export function mobScale(round: number) {
   return {
-    hp: 1 + 0.32 * (round - 1) + 0.015 * (round - 1) ** 2,
-    dmg: 1 + 0.22 * (round - 1) + 0.009 * (round - 1) ** 2,
+    hp: 1 + 0.32 * (round - 1) + 0.03 * (round - 1) ** 2,
+    dmg: 1 + 0.22 * (round - 1) + 0.011 * (round - 1) ** 2,
     gold: 1 + 0.1 * (round - 1),
   };
 }

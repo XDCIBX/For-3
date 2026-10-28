@@ -14,6 +14,7 @@
   --rare: #47a8ff;
   --epic: #be6bff;
   --legendary: #ffb321;
+  --relic: #ff3b3b;
   --sat: env(safe-area-inset-top, 0px);
   --sar: env(safe-area-inset-right, 0px);
   --sab: env(safe-area-inset-bottom, 0px);
@@ -193,6 +194,22 @@ input.field:focus {
 .r-rare { --rc: var(--rare); }
 .r-epic { --rc: var(--epic); }
 .r-legendary { --rc: var(--legendary); }
+.r-relic { --rc: var(--relic); }
+/* Реликвия: карточка и ячейка пульсируют алым */
+.item.r-relic {
+  animation: pop-in 0.35s backwards, relic-glow 1.6s ease-in-out infinite;
+  background: linear-gradient(180deg, #fff1ee, #f6d2c8);
+}
+.item.r-relic.sold {
+  animation: sold 0.4s forwards;
+}
+.eslot.r-relic {
+  animation: relic-glow 1.6s ease-in-out infinite;
+}
+@keyframes relic-glow {
+  0%, 100% { box-shadow: 0 0 6px 1px rgba(255, 59, 59, 0.5), inset 0 0 0 3px var(--rc); }
+  50% { box-shadow: 0 0 16px 4px rgba(255, 59, 59, 0.85), inset 0 0 0 3px var(--rc); }
+}
 
 /* ---------- Главное меню ---------- */
 .screen {
