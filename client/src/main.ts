@@ -436,6 +436,9 @@ class App {
           } else if (e.k === 'nova') sfx.freeze();
           else if (e.k === 'warcry') sfx.shout();
           else if (e.k === 'gslam') sfx.slam();
+          else if (e.k === 'hwind') sfx.shout();
+          else if (e.k === 'hthrow') sfx.swing();
+          else if (e.k === 'hcatch') sfx.slam();
           else if (e.k === 'slam') {
             sfx.slam();
             this.haptic(ImpactStyle.Heavy);

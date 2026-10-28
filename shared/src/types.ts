@@ -48,7 +48,7 @@ export type Phase =
 
 export type MobKind = 'slime' | 'goblin' | 'skeleton' | 'orc' | 'troll';
 
-export type ProjKind = 'arrow' | 'bolt' | 'fireball' | 'earrow' | 'rock' | 'glaive' | 'spirit';
+export type ProjKind = 'arrow' | 'bolt' | 'fireball' | 'earrow' | 'rock' | 'glaive' | 'spirit' | 'hammer';
 
 /** Призванные помощники призывателя. */
 export type MinionKind = 'wolf' | 'golem' | 'totem';

@@ -105,9 +105,12 @@ function loop(now: number) {
     if (cast !== null && Math.random() < 0.01) m.playAttack();
     m.update(dt, Number(q.get('speed') ?? 0) > 0);
   });
+  // ?mobs=1&throw=1 — цикл броска молота: замах 0.9 с, полёт 1.4 с, пауза
+  const cyc = (now / 1000) % 3.3;
+  const thr = q.has('throw');
   mobs.forEach((m) => {
     if (cast !== null && Math.random() < 0.01) m.playAttack();
-    m.update(dt, { moving: Number(q.get('speed') ?? 0) > 0, windup: false, stun: false, frozen: false, burn: false, slow: false, spawning: false });
+    m.update(dt, { moving: Number(q.get('speed') ?? 0) > 0, windup: false, stun: false, frozen: false, burn: false, slow: false, spawning: false, throwWind: thr && cyc < 0.9, hammerOut: thr && cyc >= 0.9 && cyc < 2.3 });
   });
   renderer.render(scene, cam);
   requestAnimationFrame(loop);

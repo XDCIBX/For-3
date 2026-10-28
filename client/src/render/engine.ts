@@ -479,6 +479,49 @@ export class Engine {
     }
   }
 
+  /** Магическая цепь, по которой молот возвращается к боссу. */
+  private tethers: THREE.Mesh[] = [];
+  private updateTethers() {
+    let n = 0;
+    const hand = new THREE.Vector3();
+    for (const p of this.projs.values()) {
+      if (p.kind !== 'hammer') continue;
+      let boss: MobView | null = null;
+      let bd = Infinity;
+      for (const m of this.mobs.values()) {
+        if (!m.info.st.includes('h')) continue;
+        const d = Math.hypot(m.model.root.position.x - p.x, m.model.root.position.z - p.z);
+        if (d < bd) {
+          bd = d;
+          boss = m;
+        }
+      }
+      if (!boss) continue;
+      // Цепь видна, только когда молот летит обратно
+      const bp = boss.model.root.position;
+      if (p.vx * (bp.x - p.x) + p.vz * (bp.z - p.z) <= 0) continue;
+      let t = this.tethers[n];
+      if (!t) {
+        t = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, 1, 6, 1, true).translate(0, 0.5, 0).rotateX(Math.PI / 2), glow(0xffc040, 0.55));
+        this.tethers.push(t);
+      }
+      if (t.parent !== this.stage.scene) this.stage.scene.add(t);
+      t.visible = true;
+      boss.model.handWorld(hand);
+      const to = p.obj.position;
+      t.position.copy(hand);
+      const len = hand.distanceTo(to);
+      t.scale.set(0.06 + Math.sin(performance.now() / 40) * 0.02, 0.06, Math.max(0.01, len));
+      t.lookAt(to);
+      if (Math.random() < 0.5) {
+        const k = Math.random();
+        this.fx.glow({ x: hand.x + (to.x - hand.x) * k, y: hand.y + (to.y - hand.y) * k, z: hand.z + (to.z - hand.z) * k, vy: 0.3, life: 0.3, size: 0.18, color: 0xffd060 });
+      }
+      n++;
+    }
+    for (let i = n; i < this.tethers.length; i++) this.tethers[i].visible = false;
+  }
+
   private releaseMob(v: MobView) {
     let pool = this.mobPool.get(v.info.k);
     if (!pool) this.mobPool.set(v.info.k, (pool = []));
@@ -544,6 +587,21 @@ export class Engine {
               this.effects.demon(e.x, e.z, e.r ?? 3);
               if (this.arenaStage) this.arenaStage.excitement = 1;
               break;
+            case 'hwind':
+              this.effects.hammerLane(e.x, e.z, e.rot ?? 0, e.r ?? 10, 0.9);
+              break;
+            case 'hthrow':
+              this.effects.hammerThrow(e.x, e.z, e.rot ?? 0);
+              break;
+            case 'hturn':
+              this.effects.hammerTurn(e.x, e.z);
+              break;
+            case 'hcatch': {
+              const mv = e.id !== undefined ? this.mobs.get(e.id) : undefined;
+              const hp = mv ? mv.model.handWorld(new THREE.Vector3()) : new THREE.Vector3(e.x, 3, e.z);
+              this.effects.hammerCatch(hp.x, hp.y, hp.z);
+              break;
+            }
             case 'gslam':
               this.effects.golemSlam(e.x, e.z, e.r ?? 2.2);
               break;
@@ -730,6 +788,8 @@ export class Engine {
       v.model.update(dt, {
         moving,
         windup: st.includes('w'),
+        throwWind: st.includes('t'),
+        hammerOut: st.includes('h'),
         stun: st.includes('s'),
         frozen: st.includes('f'),
         burn: st.includes('b'),
@@ -776,6 +836,7 @@ export class Engine {
       }
     }
     for (const p of this.projs.values()) p.update(dt, now, this.fx);
+    this.updateTethers();
     for (const z of this.zones.values()) z.update(dt, this.fx);
 
     this.stage.update(dt, this.fx);

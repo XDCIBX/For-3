@@ -92,6 +92,13 @@ export interface Mob {
   tauntBy: string | null;
   burnT: number;
   slamCd: number;
+  /** Бросок молота (босс): перезарядка, замах (-1 — нет), снаряд в полёте (0 — молот в руке). */
+  throwCd: number;
+  throwT: number;
+  throwDx: number;
+  throwDz: number;
+  throwDist: number;
+  hammer: number;
   lastHit: string | null;
 }
 
@@ -114,6 +121,8 @@ export interface Proj {
   bounces?: number;
   /** Выпущен помощником (тотемом). */
   fromMinion?: boolean;
+  /** Молот босса: летит к цели и возвращается к хозяину. */
+  boomerang?: { mob: number; back: boolean; t: number };
 }
 
 /** Призванный помощник (волк, голем, тотем). */
@@ -703,6 +712,12 @@ export class Game {
       tauntBy: null,
       burnT: 0,
       slamCd: 4,
+      throwCd: 3 + this.rng.next() * 4,
+      throwT: -1,
+      throwDx: 0,
+      throwDz: 1,
+      throwDist: 0,
+      hammer: 0,
       lastHit: null,
     };
     this.mobs.set(m.id, m);
@@ -1383,9 +1398,29 @@ export class Game {
       m.tauntT = Math.max(0, m.tauntT - dt);
       m.atkCd -= dt;
       m.slamCd -= dt;
+      if (!m.hammer) m.throwCd -= dt;
       if (m.burnT > 0) m.burnT -= dt;
       if (m.frozenT > 0 || m.stunT > 0) {
         m.windup = -1;
+        if (m.throwT >= 0) {
+          // Замах сбит — попробует снова чуть позже
+          m.throwT = -1;
+          m.throwCd = 2;
+        }
+        continue;
+      }
+      // Молот в полёте: босс стоит и тянет его обратно
+      if (m.hammer) {
+        const h = this.projs.get(m.hammer);
+        if (!h) m.hammer = 0;
+        else {
+          m.rot = Math.atan2(h.x - m.x, h.z - m.z);
+          continue;
+        }
+      }
+      if (m.throwT >= 0) {
+        m.throwT -= dt;
+        if (m.throwT < 0) this.throwHammer(m);
         continue;
       }
 
@@ -1437,6 +1472,15 @@ export class Game {
         m.rot = Math.atan2(nx, nz);
         const reach = def.range + m.radius + (tgt.n ? tgt.n.radius : PLAYER_RADIUS);
 
+        if (def.boss && m.throwCd <= 0 && dist > 4.5 && dist < 17 && tgt.p) {
+          // Бросок молота: замах с подсказкой на земле, куда он полетит
+          m.throwT = 0.9;
+          m.throwDx = nx;
+          m.throwDz = nz;
+          m.throwDist = Math.min(16, Math.max(7, dist + 2.5));
+          this.events.push({ e: 'fx', k: 'hwind', x: r2(m.x), z: r2(m.z), rot: r2(m.rot), r: r2(m.throwDist), id: m.id });
+          continue;
+        }
         if (def.boss && m.slamCd <= 0 && dist < 6) {
           m.slamCd = 7;
           m.windup = 1.15;
@@ -1574,12 +1618,91 @@ export class Game {
 
   // ------------------------------------------------------------------ снаряды и зоны
 
+  /** Босс бросает молот: тот летит по прямой и возвращается, раня каждого героя на пути. */
+  private throwHammer(m: Mob) {
+    const speed = 17;
+    const pr: Proj = {
+      id: this.nextId++,
+      kind: 'hammer',
+      owner: null,
+      team: 'm',
+      x: m.x + m.throwDx * (m.radius + 0.4),
+      z: m.z + m.throwDz * (m.radius + 0.4),
+      vx: m.throwDx * speed,
+      vz: m.throwDz * speed,
+      life: m.throwDist / speed,
+      // Столько же, сколько удар по площади вокруг босса
+      dmg: m.dmg * 1.5,
+      crit: false,
+      r: 1.1,
+      explodeR: 0,
+      hit: new Set(),
+      boomerang: { mob: m.id, back: false, t: 0 },
+    };
+    this.projs.set(pr.id, pr);
+    m.hammer = pr.id;
+    this.events.push({ e: 'fx', k: 'hthrow', x: r2(m.x), z: r2(m.z), rot: r2(m.rot), id: m.id });
+  }
+
+  /** Полёт молота босса: туда и обратно, сквозь препятствия. */
+  private updateHammer(pr: Proj, dt: number): boolean {
+    const b = pr.boomerang!;
+    b.t += dt;
+    const boss = this.mobs.get(b.mob);
+    if (!boss) {
+      this.events.push({ e: 'hit', x: r2(pr.x), z: r2(pr.z), k: 'hammer' });
+      return true;
+    }
+    if (!b.back && pr.life <= 0) {
+      b.back = true;
+      this.events.push({ e: 'fx', k: 'hturn', x: r2(pr.x), z: r2(pr.z) });
+    }
+    if (b.back) {
+      // Притягивается к боссу, ускоряясь
+      const dx = boss.x - pr.x;
+      const dz = boss.z - pr.z;
+      const d = Math.hypot(dx, dz) || 0.001;
+      if (d < boss.radius + 0.5 || b.t > 6) {
+        boss.hammer = 0;
+        boss.throwCd = 6 + this.rng.next() * 5;
+        boss.atkCd = Math.max(boss.atkCd, 0.6);
+        this.events.push({ e: 'fx', k: 'hcatch', x: r2(boss.x), z: r2(boss.z), id: boss.id });
+        return true;
+      }
+      const sp = Math.min(24, 12 + b.t * 6);
+      pr.vx = (dx / d) * sp;
+      pr.vz = (dz / d) * sp;
+    }
+    for (const p of this.players.values()) {
+      if (!p.alive || p.spectator || pr.hit.has(p.id)) continue;
+      if (Math.hypot(p.x - pr.x, p.z - pr.z) < PLAYER_RADIUS + pr.r) {
+        pr.hit.add(p.id);
+        this.damagePlayer(p, pr.dmg * this.rng.range(0.9, 1.1), false, null);
+        p.stunT = Math.max(p.stunT, 0.35);
+        this.events.push({ e: 'hit', x: r2(p.x), z: r2(p.z), k: 'hammer' });
+      }
+    }
+    for (const n of [...this.minions.values()]) {
+      const key = `n${n.id}`;
+      if (n.kind === 'totem' || pr.hit.has(key)) continue;
+      if (Math.hypot(n.x - pr.x, n.z - pr.z) < n.radius + pr.r) {
+        pr.hit.add(key);
+        this.damageMinion(n, pr.dmg, false);
+      }
+    }
+    return false;
+  }
+
   private updateProjectiles(dt: number) {
     const obs = this.obstacles;
     for (const pr of [...this.projs.values()]) {
       pr.x += pr.vx * dt;
       pr.z += pr.vz * dt;
       pr.life -= dt;
+      if (pr.boomerang) {
+        if (this.updateHammer(pr, dt)) this.projs.delete(pr.id);
+        continue;
+      }
       let done = false;
       if (pr.team === 'p') {
         const owner = pr.owner ? this.players.get(pr.owner) : undefined;
@@ -1777,6 +1900,8 @@ export class Game {
       if (m.windup >= 0) st += 'w';
       if (m.burnT > 0) st += 'b';
       if (m.spawnT > 0) st += 'p';
+      if (m.throwT >= 0) st += 't';
+      if (m.hammer) st += 'h';
       M.push({ id: m.id, k: m.kind, x: r2(m.x), z: r2(m.z), r: r2(m.rot), hp: Math.max(0, Math.ceil(m.hp)), mhp: m.maxHp, st });
     }
     const snap: Snapshot = {

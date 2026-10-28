@@ -60,7 +60,7 @@ export interface MobSnap {
   r: number;
   hp: number;
   mhp: number;
-  /** Флаги: s — оглушён, f — заморожен, l — замедлен, w — замах, b — горит, p — появляется. */
+  /** Флаги: s — оглушён, f — заморожен, l — замедлен, w — замах, b — горит, p — появляется, t — замах для броска молота, h — молот в полёте. */
   st: string;
 }
 
@@ -103,7 +103,7 @@ export type GameEvent =
   | { e: 'heal'; x: number; z: number; v: number }
   | { e: 'gold'; pid: string; v: number; x: number; z: number; why?: string }
   | { e: 'cast'; pid: string; s: number; r: number; x?: number; z?: number }
-  | { e: 'fx'; k: string; x: number; z: number; r?: number; rot?: number; pid?: string }
+  | { e: 'fx'; k: string; x: number; z: number; r?: number; rot?: number; pid?: string; /** Моб, к которому относится эффект. */ id?: number }
   | { e: 'matk'; id: number }
   | { e: 'natk'; id: number }
   | { e: 'summon'; id: number; k: MinionKind; x: number; z: number }

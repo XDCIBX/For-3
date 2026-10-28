@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import type { HeroClass, MobKind, ProjKind, ZoneSnap } from '@game/shared';
 import { G, addOutline, toon } from './toon';
+import { buildTrollHammer } from './mobs';
 import type { Particles } from './particles';
 import { dangerTex, frostTex, ringTex, runeTex, scorchTex, slashTex, softTex, trailTex } from './textures';
 
@@ -358,6 +359,62 @@ export class Effects {
     this.fx.burst(x, 0.6, z, { n: 14, speed: 1.2, up: 3, life: 0.8, size: 0.22, colors: [0x6ff0ff, 0xd0ffff], drag: 1.5 });
   }
 
+  /** Подсказка броска молота: красная полоса на земле, наливается к моменту броска. */
+  hammerLane(x: number, z: number, rot: number, len: number, dur: number) {
+    const g = new THREE.Group();
+    g.position.set(x, 0.12, z);
+    g.rotation.y = rot;
+    // Шевроны повторяются по длине полосы, а не растягиваются
+    const geo = new THREE.PlaneGeometry(2.2, len).rotateX(-Math.PI / 2).translate(0, 0, len / 2);
+    const uv = geo.attributes.uv as THREE.BufferAttribute;
+    for (let i = 0; i < uv.count; i++) uv.setY(i, uv.getY(i) * (len / 2.6));
+    const strip = new THREE.Mesh(geo, texMat(laneTex(), 0xff3a2a, 0.0, false));
+    strip.renderOrder = 2;
+    const fill = new THREE.Mesh(new THREE.PlaneGeometry(2.2, 1).rotateX(-Math.PI / 2).translate(0, 0, 0.5), texMat(laneTex(), 0xff7a3a, 0.0));
+    fill.position.y = 0.01;
+    fill.renderOrder = 3;
+    const tip = new THREE.Mesh(flatGeo, texMat(ringTex(), 0xff3a2a, 0));
+    tip.position.z = len;
+    tip.scale.setScalar(1.3);
+    g.add(strip, fill, tip);
+    const sm = strip.material as THREE.MeshBasicMaterial;
+    const fm = fill.material as THREE.MeshBasicMaterial;
+    const tm = tip.material as THREE.MeshBasicMaterial;
+    this.add(g, dur + 0.15, (k) => {
+      if (k >= 1) geo.dispose();
+      const a = Math.min(1, k * 4) * (k > 0.95 ? (1 - k) / 0.05 : 1);
+      sm.opacity = 0.85 * a;
+      tm.opacity = a;
+      // Заполнение бежит от босса к концу полосы
+      fill.scale.z = Math.max(0.01, len * Math.min(1, k * 1.05));
+      fm.opacity = 0.7 * a;
+    });
+  }
+
+  /** Бросок молота: хлопок воздуха у руки. */
+  hammerThrow(x: number, z: number, rot: number) {
+    const hx = x + Math.sin(rot) * 1.6;
+    const hz = z + Math.cos(rot) * 1.6;
+    this.flash(hx, 2.4, hz, 0xffd080, 2.2, 0.25);
+    this.ring(hx, hz, 2.4, 0xffffff, 0.35, 1.6);
+    this.dust(x, z, 10);
+    this.shake = Math.max(this.shake, 0.3);
+  }
+
+  /** Молот развернулся: искры и вихрь. */
+  hammerTurn(x: number, z: number) {
+    this.ring(x, z, 2.2, 0xffb030, 0.45);
+    this.fx.burst(x, 1.4, z, { n: 16, speed: 4, up: 2, life: 0.45, size: 0.2, colors: [0xffd060, 0xffffff, 0xff8a30], drag: 2 });
+  }
+
+  /** Босс поймал молот: вспышка и пыль от тяжёлого удара о ладонь. */
+  hammerCatch(x: number, y: number, z: number) {
+    this.flash(x, y, z, 0xffc060, 2.6, 0.3);
+    this.fx.burst(x, y, z, { n: 18, speed: 3.5, up: 2.5, life: 0.5, size: 0.22, colors: [0xffd060, 0xffffff, 0xff9a40], drag: 2 });
+    this.dust(x, z, 8);
+    this.shake = Math.max(this.shake, 0.35);
+  }
+
   /** Подсветка при применении умения: магический круг под ногами. */
   cast(cls: HeroClass, s: number, x: number, z: number) {
     if (cls === 'mage' && s >= 1) {
@@ -397,11 +454,17 @@ export class Effects {
       bolt: [0xc8a0ff, 0x8a5cff, 0xffffff],
       glaive: [0x5dff8a, 0xffffff],
       spirit: [0x6ff0ff, 0xffffff, 0x2ab8c8],
+      hammer: [0xffd060, 0x9a8a7a, 0xffffff],
       earrow: [0xff6a5a, 0xffffff],
       slime: [0x8aff6a],
     };
     const c = colors[kind] ?? [0xffffff, 0xffd080];
-    this.flash(x, 0.95, z, c[0], kind === 'bolt' || kind === 'spirit' ? 1.2 : 0.8, 0.15);
+    this.flash(x, 0.95, z, c[0], kind === 'bolt' || kind === 'spirit' ? 1.2 : kind === 'hammer' ? 2.2 : 0.8, 0.15);
+    if (kind === 'hammer') {
+      this.ring(x, z, 2, 0xffd080, 0.35);
+      this.fx.burst(x, 0.4, z, { n: 14, speed: 4, up: 4, life: 0.7, size: 0.3, colors: [0x7a6a5a, 0x9a8a7a], gravity: 12 }, false);
+      this.shake = Math.max(this.shake, 0.45);
+    }
     this.fx.burst(x, 0.9, z, { n: 9, speed: 3.2, up: 1.5, life: 0.32, size: 0.2, colors: c });
   }
 
@@ -507,6 +570,8 @@ export class ProjView {
   private glows: THREE.Sprite[] = [];
   private t = Math.random() * 10;
   private spin: THREE.Group | null = null;
+  private tumble = false;
+  private height = 1.0;
   constructor(kind: ProjKind) {
     this.kind = kind;
     const o = this.obj;
@@ -567,6 +632,22 @@ export class ProjView {
       this.glows.push(g);
       o.add(g);
       trail(0x5dff8a, 0.5, 1.6, 0.5);
+    } else if (kind === 'hammer') {
+      // Молот тролля летит, кувыркаясь через рукоять
+      const spin = new THREE.Group();
+      const h = buildTrollHammer();
+      h.position.y = -0.5;
+      h.scale.setScalar(2.1);
+      spin.add(h);
+      spin.rotation.order = 'YXZ';
+      this.spin = spin;
+      this.tumble = true;
+      o.add(spin);
+      const g = glowSprite(0xffb040, 3.2, 0.35);
+      this.glows.push(g);
+      o.add(g);
+      trail(0xffd8a0, 1.6, 3.2, 0.45);
+      this.height = 1.6;
     } else if (kind === 'spirit') {
       o.add(new THREE.Mesh(G.sphere(0.13, 12, 8), new THREE.MeshBasicMaterial({ color: 0xe8ffff })));
       for (const [c, s] of [
@@ -586,19 +667,23 @@ export class ProjView {
   update(dt: number, now: number, fx: Particles) {
     this.t += dt;
     const t = Math.min(0.15, (now - this.t0) / 1000);
-    this.obj.position.set(this.x + this.vx * t, 1.0, this.z + this.vz * t);
+    this.obj.position.set(this.x + this.vx * t, this.height, this.z + this.vz * t);
     this.obj.rotation.y = Math.atan2(this.vx, this.vz);
     this.glows.forEach((g, i) => {
-      const base = (this.kind === 'fireball' ? [2.0, 1.2] : this.kind === 'glaive' ? [1.4] : [1.3, 0.8])[i];
+      const base = (this.kind === 'fireball' ? [2.0, 1.2] : this.kind === 'glaive' ? [1.4] : this.kind === 'hammer' ? [3.2] : [1.3, 0.8])[i];
       g.scale.setScalar(base * (1 + Math.sin(this.t * (20 + i * 7)) * 0.12));
     });
-    if (this.spin) this.spin.rotation.y += dt * 22;
+    if (this.spin && this.tumble) this.spin.rotation.x += dt * 16;
+    else if (this.spin) this.spin.rotation.y += dt * 22;
     this.emitT -= dt;
     if (this.emitT <= 0) {
       this.emitT = this.kind === 'fireball' ? 0.015 : 0.03;
       const p = this.obj.position;
       if (this.kind === 'spirit') fx.glow({ x: p.x, y: p.y, z: p.z, vx: Math.random() - 0.5, vy: Math.random() * 0.8, vz: Math.random() - 0.5, life: 0.4, size: 0.2, color: Math.random() < 0.5 ? 0x6ff0ff : 0xffffff });
-      else if (this.kind === 'glaive') fx.glow({ x: p.x, y: p.y, z: p.z, vx: Math.random() - 0.5, vy: 0.3, vz: Math.random() - 0.5, life: 0.3, size: 0.18, color: 0x5dff8a });
+      else if (this.kind === 'hammer') {
+        fx.glow({ x: p.x + (Math.random() - 0.5), y: p.y + (Math.random() - 0.5), z: p.z + (Math.random() - 0.5), vy: 0.5, life: 0.35, size: 0.25, color: Math.random() < 0.5 ? 0xffb040 : 0xffffff });
+        if (Math.random() < 0.35) fx.puff({ x: p.x, y: 0.3, z: p.z, vy: 0.4, life: 0.6, size: 0.6, grow: 0.8, color: 0xd8c8a8, alpha: 0.35 });
+      } else if (this.kind === 'glaive') fx.glow({ x: p.x, y: p.y, z: p.z, vx: Math.random() - 0.5, vy: 0.3, vz: Math.random() - 0.5, life: 0.3, size: 0.18, color: 0x5dff8a });
       else if (this.kind === 'bolt') fx.glow({ x: p.x, y: p.y, z: p.z, vx: Math.random() - 0.5, vy: Math.random() - 0.5, vz: Math.random() - 0.5, life: 0.35, size: 0.22, color: Math.random() < 0.5 ? 0x9a6aff : 0x6ab8ff });
       else if (this.kind === 'fireball') {
         fx.glow({ x: p.x, y: p.y, z: p.z, vx: Math.random() - 0.5, vy: Math.random(), vz: Math.random() - 0.5, life: 0.4, size: 0.45, grow: -0.6, color: Math.random() < 0.5 ? 0xff7020 : 0xffd040 });
@@ -710,4 +795,34 @@ export class ZoneView {
       }
     }
   }
+}
+
+let laneCanvas: THREE.CanvasTexture | null = null;
+/** Полоса-подсказка: мягкие края и шевроны, указывающие направление. */
+function laneTex(): THREE.CanvasTexture {
+  if (laneCanvas) return laneCanvas;
+  const c = document.createElement('canvas');
+  c.width = 64;
+  c.height = 256;
+  const g = c.getContext('2d')!;
+  const edge = g.createLinearGradient(0, 0, 64, 0);
+  edge.addColorStop(0, 'rgba(255,255,255,1)');
+  edge.addColorStop(0.12, 'rgba(255,255,255,0.55)');
+  edge.addColorStop(0.88, 'rgba(255,255,255,0.55)');
+  edge.addColorStop(1, 'rgba(255,255,255,1)');
+  g.fillStyle = edge;
+  g.fillRect(0, 0, 64, 256);
+  g.strokeStyle = 'rgba(255,255,255,0.85)';
+  g.lineWidth = 6;
+  for (let y = 16; y < 256; y += 48) {
+    g.beginPath();
+    g.moveTo(14, y + 18);
+    g.lineTo(32, y);
+    g.lineTo(50, y + 18);
+    g.stroke();
+  }
+  laneCanvas = new THREE.CanvasTexture(c);
+  laneCanvas.colorSpace = THREE.SRGBColorSpace;
+  laneCanvas.wrapT = THREE.RepeatWrapping;
+  return laneCanvas;
 }

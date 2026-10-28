@@ -6,6 +6,10 @@ import { bake } from './bake';
 export interface MobAnimInput {
   moving: boolean;
   windup: boolean;
+  /** Замах для броска молота. */
+  throwWind?: boolean;
+  /** Молот в полёте — рука пуста. */
+  hammerOut?: boolean;
   stun: boolean;
   frozen: boolean;
   burn: boolean;
@@ -23,6 +27,41 @@ interface Rig {
   legR: THREE.Group;
   handR: THREE.Group;
   handL: THREE.Group;
+}
+
+/**
+ * Боевой молот тролля-вождя: окованная рукоять и каменное навершие с железными
+ * обручами и шипами. Ось рукояти — +y, хват в начале координат.
+ */
+export function buildTrollHammer(): THREE.Group {
+  const g = new THREE.Group();
+  const wood = 0x6a4024;
+  const iron = 0x5a6470;
+  const stone = 0x8a8478;
+  g.add(part(G.cyl(0.055, 0.07, 1.05, 8), wood, { pos: [0, 0.35, 0], outline: 0.02 }));
+  for (const y of [0.0, 0.12, 0.24]) g.add(part(G.torus(0.075, 0.018, Math.PI * 2, 4, 10), 0x3a2414, { pos: [0, y, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+  g.add(part(G.sphere(0.09, 8, 6), iron, { pos: [0, -0.2, 0], outline: 0.015 }));
+  // Навершие: тяжёлый каменный блок поперёк рукояти
+  const headY = 0.95;
+  g.add(part(G.box(0.62, 0.36, 0.38), stone, { pos: [0, headY, 0], outline: 0.03 }));
+  for (const sx of [-1, 1]) {
+    g.add(part(G.box(0.08, 0.42, 0.44), iron, { pos: [sx * 0.33, headY, 0], outline: 0.02 }));
+    g.add(part(G.box(0.06, 0.44, 0.46), iron, { pos: [sx * 0.12, headY, 0], outline: false }));
+    // Ударная грань с шипами
+    for (const [dy, dz] of [
+      [0.1, 0.1],
+      [-0.1, 0.1],
+      [0.1, -0.1],
+      [-0.1, -0.1],
+    ])
+      g.add(part(G.cone(0.05, 0.14, 5), 0xcfd8dc, { pos: [sx * 0.42, headY + dy, dz], rot: [0, 0, -sx * Math.PI / 2], outline: 0.01 }));
+  }
+  g.add(part(G.cone(0.07, 0.22, 6), iron, { pos: [0, headY + 0.28, 0], outline: 0.015 }));
+  // Светящаяся руна на камне
+  const rune = new THREE.Mesh(G.torus(0.09, 0.02, Math.PI * 2, 4, 6), toon(0xffb030, { emissive: 0xff7a10, emissiveIntensity: 1 }));
+  rune.position.set(0, headY, 0.2);
+  g.add(rune);
+  return g;
 }
 
 function eyePair(head: THREE.Group, x: number, y: number, z: number, r: number, iris: number, pupil = 0x1a1210, angry = false) {
@@ -92,6 +131,13 @@ export class MobModel {
   private walk = 0;
   private atkT = 99;
   private popT = 0;
+  private weapon: THREE.Object3D | null = null;
+  /** Бросок молота: время с начала замаха, с броска и с поимки. */
+  private windT = 99;
+  private throwT = 99;
+  private catchT = 99;
+  private wasOut = false;
+  private wasWind = false;
   private spawnK = 0;
   dying = 0;
   private stars = new THREE.Group();
@@ -231,12 +277,12 @@ export class MobModel {
           for (let i = -3; i <= 3; i++) r.torso.add(part(G.cone(0.035, 0.12, 5), 0xfff6e0, { pos: [i * 0.08, 0.72 - Math.abs(i) * 0.02, 0.3 - Math.abs(i) * 0.03], rot: [Math.PI, 0, 0], outline: false }));
           // Набедренная повязка
           r.torso.add(part(G.cyl(0.4, 0.44, 0.22, 14), 0x7a4a26, { pos: [0, 0.03, 0], outline: 0.02 }));
-          const club = new THREE.Group();
-          club.add(part(G.cyl(0.06, 0.08, 0.6, 8), 0x6a4024, { pos: [0, 0.2, 0], outline: 0.02 }));
-          club.add(part(G.cyl(0.2, 0.1, 0.7, 10), 0x8a5a2b, { pos: [0, 0.75, 0], outline: 0.025 }));
-          for (let i = 0; i < 6; i++) club.add(part(G.cone(0.05, 0.16, 5), 0xcfd8dc, { pos: [Math.cos(i) * 0.17, 0.6 + (i % 3) * 0.15, Math.sin(i) * 0.17], rot: [Math.sin(i) * 1.5, 0, -Math.cos(i) * 1.5], outline: false }));
-          club.rotation.x = Math.PI / 2 - 0.5;
-          r.handR.add(club);
+          const hammer = buildTrollHammer();
+          hammer.rotation.x = Math.PI / 2 - 0.5;
+          // Своя группа: молот прячется, пока летит
+          hammer.userData.anim = true;
+          r.handR.add(hammer);
+          this.weapon = hammer;
         } else {
           // Шлем и наплечник
           r.head.add(part(G.halfSphere(0.32), 0x6d7680, { pos: [0, 0.07, -0.02], outline: 0.02 }));
@@ -294,6 +340,14 @@ export class MobModel {
     this.inner.position.set(0, 0, 0);
     this.stars.visible = false;
     this.ice.visible = false;
+    this.windT = this.throwT = this.catchT = 99;
+    this.wasOut = this.wasWind = false;
+    if (this.weapon) this.weapon.visible = true;
+  }
+
+  /** Мировая позиция правой руки — откуда летит и куда возвращается молот. */
+  handWorld(target: THREE.Vector3): THREE.Vector3 {
+    return this.rig ? this.rig.handR.getWorldPosition(target) : target.copy(this.root.position).setY(this.height * 0.6);
   }
 
   pop() {
@@ -322,6 +376,19 @@ export class MobModel {
       return;
     }
 
+    // Бросок молота
+    const wind = !!st.throwWind;
+    const out = !!st.hammerOut;
+    if (wind && !this.wasWind) this.windT = 0;
+    if (out && !this.wasOut) this.throwT = 0;
+    if (!out && this.wasOut) this.catchT = 0;
+    this.wasWind = wind;
+    this.wasOut = out;
+    this.windT += dt;
+    this.throwT += dt;
+    this.catchT += dt;
+    if (this.weapon) this.weapon.visible = !out;
+
     const windupLean = st.windup ? -0.3 : 0;
     const strike = this.atkT < 0.25 ? Math.sin((this.atkT / 0.25) * Math.PI) : 0;
 
@@ -348,6 +415,40 @@ export class MobModel {
       if (this.kind === 'skeleton' && (st.windup || strike > 0)) r.armL.rotation.x = -1.5;
       r.body.position.y = mv ? Math.abs(Math.sin(this.walk)) * 0.06 * this.scale : 0;
       r.torso.rotation.x = windupLean + strike * 0.35 + (mv ? 0.12 : 0);
+      r.torso.rotation.y = 0;
+      r.armR.rotation.z = 0;
+      if (wind) {
+        // Замах: молот заведён далеко за голову, корпус откинут и развёрнут
+        const k = Math.min(1, this.windT / 0.5);
+        const e = 1 - Math.pow(1 - k, 3);
+        r.armR.rotation.x = -3.3 * e + Math.sin(t * 30) * 0.03 * k;
+        r.armR.rotation.z = 0.35 * e;
+        r.armL.rotation.x = -1.0 * e;
+        r.torso.rotation.x = -0.45 * e;
+        r.torso.rotation.y = -0.6 * e;
+      } else if (this.throwT < 0.35) {
+        // Бросок: рука хлёстко уходит вперёд
+        const k = this.throwT / 0.35;
+        const e = 1 - Math.pow(1 - k, 4);
+        r.armR.rotation.x = -3.3 + e * 3.0;
+        r.armL.rotation.x = -1.0 + e * 0.6;
+        r.torso.rotation.x = -0.45 + e * 0.7;
+        r.torso.rotation.y = -0.6 + e * 0.9;
+      } else if (out) {
+        // Молот летит — тянет его к себе вытянутой рукой
+        const pull = Math.sin(t * 9) * 0.06;
+        r.armR.rotation.x = -1.55 + pull;
+        r.armL.rotation.x = -0.6;
+        r.torso.rotation.x = -0.12 + pull * 0.5;
+        r.torso.rotation.y = 0.15;
+      } else if (this.catchT < 0.45) {
+        // Поймал: отдача тяжёлого молота
+        const k = this.catchT / 0.45;
+        const e = Math.sin(k * Math.PI);
+        r.armR.rotation.x = -1.55 * (1 - k) - e * 0.8;
+        r.torso.rotation.x = -0.3 * e;
+        r.body.position.y -= 0.1 * e * this.scale;
+      }
       r.head.rotation.z = Math.sin(t * 1.7) * 0.06;
       r.torso.scale.y = 1 + Math.sin(t * 2.4) * 0.02;
     }

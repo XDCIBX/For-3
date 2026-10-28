@@ -182,3 +182,29 @@ test('охотник бьёт двумя клинками, призывател�
   assert.ok(target.hp < hp0, 'помощники атакуют мобов');
   assert.ok(g.snapshot().S.length >= 2);
 });
+
+test('тролль-вождь бросает молот: тот ранит героя и возвращается к боссу', () => {
+  const g = new Game(5);
+  const p = g.addPlayer('Аня') as Player;
+  g.startGame();
+  run(g, 3.2);
+  for (const m of [...g.mobs.values()]) g.mobs.delete(m.id);
+  const boss = g.spawnMob('troll', p.x + 10, p.z);
+  boss.spawnT = 0;
+  boss.throwCd = 0;
+  boss.slamCd = 99;
+  p.stats.maxHp = p.hp = 99999;
+  const kinds: string[] = [];
+  let hits = 0;
+  for (let i = 0; i < Math.round(4 / DT); i++) {
+    g.update(DT);
+    for (const e of g.snapshot().E) {
+      if (e.e === 'fx' && e.k.startsWith('h')) kinds.push(e.k);
+      if (e.e === 'dmg' && e.tp === 'p') hits++;
+    }
+  }
+  assert.deepEqual(kinds, ['hwind', 'hthrow', 'hturn', 'hcatch']);
+  assert.equal(hits, 1, 'один удар за бросок');
+  assert.equal(boss.hammer, 0);
+  assert.ok(boss.throwCd >= 5, 'после поимки — перезарядка');
+});
