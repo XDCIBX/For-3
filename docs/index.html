@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0d0716">
+  <meta name="description" content="Правда или действие: 300 правд и 200 действий, уровни 0+, 18+ и 21+.">
+  <title>Правда или действие</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%94%A5%3C/text%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;600;700;800&family=Unbounded:wght@600;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="bg" aria-hidden="true"><i></i><i></i><i></i></div>
+
+  <!-- Проверка возраста -->
+  <div class="modal" id="ageGate" hidden>
+    <div class="modal-box">
+      <div class="modal-emoji">🔞</div>
+      <h2>Тебе уже есть 18?</h2>
+      <p>Большинство карточек — откровенные вопросы и задания для взрослых. Уровень 21+ включает алкоголь.</p>
+      <div class="modal-actions">
+        <button class="btn btn-primary" data-age="21">Мне 21+</button>
+        <button class="btn btn-ghost" data-age="18">Мне 18–20</button>
+        <button class="btn btn-link" data-age="0">Мне нет 18</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Экран настроек -->
+  <main class="screen" id="setup">
+    <header class="hero">
+      <div class="logo">
+        <span class="logo-truth">Правда</span>
+        <span class="logo-or">или</span>
+        <span class="logo-dare">действие</span>
+      </div>
+      <p class="tagline">300 правд · 200 действий · без повторов</p>
+    </header>
+
+    <section class="panel">
+      <h3>Игроки</h3>
+      <form id="addPlayer" class="add-player" autocomplete="off">
+        <input id="playerName" type="text" maxlength="20" placeholder="Имя игрока" aria-label="Имя игрока">
+        <button class="btn btn-add" type="submit" aria-label="Добавить игрока">+</button>
+      </form>
+      <ul id="playerList" class="player-list"></ul>
+      <p class="hint" id="playersHint">Добавь хотя бы двух игроков — или играй без имён.</p>
+    </section>
+
+    <section class="panel">
+      <h3>Уровни</h3>
+      <div class="levels" id="levels">
+        <button class="level" data-level="0+" aria-pressed="true">
+          <b>0+</b><span>Весело и мило</span>
+        </button>
+        <button class="level" data-level="18+" aria-pressed="true">
+          <b>18+</b><span>Флирт и пикантное</span>
+        </button>
+        <button class="level" data-level="21+" aria-pressed="true">
+          <b>21+</b><span>Алкоголь и жара</span>
+        </button>
+      </div>
+      <p class="hint" id="levelHint"></p>
+    </section>
+
+    <button class="btn btn-primary btn-big" id="startBtn">Начать игру</button>
+    <p class="rules">Любое задание можно пропустить. Касания — только с согласия. Алкоголь можно заменить любым напитком — знайте меру.</p>
+  </main>
+
+  <!-- Игровой экран -->
+  <main class="screen" id="game" hidden>
+    <header class="topbar">
+      <button class="icon-btn" id="backBtn" aria-label="Настройки">←</button>
+      <div class="turn">
+        <span class="turn-label">Ходит</span>
+        <span class="turn-name" id="turnName">Игрок</span>
+      </div>
+      <button class="icon-btn" id="scoreBtn" aria-label="Счёт">🏆</button>
+    </header>
+
+    <div class="stage">
+      <div class="card" id="card">
+        <div class="card-inner">
+          <div class="card-face card-front">
+            <div class="front-mark">?</div>
+            <p>Выбери: правда или действие</p>
+          </div>
+          <div class="card-face card-back">
+            <div class="card-head">
+              <span class="card-type" id="cardType">Правда</span>
+              <span class="badge" id="cardLevel">18+</span>
+            </div>
+            <p class="card-text" id="cardText"></p>
+            <div class="card-foot" id="cardFoot"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="choice" id="choice">
+      <button class="btn btn-truth" data-kind="truth">Правда</button>
+      <button class="btn btn-random" data-kind="random" aria-label="Случайно">🎲</button>
+      <button class="btn btn-dare" data-kind="dare">Действие</button>
+    </div>
+
+    <div class="result" id="result" hidden>
+      <button class="btn btn-ghost" id="skipBtn">Пропустить</button>
+      <button class="btn btn-primary" id="doneBtn">Выполнено ✓</button>
+    </div>
+
+    <p class="counter" id="counter"></p>
+  </main>
+
+  <!-- Счёт -->
+  <div class="modal" id="scoreModal" hidden>
+    <div class="modal-box">
+      <h2>Счёт</h2>
+      <ol class="scores" id="scores"></ol>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="closeScore">Продолжить</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>

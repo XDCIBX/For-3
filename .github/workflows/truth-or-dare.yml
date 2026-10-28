@@ -1,0 +1,17 @@
+name: Правда или действие — проверка
+
+on:
+  push:
+    paths: [docs/**, tests/truth-or-dare/**, .github/workflows/truth-or-dare.yml]
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Проверка базы карточек
+        run: node tests/truth-or-dare/check-data.mjs
