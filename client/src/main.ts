@@ -336,7 +336,10 @@ class App {
       this.tavernUi = null;
       this.engine.tavernLeft = this.engine.tavernRight = 0;
     }
-    if (this.controls) this.controls.el.style.display = ph === 'tavern' || ph === 'gameover' ? 'none' : '';
+    if (this.controls) {
+      this.controls.release();
+      this.controls.el.style.display = ph === 'tavern' || ph === 'gameover' ? 'none' : '';
+    }
     hud.el.style.display = ph === 'tavern' ? 'none' : '';
     if (this.st.me && this.controls) this.controls.setClass(this.st.me.c);
     switch (ph) {
@@ -482,6 +485,7 @@ class App {
           break;
         case 'pdie':
           if (e.pid === me) {
+            this.controls?.release();
             sfx.death();
             this.haptic(ImpactStyle.Heavy);
           }

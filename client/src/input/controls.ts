@@ -34,6 +34,8 @@ export class Controls {
   private overCancel = false;
   private mouse: { x: number; y: number; t: number } | null = null;
   private wasReady = [true, true, true, true];
+  private lastP = ['', '', '', ''];
+  private cls: HeroClass | null = null;
   private disposers: (() => void)[] = [];
   enabled = true;
 
@@ -95,8 +97,22 @@ export class Controls {
   }
 
   setClass(cls: HeroClass) {
+    // Иконки перерисовываем только при смене класса — иначе кнопки мигают на каждой смене фазы
+    if (cls === this.cls) return;
+    this.cls = cls;
     this.defs = CLASSES[cls].skills;
     this.btns.forEach((b, i) => (b.querySelector('.si')!.innerHTML = skillIcon(this.defs[i].id)));
+  }
+
+  /**
+   * Отпустить все кнопки: при гибели героя и смене фазы. Иначе удержание атаки
+   * «залипает» (палец ушёл с экрана, пока кнопки были скрыты) и герой сам машет оружием.
+   */
+  release() {
+    this.holdMain = false;
+    if (this.aimSlot >= 0) this.skillCancel(this.aimSlot);
+    for (const b of this.btns) b.classList.remove('pressed');
+    this.keys.clear();
   }
 
   dispose() {
@@ -257,7 +273,11 @@ export class Controls {
     for (let i = 0; i < 4; i++) {
       const b = this.btns[i];
       const frac = cdm[i] > 0 ? Math.max(0, Math.min(1, cd[i] / cdm[i])) : 0;
-      (b.querySelector('.cd') as HTMLElement).style.setProperty('--p', `${(frac * 100).toFixed(1)}%`);
+      const pv = `${(frac * 100).toFixed(0)}%`;
+      if (pv !== this.lastP[i]) {
+        this.lastP[i] = pv;
+        (b.querySelector('.cd') as HTMLElement).style.setProperty('--p', pv);
+      }
       const t = b.querySelector('.cdt') as HTMLElement;
       const txt = i > 0 && cd[i] > 0.05 ? (cd[i] < 1 ? cd[i].toFixed(1) : Math.ceil(cd[i]).toString()) : '';
       if (t.textContent !== txt) t.textContent = txt;

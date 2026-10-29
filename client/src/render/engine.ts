@@ -242,7 +242,7 @@ export class Engine {
           : s.name === 'arena'
             ? makeEnvironment(this.renderer, '#3a4a7a', '#f0b080', '#5a4030', 'rgba(255,210,150,0.95)')
             : s.name === 'lair'
-              ? makeEnvironment(this.renderer, '#140606', '#7a2a0e', '#3a1006', 'rgba(255,140,60,0.9)', [0.3, 0.6])
+              ? makeEnvironment(this.renderer, '#3a1810', '#c05a2a', '#6a2a14', 'rgba(255,170,90,1)', [0.3, 0.6])
             : makeEnvironment(this.renderer, '#4a8ad0', '#d8ecf6', '#5a6a3a', 'rgba(255,250,230,1)');
       s.scene.environment = env;
     }

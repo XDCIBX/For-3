@@ -177,15 +177,17 @@ export class Hud {
     const mobbar = this.q('.mobbar')!;
     const pvp = isPvpRound(st.round);
     this.set('rt', `Волна ${st.round}/${MAX_ROUNDS}${pvp ? ' · ПвП' : st.round === DRAGON_ROUND ? ' · Дракон' : ''}`, (v) => (rt.textContent = v));
+    // DOM трогаем только при изменениях: перерисовка каждый кадр тормозит телефон и мигает кнопками
     if (st.phase === 'battle') {
-      rs.textContent = `Врагов осталось: ${st.mobsLeft}`;
-      mobbar.style.display = '';
-      (mobbar.firstElementChild as HTMLElement).style.width = `${st.mobsTotal ? (st.mobsLeft / st.mobsTotal) * 100 : 0}%`;
+      this.set('rs', `Врагов осталось: ${st.mobsLeft}`, (v) => (rs.textContent = v));
+      this.set('mbd', '', (v) => (mobbar.style.display = v));
+      this.set('mbw', `${(st.mobsTotal ? (st.mobsLeft / st.mobsTotal) * 100 : 0).toFixed(1)}%`, (v) => ((mobbar.firstElementChild as HTMLElement).style.width = v));
     } else {
-      mobbar.style.display = 'none';
+      this.set('mbd', 'none', (v) => (mobbar.style.display = v));
       const nextPvp = roundsToPvp(st.round + 1) + 1;
-      rs.textContent =
+      const txt =
         st.phase === 'intro' ? 'Приготовьтесь!' : st.phase.startsWith('duel') ? `Дуэль ${(st.duel?.idx ?? 0) + 1} из ${st.duel?.total ?? 0}${st.phase === 'duel' ? ` · ${Math.ceil(st.timer)} с` : ''}` : st.phase === 'clear' ? 'Победа!' : pvp || st.round >= DRAGON_ROUND - 1 ? '' : `До ПвП: ${nextPvp} р.`;
+      this.set('rs', txt, (v) => (rs.textContent = v));
     }
 
     // Команда
@@ -204,21 +206,22 @@ export class Hud {
     for (const p of mates) {
       const m = matesBox.querySelector<HTMLElement>(`[data-id="${p.id}"]`);
       if (!m) continue;
-      (m.querySelector('.mb i') as HTMLElement).style.width = `${Math.max(0, (p.hp / p.mhp) * 100)}%`;
-      (m.querySelector('.g') as HTMLElement).textContent = `${p.g}💰`;
-      m.classList.toggle('dead', !p.al || (!p.con && !p.bot));
+      this.set(`mw${p.id}`, `${Math.max(0, (p.hp / p.mhp) * 100).toFixed(1)}%`, (v) => ((m.querySelector('.mb i') as HTMLElement).style.width = v));
+      this.set(`mg${p.id}`, `${p.g}💰`, (v) => ((m.querySelector('.g') as HTMLElement).textContent = v));
+      const dead = !p.al || (!p.con && !p.bot);
+      if (m.classList.contains('dead') !== dead) m.classList.toggle('dead', dead);
     }
 
     // Возрождение
     const resp = this.el.querySelector<HTMLElement>('.respawn')!;
     if (!me.al && st.phase === 'battle') {
-      resp.style.display = '';
-      resp.innerHTML = `💀 Вы пали!<br><span style="font-size:20px">Возрождение через ${Math.ceil(me.rs)}…</span>`;
-    } else resp.style.display = 'none';
+      this.set('respd', '', (v) => (resp.style.display = v));
+      this.set('resp', String(Math.ceil(me.rs)), (v) => (resp.innerHTML = `💀 Вы пали!<br><span style="font-size:20px">Возрождение через ${v}…</span>`));
+    } else this.set('respd', 'none', (v) => (resp.style.display = v));
 
     // Дуэль
     const spect = this.el.querySelector<HTMLElement>('.spectate')!;
-    spect.style.display = st.phase.startsWith('duel') && me.st.includes('x') ? '' : 'none';
+    this.set('spect', st.phase.startsWith('duel') && me.st.includes('x') ? '' : 'none', (v) => (spect.style.display = v));
     const vs = this.el.querySelector<HTMLElement>('.duel-vs')!;
     if (st.duel && st.phase.startsWith('duel')) {
       const a = st.players.get(st.duel.a);
@@ -229,9 +232,9 @@ export class Hud {
           vs.dataset.k = key;
           vs.innerHTML = `<span class="stroke" style="color:${CLASSES[a.c].color}">${esc(a.n)}</span><span class="vs">${SWORDS}</span><span class="stroke" style="color:${CLASSES[b.c].color}">${esc(b.n)}</span>`;
         }
-        vs.style.display = 'flex';
+        this.set('vs', 'flex', (v) => (vs.style.display = v));
       }
-    } else vs.style.display = 'none';
+    } else this.set('vs', 'none', (v) => (vs.style.display = v));
 
     // Мини-карту обновляем 10 раз в секунду — этого достаточно
     this.miniT -= dt;

@@ -87,11 +87,11 @@ export class LairStage implements Stage {
   constructor(world: WorldData) {
     this.world = world;
     const s = this.scene;
-    s.fog = new THREE.Fog(0x2a0c06, 38, 115);
-    s.background = skyTexture('#0c0404', '#2a0c06', '#4a1608');
-    s.add(new THREE.HemisphereLight(0xffa07a, 0x3a160c, 0.9));
+    s.fog = new THREE.Fog(0x4a1e12, 45, 130);
+    s.background = skyTexture('#1e0a06', '#4a1a0c', '#7a2a10');
+    s.add(new THREE.HemisphereLight(0xffc0a0, 0x5a2a18, 1.3));
     // Свет из жерла вулкана над головой: тусклый, оранжевый
-    this.sun = makeSun(2.6, 0xffc08a, [-18, 46, 20], 40, 2048);
+    this.sun = makeSun(3.3, 0xffd4a8, [-18, 46, 20], 40, 2048);
     s.add(this.sun, this.sun.target);
 
     const rng = new Rng(world.seed + 333);
@@ -128,10 +128,10 @@ export class LairStage implements Stage {
     const uvs: number[] = [];
     const idx: number[] = [];
     const c = new THREE.Color();
-    const basalt = new THREE.Color(0x4a3e38);
-    const ash = new THREE.Color(0x6a5c52);
-    const scorch = new THREE.Color(0x2a201c);
-    const wallC = new THREE.Color(0x3a2e28);
+    const basalt = new THREE.Color(0x66574e);
+    const ash = new THREE.Color(0x8a7a6c);
+    const scorch = new THREE.Color(0x40322c);
+    const wallC = new THREE.Color(0x52423a);
     const gold = new THREE.Color(0x8a6a2a);
     const { pond, ruins, spawns } = this.world;
     const caveAngles = spawns.map((sp) => Math.atan2(sp.z, sp.x));

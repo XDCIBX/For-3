@@ -148,8 +148,9 @@ class Drake implements Creature {
   private spit: boolean;
   constructor(spit: boolean) {
     this.spit = spit;
-    const col = spit ? 0x3a2a34 : 0x8a2a16;
-    const belly = spit ? 0xd86a20 : 0xd8a058;
+    // Яркие окрасы, чтобы стражей было видно на тёмном базальте
+    const col = spit ? 0x4f7a2e : 0xb8401e;
+    const belly = spit ? 0xf08a2a : 0xe8b468;
     const horn = 0xe0d2b4;
     const map = scaleTex();
     const g = this.group;
@@ -183,7 +184,7 @@ class Drake implements Creature {
     for (const s of [-1, 1]) {
       H.add(part(G.cone(0.035, 0.22, 6), horn, { pos: [s * 0.08, 0.12, -0.1], rot: [-0.9, 0, s * 0.3] }));
       H.add(part(G.cone(0.02, 0.1, 5), horn, { pos: [s * 0.12, 0.0, -0.02], rot: [-1.3, 0, s * 0.9] }));
-      const e = new THREE.Mesh(G.sphere(0.03, 8, 6), toon(0xffd040, { emissive: 0xffa010, emissiveIntensity: 1.5 }));
+      const e = new THREE.Mesh(G.sphere(0.04, 8, 6), toon(0xffe060, { emissive: 0xffb020, emissiveIntensity: 2.2 }));
       e.position.set(s * 0.075, 0.05, 0.1);
       H.add(e);
     }
@@ -202,7 +203,7 @@ class Drake implements Creature {
     }
     // Крылья
     for (const s of [-1, 1]) {
-      const w = wing(1.25, spit ? 0x2a1a24 : 0x5a1a10, spit ? 0x1a1018 : 0x3a120a);
+      const w = wing(1.25, spit ? 0x6a9a3a : 0xc8582a, spit ? 0x2a4018 : 0x5a1a0a);
       w.userData.anim = true;
       w.scale.x = s;
       w.position.set(s * 0.14, 0.15, 0.18);
