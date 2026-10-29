@@ -94,12 +94,13 @@ let itemCounter = 0;
 /** Вероятности редкостей в зависимости от раунда. */
 export function rarityWeights(round: number): Record<Rarity, number> {
   const r = Math.max(1, round);
+  // К концу игры обычные и редкие вещи уходят, уступая эпическим, легендарным и реликвиям
   return {
-    common: Math.max(8, 70 - r * 6),
-    rare: 25 + r * 1.5,
-    epic: r >= 3 ? 4 + r * 2 : 0,
-    legendary: r >= 6 ? (r - 5) * 1.6 : 0,
-    relic: r >= 10 ? (r - 9) * 0.9 : 0,
+    common: Math.max(0, 70 - r * 6.5),
+    rare: r <= 11 ? 25 + r * 2 : Math.max(2, 47 - (r - 11) * 6),
+    epic: r < 3 ? 0 : r <= 14 ? 4 + r * 3 : Math.max(20, 46 - (r - 14) * 3),
+    legendary: r >= 6 ? (r - 5) * 3.2 : 0,
+    relic: r >= 10 ? (r - 9) * 2.8 : 0,
   };
 }
 

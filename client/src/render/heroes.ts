@@ -100,6 +100,8 @@ export class HeroModel {
   private walkPhase = 0;
   private castT = 99;
   private castS = 0;
+  /** Оборотень бьёт поочерёдно правой и левой лапой. */
+  private clawSide = 1;
   private castDur = 0.3;
   private blinkT = 2 + Math.random() * 3;
   private popT = 0;
@@ -726,13 +728,14 @@ export class HeroModel {
   playCast(s: number) {
     this.castS = s;
     this.castT = 0;
+    if (this.cls === 'werewolf' && s === 0) this.clawSide = -this.clawSide;
     const durs: Record<HeroClass, number[]> = {
       warrior: [0.32, 0.4, 0.3, 0.7],
       mage: [0.3, 0.4, 0.45, 0.8],
       archer: [0.28, 0.35, 0.35, 0.6],
       hunter: [0.22, 0.25, 0.32, 0.7],
       summoner: [0.3, 0.55, 0.6, 0.45],
-      werewolf: [0.26, 0.4, 0.8, 0.9],
+      werewolf: [0.34, 0.4, 0.8, 0.9],
       dwarf: [0.3, 0.45, 0.55, 0.65],
     };
     this.castDur = durs[this.cls][s];
@@ -777,6 +780,7 @@ export class HeroModel {
     let lean = sp * 0.12;
     let headTilt = 0;
     let bodyRoll = 0;
+    let legAmp = 1;
 
     // Оружие в руке в покое
     if (this.cls === 'warrior') {
@@ -798,6 +802,21 @@ export class HeroModel {
       armRz = 0.45;
       lean += 0.18 + this.beastK * 0.2;
       headTilt = -0.1 - this.beastK * 0.15;
+      const run = Math.min(1, sp * 1.4);
+      if (run > 0.05) {
+        // Волчий бег: низко, длинными прыжками, когти отведены назад
+        const ph = this.walkPhase;
+        legAmp = 1 + run * 0.45;
+        bodyY = Math.abs(Math.sin(ph)) * 0.2 * run;
+        lean += run * (0.2 + Math.sin(ph * 2) * 0.05);
+        armRx = -0.35 * (1 - run) + Math.sin(ph) * 1.15 * run + 0.35 * run;
+        armLx = -0.35 * (1 - run) - Math.sin(ph) * 1.15 * run + 0.35 * run;
+        armLz = -0.45 - run * 0.2;
+        armRz = 0.45 + run * 0.2;
+        torsoYaw = Math.sin(ph) * 0.18 * run;
+        bodyRoll = Math.sin(ph) * 0.05 * run;
+        headTilt = -0.28 * run - this.beastK * 0.15;
+      }
     } else if (this.cls === 'dwarf') {
       // Мушкетон у бедра, обеими руками
       armRx = -0.75 + swing * 0.15;
@@ -870,12 +889,46 @@ export class HeroModel {
         }
       } else if (this.cls === 'werewolf') {
         if (this.castS === 0) {
-          // Наискось крест-накрест обеими лапами
-          armRx = -2.4 + ease * 2.6;
-          armLx = -2.4 + ease * 2.6;
-          armRz = 1.0 - ease * 1.3;
-          armLz = -1.0 + ease * 1.3;
-          lean += 0.25 * e;
+          // Удар когтями поочерёдно: замах из-за плеча, рывок наискось через корпус с выпадом, возврат
+          const sd = this.clawSide;
+          let ax: number;
+          let az: number;
+          let yaw: number;
+          let lunge = 0;
+          if (k < 0.3) {
+            const w = Math.sin((k / 0.3) * Math.PI * 0.5);
+            ax = -2.7 * w;
+            az = sd * (0.45 + 0.8 * w);
+            yaw = -sd * 0.5 * w;
+            lean -= 0.12 * w;
+          } else if (k < 0.62) {
+            const w = (k - 0.3) / 0.32;
+            const f = 1 - Math.pow(1 - w, 3);
+            ax = -2.7 + f * 3.2;
+            az = sd * (1.25 - f * 1.6);
+            yaw = -sd * 0.5 + f * sd * 1.1;
+            lunge = Math.sin(w * Math.PI);
+          } else {
+            const w = (k - 0.62) / 0.38;
+            ax = 0.5 - w * 1.1;
+            az = sd * (-0.35 + w * 0.8);
+            yaw = sd * 0.6 * (1 - w);
+          }
+          if (sd > 0) {
+            armRx = ax;
+            armRz = az;
+            armLx = -1.0;
+            armLz = -0.5;
+          } else {
+            armLx = ax;
+            armLz = az;
+            armRx = -1.0;
+            armRz = 0.5;
+          }
+          torsoYaw = yaw;
+          lean += 0.3 * lunge;
+          bodyY += 0.12 * lunge;
+          headTilt = 0.15 * lunge;
         } else if (this.castS === 1) {
           // Присед перед прыжком
           bodyY -= 0.2 * e;
@@ -980,8 +1033,8 @@ export class HeroModel {
       armLx = armRx = -2.8 * e;
     }
 
-    this.legL.rotation.x = swing;
-    this.legR.rotation.x = -swing;
+    this.legL.rotation.x = swing * legAmp;
+    this.legR.rotation.x = -swing * legAmp;
     this.armL.rotation.set(armLx, 0, armLz);
     this.armR.rotation.set(armRx, 0, armRz);
     this.torsoG.rotation.y = torsoYaw;

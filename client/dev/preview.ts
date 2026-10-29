@@ -92,6 +92,8 @@ if (q.get('minions')) {
   cam.position.set(0, 4, 9);
   cam.lookAt(0, 1.1, 0);
 }
+// ?loopcast=1 — умение повторяется ровно раз в 0,6 с (для покадровой проверки)
+if (q.has('loopcast')) setInterval(() => heroes.forEach((h) => h.playCast(Number(q.get('cast') ?? 0))), 600);
 let last = performance.now();
 const cast = q.get('cast');
 function loop(now: number) {

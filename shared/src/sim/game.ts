@@ -1179,6 +1179,38 @@ export class Game {
     }
   }
 
+  /**
+   * Неподвижный помощник не должен появиться внутри врага: иначе снаряды
+   * врага стартуют уже за ним и пролетают мимо. Отодвигаем к хозяину.
+   */
+  private clearOfEnemies(owner: Player, pos: { x: number; z: number }, r: number) {
+    for (let iter = 0; iter < 12; iter++) {
+      let blocked = false;
+      for (const t of this.targetsFor(owner)) {
+        if (t.kind === 'n') continue;
+        if (Math.hypot(t.x - pos.x, t.z - pos.z) < t.rad + r + 0.35) {
+          blocked = true;
+          break;
+        }
+      }
+      if (!blocked) return;
+      const dx = owner.x - pos.x;
+      const dz = owner.z - pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d < 0.5) {
+        // Уже у самого хозяина — ставим перед ним с противоположной от врага стороны
+        pos.x = owner.x - Math.sin(owner.rot) * (PLAYER_RADIUS + r + 0.2);
+        pos.z = owner.z - Math.cos(owner.rot) * (PLAYER_RADIUS + r + 0.2);
+        resolveCollision(pos, r, this.obstacles, this.bound);
+        return;
+      }
+      const step = Math.min(0.6, d);
+      pos.x += (dx / d) * step;
+      pos.z += (dz / d) * step;
+      resolveCollision(pos, r, this.obstacles, this.bound);
+    }
+  }
+
   /** Характеристики помощников растут вместе со снаряжением призывателя. */
   private summon(p: Player, kind: MinionKind, x: number, z: number): Minion {
     const st = p.stats;
@@ -1192,6 +1224,7 @@ export class Game {
     }[kind];
     const pos = { x, z };
     resolveCollision(pos, spec.radius, this.obstacles, this.bound);
+    if (kind === 'turret' || kind === 'totem') this.clearOfEnemies(p, pos, spec.radius);
     const n: Minion = {
       id: this.nextId++,
       kind,
@@ -1502,6 +1535,18 @@ export class Game {
         if (p.faceT <= 0 && spd > 0 && Math.hypot(p.input.mx, p.input.mz) > 0.1) p.rot = Math.atan2(p.input.mx, p.input.mz);
       }
       resolveCollision(pos, PLAYER_RADIUS, obs, bound);
+      // Турель — твёрдая: сквозь неё не пройти
+      for (const n of this.minions.values()) {
+        if (n.kind !== 'turret') continue;
+        const ox = pos.x - n.x;
+        const oz = pos.z - n.z;
+        const d = Math.hypot(ox, oz);
+        const min = PLAYER_RADIUS + n.radius;
+        if (d < min && d > 0.0001) {
+          pos.x = n.x + (ox / d) * min;
+          pos.z = n.z + (oz / d) * min;
+        }
+      }
       p.x = pos.x;
       p.z = pos.z;
     }

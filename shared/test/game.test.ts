@@ -262,3 +262,26 @@ test('оборотень прыгает и бьёт при приземлени�
   g.castSkill(bot, 2, 1, 0, 3);
   assert.ok([...g.minions.values()].some((n) => n.owner === bot.id && n.kind === 'turret'));
 });
+
+test('турель гнома не появляется внутри врага в дуэли, и враг может её разбить', () => {
+  const g = new Game(3);
+  const d = g.addPlayer('Гном') as Player;
+  const m = g.addPlayer('Маг') as Player;
+  g.handle(d.id, { t: 'pick', cls: 'dwarf' });
+  g.handle(m.id, { t: 'pick', cls: 'mage' });
+  g.startRound = 5;
+  g.startGame();
+  run(g, 20, () => g.phase === 'duel');
+  assert.equal(g.phase, 'duel');
+  m.x = d.x + 4;
+  m.z = d.z;
+  d.cds[2] = 0;
+  g.castSkill(d, 2, 1, 0, 4);
+  const tur = [...g.minions.values()].find((n) => n.kind === 'turret')!;
+  assert.ok(Math.hypot(tur.x - m.x, tur.z - m.z) > 1.4, 'турель не внутри мага');
+  const hp0 = tur.hp;
+  m.cds[0] = 0;
+  g.castSkill(m, 0, tur.x - m.x, tur.z - m.z, 2);
+  run(g, 0.6);
+  assert.ok(tur.hp < hp0, 'выстрел мага попадает в турель');
+});
