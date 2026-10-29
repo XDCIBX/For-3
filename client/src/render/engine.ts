@@ -4,7 +4,7 @@ import type { ClientState, PlayerInfo } from '../net/state';
 import { ArenaStage } from './arena';
 import { HpBar, nameSprite } from './bars';
 import { Effects, ProjView, ZoneView } from './effects';
-import type { Stage } from './env';
+import { makeEnvironment, type Stage } from './env';
 import { HeroModel } from './heroes';
 import { IslandStage } from './island';
 import { MinionModel } from './minions';
@@ -171,6 +171,9 @@ export class Engine {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.shadowMap.autoUpdate = false;
+    // Кинематографичная тональная кривая: мягкие света, насыщенные тени
+    this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    this.renderer.toneMappingExposure = 0.95;
     this.camera = new THREE.PerspectiveCamera(38, 1, 0.5, 400);
     this.effects = new Effects(this.fx);
 
@@ -229,6 +232,16 @@ export class Engine {
   private setStage(s: Stage) {
     if (this.stage === s) return;
     this.stage = s;
+    if (!s.scene.environment) {
+      // Своё небо для отражений у каждой сцены
+      const env =
+        s.name === 'tavern'
+          ? makeEnvironment(this.renderer, '#2a1a10', '#8a5a2a', '#3a2414', 'rgba(255,190,110,0.9)', [0.5, 0.45])
+          : s.name === 'arena'
+            ? makeEnvironment(this.renderer, '#3a4a7a', '#f0b080', '#5a4030', 'rgba(255,210,150,0.95)')
+            : makeEnvironment(this.renderer, '#4a8ad0', '#d8ecf6', '#5a6a3a', 'rgba(255,250,230,1)');
+      s.scene.environment = env;
+    }
     s.scene.add(this.fx.group, this.aimGroup);
     this.fx.clear();
     this.effects.clear();

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { Rng, type Obstacle, type WorldData, type Vec2 } from '@game/shared';
 import { G, addOutline, faceted, glow, instancedOutline, part, swayToon, toon } from './toon';
-import { barkTex, clothTex, grassTex, leafTex, rockTex, sandTex, stoneTex, woodTex } from './textures';
+import { barkTex, clothTex, grassTex, leafTex, normalFor, rockTex, sandTex, stoneTex, woodTex } from './textures';
 import { bakeStatic } from './bake';
 import { Flame, makeSun, portalMaterial, skyTexture, waterMaterial, type Stage } from './env';
 import type { Particles } from './particles';
@@ -38,6 +38,60 @@ function pathPoints(s: Vec2): Vec2[] {
   return pts;
 }
 
+
+/** Детерминированный «шум» по координате вершины — швы геометрии не расходятся. */
+function vhash(x: number, y: number, z: number): number {
+  const h = Math.sin(x * 12.9898 + y * 78.233 + z * 37.719) * 43758.5453;
+  return h - Math.floor(h);
+}
+
+/**
+ * Делает форму живой: смещает вершины шумом и запекает затенение в цвет вершин
+ * (низ и глубина кроны темнее — дешёвая имитация ambient occlusion).
+ */
+function organic(geo: THREE.BufferGeometry, amp: number, ao: number, droop: boolean): THREE.BufferGeometry {
+  const p = geo.attributes.position;
+  geo.computeBoundingBox();
+  const bb = geo.boundingBox!;
+  const maxR = Math.max(bb.max.x, -bb.min.x, bb.max.z, -bb.min.z);
+  const col = new Float32Array(p.count * 3);
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const y = p.getY(i);
+    const z = p.getZ(i);
+    const r = Math.hypot(x, z);
+    const n1 = vhash(x, y, z) - 0.5;
+    const n2 = vhash(z + 3.1, x - 1.7, y + 0.3) - 0.5;
+    const k = 1 + n1 * amp * 2.2;
+    let ny = y + n2 * amp;
+    if (droop) ny -= (r / maxR) * (r / maxR) * 0.25 * (0.6 + n2);
+    p.setXYZ(i, x * k, ny, z * k);
+    const hK = (y - bb.min.y) / Math.max(0.01, bb.max.y - bb.min.y);
+    const out = Math.min(1, r / (maxR * 0.85));
+    const shade = ao + (1 - ao) * Math.min(1, 0.35 + hK * 0.45 + out * 0.45) + n1 * 0.08;
+    col[i * 3] = shade;
+    col[i * 3 + 1] = shade;
+    col[i * 3 + 2] = shade * 0.96;
+  }
+  geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  geo.computeVertexNormals();
+  return geo;
+}
+
+/** Корневое расширение и неровная кора у основания ствола. */
+function flare(geo: THREE.BufferGeometry, k: number): THREE.BufferGeometry {
+  const p = geo.attributes.position;
+  for (let i = 0; i < p.count; i++) {
+    const x = p.getX(i);
+    const y = p.getY(i);
+    const z = p.getZ(i);
+    const f = 1 + k * Math.max(0, 1 - y / 0.6) ** 2 * (0.7 + vhash(x, 0, z) * 0.6) + (vhash(x, y, z) - 0.5) * 0.12;
+    p.setXYZ(i, x * f, y, z * f);
+  }
+  geo.computeVertexNormals();
+  return geo;
+}
+
 export class IslandStage implements Stage {
   readonly name = 'island';
   readonly scene = new THREE.Scene();
@@ -56,10 +110,12 @@ export class IslandStage implements Stage {
   constructor(world: WorldData) {
     this.world = world;
     const scene = this.scene;
-    scene.background = skyTexture('#5aa9e6', '#9fd3f2', '#e8f6ff');
+    // Воздушная перспектива: даль тонет в дымке
+    scene.fog = new THREE.Fog(0xc4d4dc, 55, 170);
+    scene.background = skyTexture('#4f86c0', '#a9c8de', '#dce6ea');
 
-    scene.add(new THREE.HemisphereLight(0xd8f0ff, 0x6a7a3a, 1.35));
-    this.sun = makeSun(2.4, 0xfff0d2, [-26, 48, 22], 40, 2048);
+    scene.add(new THREE.HemisphereLight(0xd8f0ff, 0x6a7a3a, 0.35));
+    this.sun = makeSun(3.0, 0xfff0d2, [-26, 48, 22], 40, 2048);
     scene.add(this.sun, this.sun.target);
 
     this.paths = world.spawns.map(pathPoints);
@@ -106,15 +162,15 @@ export class IslandStage implements Stage {
     // 1 — трава (текстура травинок), 0 — песок/тропа/камень (текстура песка)
     const detail: number[] = [];
     const c = new THREE.Color();
-    const grassA = new THREE.Color(0x7ccf55);
-    const grassB = new THREE.Color(0x5fb447);
-    const grassC = new THREE.Color(0x96d968);
-    const dirt = new THREE.Color(0xc79a5a);
-    const dirtEdge = new THREE.Color(0xa47b42);
-    const sand = new THREE.Color(0xf0dca0);
-    const wet = new THREE.Color(0xc9ae75);
+    const grassA = new THREE.Color(0x6a9a48);
+    const grassB = new THREE.Color(0x557f3a);
+    const grassC = new THREE.Color(0x7fa456);
+    const dirt = new THREE.Color(0xa0835a);
+    const dirtEdge = new THREE.Color(0x86683f);
+    const sand = new THREE.Color(0xd8c79a);
+    const wet = new THREE.Color(0xb09a70);
     const corrupt = new THREE.Color(0x6a4f86);
-    const stone = new THREE.Color(0xb9b2a2);
+    const stone = new THREE.Color(0xa29c8e);
     const { pond, ruins, spawns } = this.world;
     pos.push(0, 0, 0);
     col.push(dirt.r, dirt.g, dirt.b);
@@ -154,7 +210,7 @@ export class IslandStage implements Stage {
           grassy = 0;
         }
         const pdd = Math.hypot(x - pond.x, z - pond.z);
-        if (pdd < pond.r + 0.9) c.lerp(new THREE.Color(0x4f9a3a), 0.5);
+        if (pdd < pond.r + 0.9) c.lerp(new THREE.Color(0x456f34), 0.5);
         if (r > sr - 2.4) c.lerp(sand, Math.min(1, (r - sr + 2.4) / 1.2));
         if (r > sr + 0.2) c.lerp(wet, Math.min(1, (r - sr - 0.2) / 1.5));
         if (r > sr - 2.4) grassy = Math.min(grassy, Math.max(0, 1 - (r - sr + 2.4) / 1.2));
@@ -180,7 +236,7 @@ export class IslandStage implements Stage {
     geo.setIndex(idx);
     geo.computeVertexNormals();
     // Трава и песок смешиваются по атрибуту detail
-    const mat = new THREE.MeshToonMaterial({ color: 0xffffff, vertexColors: true, gradientMap: toon(0xffffff).gradientMap, map: grassTex() });
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, map: grassTex(), roughness: 0.95, metalness: 0, envMapIntensity: 0.6, normalMap: normalFor(grassTex(), 3), normalScale: new THREE.Vector2(0.7, 0.7) });
     mat.onBeforeCompile = (sh) => {
       sh.uniforms.sandMap = { value: sandTex() };
       sh.vertexShader = 'attribute float detail;\nvarying float vDetail;\n' + sh.vertexShader.replace('#include <begin_vertex>', '#include <begin_vertex>\nvDetail = detail;');
@@ -202,12 +258,12 @@ export class IslandStage implements Stage {
   }
 
   private buildWater() {
-    const water = new THREE.Mesh(new THREE.CircleGeometry(220, 64).rotateX(-Math.PI / 2), waterMaterial(0x1f6fb8, 0x4fd0e0, 34, 52));
+    const water = new THREE.Mesh(new THREE.CircleGeometry(220, 64).rotateX(-Math.PI / 2), waterMaterial(0x1a4560, 0x3a7f86, 34, 52));
     water.position.y = -0.45;
     this.scene.add(water);
     // Пруд
     const p = this.world.pond;
-    const pondM = new THREE.Mesh(new THREE.CircleGeometry(p.r, 40).rotateX(-Math.PI / 2), waterMaterial(0x2f86c8, 0x6fe0e8, 0, p.r * 1.5));
+    const pondM = new THREE.Mesh(new THREE.CircleGeometry(p.r, 40).rotateX(-Math.PI / 2), waterMaterial(0x24526a, 0x4a8a88, 0, p.r * 1.5));
     pondM.position.set(p.x, 0.04, p.z);
     this.scene.add(pondM);
     const rim = new THREE.Mesh(new THREE.RingGeometry(p.r - 0.1, p.r + 0.35, 40).rotateX(-Math.PI / 2), toon(0x8a6a3a));
@@ -218,7 +274,7 @@ export class IslandStage implements Stage {
     for (let i = 0; i < 6; i++) {
       const a = rng.range(0, Math.PI * 2);
       const d = rng.range(0.5, p.r - 0.6);
-      const pad = new THREE.Mesh(new THREE.CircleGeometry(0.35, 12, 0.3, Math.PI * 2 - 0.6).rotateX(-Math.PI / 2), toon(0x3f9a3a, { side: THREE.DoubleSide }));
+      const pad = new THREE.Mesh(new THREE.CircleGeometry(0.35, 12, 0.3, Math.PI * 2 - 0.6).rotateX(-Math.PI / 2), toon(0x3a6a30, { side: THREE.DoubleSide }));
       pad.position.set(p.x + Math.cos(a) * d, 0.07, p.z + Math.sin(a) * d);
       pad.rotation.y = rng.range(0, 6);
       this.scene.add(pad);
@@ -296,7 +352,7 @@ export class IslandStage implements Stage {
         m.castShadow = m.receiveShadow = true;
         addOutline(m, 0.04);
         g.add(m);
-        const moss = new THREE.Mesh(geo, toon(0x6fb04a, { map: leafTex() }));
+        const moss = new THREE.Mesh(geo, toon(0x5a8a3e, { map: leafTex() }));
         moss.scale.set(o.r * 0.85, o.r * 0.3, o.r * 0.8);
         moss.position.y = o.r * 0.75;
         moss.rotation.copy(m.rotation);
@@ -357,7 +413,7 @@ export class IslandStage implements Stage {
       }
       case 'tent': {
         const g = new THREE.Group();
-        const col = o.variant === 0 ? 0xe05a3a : 0x3a7ad0;
+        const col = o.variant === 0 ? 0xa84a3a : 0x3a5a8a;
         const tent = new THREE.Mesh(new THREE.ConeGeometry(1.5, 2.0, 4, 1), toon(col, { map: clothTex() }));
         tent.position.y = 1.0;
         tent.rotation.y = Math.PI / 4;
@@ -389,44 +445,59 @@ export class IslandStage implements Stage {
   private buildTrees(trees: Obstacle[]) {
     const byVar = [0, 1, 2].map((v) => trees.filter((t) => t.variant === v));
     const dummy = new THREE.Object3D();
-    const pineFoliage = mergeGeometries([
-      new THREE.ConeGeometry(1.5, 1.7, 9).translate(0, 1.9, 0),
-      new THREE.ConeGeometry(1.2, 1.5, 9).translate(0, 2.8, 0),
-      new THREE.ConeGeometry(0.85, 1.3, 9).translate(0, 3.6, 0),
-    ])!;
-    const oakFoliage = mergeGeometries([
-      new THREE.IcosahedronGeometry(1.25, 1).translate(0, 2.7, 0),
-      new THREE.IcosahedronGeometry(0.95, 1).translate(0.9, 2.3, 0.3),
-      new THREE.IcosahedronGeometry(0.9, 1).translate(-0.85, 2.4, -0.2),
-      new THREE.IcosahedronGeometry(0.85, 1).translate(0.1, 3.3, -0.6),
-      new THREE.IcosahedronGeometry(0.8, 1).translate(-0.2, 2.2, 0.9),
-    ])!;
-    const birchFoliage = mergeGeometries([
-      new THREE.IcosahedronGeometry(0.95, 1).translate(0, 3.0, 0),
-      new THREE.IcosahedronGeometry(0.75, 1).translate(0.55, 2.5, 0.2),
-      new THREE.IcosahedronGeometry(0.7, 1).translate(-0.5, 2.6, -0.1),
-      new THREE.IcosahedronGeometry(0.6, 1).translate(0, 3.7, 0.1),
-    ])!;
-    // Нормали «облаком» — мягкая заливка кроны
+    // Хвоя ярусами с рваными, чуть провисшими краями
+    const pineFoliage = organic(
+      mergeGeometries(
+        [0, 1, 2, 3, 4, 5].map((i) => new THREE.ConeGeometry(1.65 - i * 0.24, 1.25 - i * 0.05, 14, 2).translate(0, 1.55 + i * 0.5, 0).rotateY(i * 0.7)),
+      )!,
+      0.16,
+      0.5,
+      true,
+    );
+    // Лиственные кроны — много неровных комков разного размера
+    const lumps = (n: number, r: number, h: number, cy: number, seed: number) => {
+      const rr = new Rng(seed);
+      const parts: THREE.BufferGeometry[] = [new THREE.IcosahedronGeometry(r * 0.75, 1).translate(0, cy, 0)];
+      for (let i = 0; i < n; i++) {
+        const a = rr.range(0, Math.PI * 2);
+        const d = rr.range(0.35, 0.85) * r;
+        parts.push(new THREE.IcosahedronGeometry(r * rr.range(0.38, 0.6), 1).translate(Math.cos(a) * d, cy + rr.range(-0.45, 0.6) * h, Math.sin(a) * d));
+      }
+      return mergeGeometries(parts)!;
+    };
+    const oakFoliage = organic(lumps(11, 1.6, 1.2, 2.75, 7), 0.12, 0.42, false);
+    const birchFoliage = organic(lumps(8, 1.15, 1.3, 3.05, 11), 0.1, 0.48, false);
+    // Нормали — наполовину «облаком»: крона читается объёмом, но комки видны
     for (const g of [oakFoliage, birchFoliage]) {
       const p = g.attributes.position;
       const n = g.attributes.normal;
+      const v = new THREE.Vector3();
+      const m = new THREE.Vector3();
       for (let i = 0; i < p.count; i++) {
-        const v = new THREE.Vector3(p.getX(i), p.getY(i) - 2.8, p.getZ(i)).normalize();
-        n.setXYZ(i, v.x, v.y, v.z);
+        v.set(p.getX(i), p.getY(i) - 2.8, p.getZ(i)).normalize();
+        m.set(n.getX(i), n.getY(i), n.getZ(i)).lerp(v, 0.55).normalize();
+        n.setXYZ(i, m.x, m.y, m.z);
       }
     }
-    const trunkGeo = new THREE.CylinderGeometry(0.2, 0.32, 2.0, 8).translate(0, 1.0, 0);
-    const birchTrunk = new THREE.CylinderGeometry(0.15, 0.2, 2.6, 8).translate(0, 1.3, 0);
+    // Ствол с корневым расширением и парой сучьев в крону
+    const trunkGeo = mergeGeometries([
+      flare(new THREE.CylinderGeometry(0.17, 0.3, 2.2, 10, 4).translate(0, 1.1, 0), 0.45),
+      new THREE.CylinderGeometry(0.05, 0.1, 1.1, 6).rotateZ(-0.8).translate(0.4, 2.0, 0),
+      new THREE.CylinderGeometry(0.04, 0.09, 1.0, 6).rotateZ(0.9).rotateY(1.2).translate(-0.12, 2.15, -0.35),
+    ])!;
+    const birchTrunk = mergeGeometries([
+      flare(new THREE.CylinderGeometry(0.13, 0.2, 2.8, 10, 4).translate(0, 1.4, 0), 0.3),
+      new THREE.CylinderGeometry(0.035, 0.07, 0.9, 6).rotateZ(-0.7).translate(0.3, 2.3, 0),
+    ])!;
     const defs = [
-      { trees: byVar[0], foliage: pineFoliage, trunk: trunkGeo, fcol: [0x2f8a4a, 0x3a9a52, 0x2a7a46], tcol: 0x7a4a26 },
-      { trees: byVar[1], foliage: oakFoliage, trunk: trunkGeo, fcol: [0x5fbf4a, 0x6fcf52, 0x4faf42, 0x8fd04a], tcol: 0x80522a },
-      { trees: byVar[2], foliage: birchFoliage, trunk: birchTrunk, fcol: [0xb5d84a, 0xd8d04a, 0xa0d04f], tcol: 0xf2efe6 },
+      { trees: byVar[0], foliage: pineFoliage, trunk: trunkGeo, fcol: [0x2a5a3a, 0x30663f, 0x264f34], tcol: 0x7a4a26 },
+      { trees: byVar[1], foliage: oakFoliage, trunk: trunkGeo, fcol: [0x4a7a35, 0x568a3c, 0x3f6c30, 0x6a8a3c], tcol: 0x80522a },
+      { trees: byVar[2], foliage: birchFoliage, trunk: birchTrunk, fcol: [0x7a9038, 0x8f923a, 0x6a8636], tcol: 0xf2efe6 },
     ];
     const c = new THREE.Color();
     for (const d of defs) {
       if (d.trees.length === 0) continue;
-      const fMat = swayToon(0xffffff, 0.035, { map: leafTex() }, true);
+      const fMat = swayToon(0xffffff, 0.035, { map: leafTex(), vertexColors: true }, true);
       const foliage = new THREE.InstancedMesh(d.foliage, fMat, d.trees.length);
       const trunk = new THREE.InstancedMesh(d.trunk, toon(d.tcol, { map: barkTex() }), d.trees.length);
       d.trees.forEach((t, i) => {
@@ -463,14 +534,27 @@ export class IslandStage implements Stage {
     const dummy = new THREE.Object3D();
     const R = this.world.radius;
     // Трава
-    const tuft = mergeGeometries([
-      new THREE.ConeGeometry(0.07, 0.5, 3).translate(0, 0.25, 0),
-      new THREE.ConeGeometry(0.06, 0.4, 3).rotateZ(0.35).translate(0.08, 0.18, 0),
-      new THREE.ConeGeometry(0.06, 0.42, 3).rotateZ(-0.35).translate(-0.08, 0.19, 0.02),
-      new THREE.ConeGeometry(0.05, 0.35, 3).rotateX(0.35).translate(0, 0.16, 0.08),
-    ])!;
+    // Пучок тонких изогнутых травинок: тёмные у земли, светлые на концах
+    const blades: THREE.BufferGeometry[] = [];
+    for (let i = 0; i < 7; i++) {
+      const a = i * 2.4;
+      const h = 0.32 + ((i * 37) % 10) * 0.025;
+      const tilt = 0.15 + ((i * 53) % 7) * 0.05;
+      blades.push(new THREE.ConeGeometry(0.028, h, 3, 1, true).translate(0, h / 2, 0).rotateZ(tilt).rotateY(a).translate(Math.cos(a) * 0.05, 0, Math.sin(a) * 0.05));
+    }
+    const tuft = mergeGeometries(blades)!;
+    {
+      const p = tuft.attributes.position;
+      const col = new Float32Array(p.count * 3);
+      for (let i = 0; i < p.count; i++) {
+        const k = 0.45 + 0.6 * Math.min(1, p.getY(i) / 0.45);
+        col[i * 3] = col[i * 3 + 1] = k;
+        col[i * 3 + 2] = k * 0.9;
+      }
+      tuft.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    }
     const grassN = 2200;
-    const grass = new THREE.InstancedMesh(tuft, swayToon(0xffffff, 0.25), grassN);
+    const grass = new THREE.InstancedMesh(tuft, swayToon(0xffffff, 0.25, { vertexColors: true, side: THREE.DoubleSide }), grassN);
     const gc = new THREE.Color();
     let n = 0;
     for (let tries = 0; tries < grassN * 3 && n < grassN; tries++) {
@@ -485,7 +569,7 @@ export class IslandStage implements Stage {
       dummy.scale.setScalar(rng.range(0.7, 1.4));
       dummy.updateMatrix();
       grass.setMatrixAt(n, dummy.matrix);
-      grass.setColorAt(n, gc.set(rng.pick([0x5fb447, 0x74c752, 0x8ad35e, 0x4fa83f])));
+      grass.setColorAt(n, gc.set(rng.pick([0x557f3a, 0x648c44, 0x76994e, 0x4a7535])));
       n++;
     }
     grass.count = n;
@@ -495,9 +579,9 @@ export class IslandStage implements Stage {
     // Цветы
     const flowerN = 420;
     const stems = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.015, 0.02, 0.35, 4).translate(0, 0.17, 0), toon(0x4f9a3a), flowerN);
-    const heads = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.09, 0).translate(0, 0.38, 0), toon(0xffffff), flowerN);
-    const centers = new THREE.InstancedMesh(new THREE.SphereGeometry(0.04, 6, 4).translate(0, 0.42, 0.03), toon(0xffd54a), flowerN);
-    const fcolors = [0xff6a8a, 0xffe14a, 0xffffff, 0xb07aff, 0x6ab8ff, 0xff9a3a];
+    const heads = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.065, 1).translate(0, 0.37, 0), toon(0xffffff), flowerN);
+    const centers = new THREE.InstancedMesh(new THREE.SphereGeometry(0.028, 6, 4).translate(0, 0.4, 0.03), toon(0xffd54a), flowerN);
+    const fcolors = [0xc85a6a, 0xe0c040, 0xeeeee6, 0x9a6ad0, 0x5a90d0, 0xd08a3a];
     n = 0;
     for (let tries = 0; tries < flowerN * 4 && n < flowerN; tries++) {
       // Цветы растут полянками
@@ -554,7 +638,7 @@ export class IslandStage implements Stage {
       dummy.scale.setScalar(rng.range(0.7, 1.2));
       dummy.updateMatrix();
       bushes.setMatrixAt(n, dummy.matrix);
-      bushes.setColorAt(n, gc.set(rng.pick([0x3f9a3a, 0x4fae42, 0x358a3a])));
+      bushes.setColorAt(n, gc.set(rng.pick([0x3a6a30, 0x447a36, 0x335f2c])));
       if (rng.chance(0.35)) berries.setMatrixAt(nb++, dummy.matrix);
       n++;
     }
@@ -580,7 +664,7 @@ export class IslandStage implements Stage {
       dummy.updateMatrix();
       caps.setMatrixAt(n, dummy.matrix);
       mstems.setMatrixAt(n, dummy.matrix);
-      caps.setColorAt(n, gc.set(rng.pick([0xe0453a, 0xe0453a, 0xd98a3a, 0x9a6ad0])));
+      caps.setColorAt(n, gc.set(rng.pick([0xb8453a, 0xb8453a, 0xb07a40, 0x8a6a5a])));
       n++;
     }
     caps.count = mstems.count = n;
@@ -737,14 +821,14 @@ export class IslandStage implements Stage {
       const d = rng.range(55, 75);
       const g = new THREE.Group();
       const r = rng.range(3, 7);
-      const isle = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.3, 1.6, 12), toon(0x6fbf4a));
+      const isle = new THREE.Mesh(new THREE.CylinderGeometry(r, r * 1.3, 1.6, 12), toon(0x5a8a40));
       isle.position.y = -0.3;
       g.add(isle);
-      const sand = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.3, r * 1.45, 0.4, 12), toon(0xf0dca0));
+      const sand = new THREE.Mesh(new THREE.CylinderGeometry(r * 1.3, r * 1.45, 0.4, 12), toon(0xd8c79a));
       sand.position.y = -0.95;
       g.add(sand);
       for (let k = 0; k < Math.round(r); k++) {
-        const t = new THREE.Mesh(G.cone(0.9, 2.4, 7), toon(0x2f8a4a));
+        const t = new THREE.Mesh(G.cone(0.9, 2.4, 7), toon(0x2a5a3a));
         t.position.set(rng.range(-r * 0.6, r * 0.6), 1.5, rng.range(-r * 0.6, r * 0.6));
         g.add(t);
       }

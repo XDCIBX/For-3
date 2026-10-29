@@ -20,8 +20,8 @@ interface Part {
 }
 
 function canBake(m: THREE.Mesh): boolean {
-  const mat = m.material as THREE.MeshToonMaterial;
-  if (Array.isArray(mat) || !mat || !(mat as THREE.Material & { isMeshToonMaterial?: boolean }).isMeshToonMaterial) return false;
+  const mat = m.material as THREE.MeshStandardMaterial;
+  if (Array.isArray(mat) || !mat || !(mat as THREE.Material & { isMeshStandardMaterial?: boolean }).isMeshStandardMaterial) return false;
   if (mat.transparent || mat.vertexColors || mat.emissive.getHex() !== 0) return false;
   if (m.userData.noBake || m.name === 'outline' || !m.visible) return false;
   return !!m.geometry.attributes.normal;
@@ -64,7 +64,10 @@ function collect(group: THREE.Object3D, out: Part[], groups: THREE.Object3D[]) {
 
 function buildGeometry(parts: Part[], withUv: boolean): THREE.BufferGeometry {
   const key = parts
-    .map((p) => `${p.mesh.geometry.uuid}:${(p.mesh.material as THREE.MeshToonMaterial).color.getHexString()}:${p.matrix.elements.map((e) => e.toFixed(3)).join(',')}`)
+    .map((p) => {
+      const mt = p.mesh.material as THREE.MeshStandardMaterial;
+      return `${p.mesh.geometry.uuid}:${mt.color.getHexString()}:${mt.roughness}:${mt.metalness}:${p.matrix.elements.map((e) => e.toFixed(3)).join(',')}`;
+    })
     .join('|') + (withUv ? 'uv' : '');
   let g = geoCache.get(key);
   if (g) return g;
@@ -77,11 +80,16 @@ function buildGeometry(parts: Part[], withUv: boolean): THREE.BufferGeometry {
     else if (withUv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(src.attributes.position.count * 2), 2));
     if (src.index) geo.setIndex(src.index.clone());
     geo.applyMatrix4(p.matrix);
-    tmpColor.copy((p.mesh.material as THREE.MeshToonMaterial).color);
+    tmpColor.copy((p.mesh.material as THREE.MeshStandardMaterial).color);
     const n = geo.attributes.position.count;
     const col = new Float32Array(n * 3);
     for (let i = 0; i < n; i++) col.set([tmpColor.r, tmpColor.g, tmpColor.b], i * 3);
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    // Шероховатость и металличность детали — в вершины (см. pbrAttr в toon.ts)
+    const mt = p.mesh.material as THREE.MeshStandardMaterial;
+    const pbr = new Float32Array(n * 2);
+    for (let i = 0; i < n; i++) pbr.set([mt.roughness, mt.metalness], i * 2);
+    geo.setAttribute('pbr', new THREE.BufferAttribute(pbr, 2));
     return geo;
   });
   // Индексированные и неиндексированные геометрии не смешиваются — приводим к одному виду
@@ -102,15 +110,15 @@ function bakeGroup(group: THREE.Object3D) {
     // Корзины: (текстура) × (с контуром / без)
     const buckets = new Map<string, Part[]>();
     for (const p of parts) {
-      const map = (p.mesh.material as THREE.MeshToonMaterial).map;
+      const map = (p.mesh.material as THREE.MeshStandardMaterial).map;
       const key = `${map?.uuid ?? '-'}|${p.outline > 0}`;
       let b = buckets.get(key);
       if (!b) buckets.set(key, (b = []));
       b.push(p);
     }
     for (const b of buckets.values()) {
-      const map = (b[0].mesh.material as THREE.MeshToonMaterial).map ?? undefined;
-      const merged = new THREE.Mesh(buildGeometry(b, !!map), toon(0xffffff, { vertexColors: true, map }));
+      const map = (b[0].mesh.material as THREE.MeshStandardMaterial).map ?? undefined;
+      const merged = new THREE.Mesh(buildGeometry(b, !!map), toon(0xffffff, { vertexColors: true, map, pbrAttr: true }));
       merged.userData.baked = true;
       merged.raycast = () => {};
       const ol = b.reduce((s, p) => s + p.outline, 0) / b.length;
@@ -166,7 +174,7 @@ export function bakeStatic(root: THREE.Object3D, chunk = 12) {
     m.getWorldPosition(pos);
     const cx = Math.floor(pos.x / chunk);
     const cz = Math.floor(pos.z / chunk);
-    const map = (m.material as THREE.MeshToonMaterial).map;
+    const map = (m.material as THREE.MeshStandardMaterial).map;
     const ol = outlineOf(m);
     const key = `${cx},${cz}|${map?.uuid ?? '-'}|${ol > 0}|${m.castShadow}|${m.receiveShadow}`;
     let g = groups.get(key);
@@ -176,8 +184,8 @@ export function bakeStatic(root: THREE.Object3D, chunk = 12) {
   });
   for (const parts of groups.values()) {
     if (parts.length < 2) continue;
-    const map = (parts[0].mesh.material as THREE.MeshToonMaterial).map ?? undefined;
-    const merged = new THREE.Mesh(buildGeometry(parts, !!map), toon(0xffffff, { vertexColors: true, map }));
+    const map = (parts[0].mesh.material as THREE.MeshStandardMaterial).map ?? undefined;
+    const merged = new THREE.Mesh(buildGeometry(parts, !!map), toon(0xffffff, { vertexColors: true, map, pbrAttr: true }));
     merged.userData.baked = true;
     merged.raycast = () => {};
     const ol = parts.reduce((s, p) => s + p.outline, 0) / parts.length;

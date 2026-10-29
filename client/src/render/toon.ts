@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { normalFor } from './textures';
 
 /** Ступенчатая карта освещения — мультяшный «cel-shading». */
 function makeGradient(): THREE.DataTexture {
@@ -18,28 +19,6 @@ export const OUTLINE_COLOR = new THREE.Color(0x24160f);
 
 const cache = new Map<string, THREE.Material>();
 
-/**
- * Мягкий контровой свет по краю силуэта: фигуры и предметы «отрываются» от фона.
- * Одна общая правка шейдера — число программ и отрисовок не растёт.
- */
-export const RIM = { color: { value: new THREE.Color(0xfff2d8) }, strength: { value: 0.45 } };
-function withRim(m: THREE.MeshToonMaterial): THREE.MeshToonMaterial {
-  m.onBeforeCompile = (sh) => {
-    sh.uniforms.rimColor = RIM.color;
-    sh.uniforms.rimStrength = RIM.strength;
-    sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nuniform vec3 rimColor;\nuniform float rimStrength;')
-      .replace(
-        '#include <opaque_fragment>',
-        `float rimF = 1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0);
-        outgoingLight += rimColor * smoothstep(0.55, 0.75, rimF) * rimStrength * (0.55 + 0.45 * diffuseColor.rgb);
-        #include <opaque_fragment>`,
-      );
-  };
-  m.customProgramCacheKey = () => 'toon-rim';
-  return m;
-}
-
 export interface ToonOpts {
   emissive?: THREE.ColorRepresentation;
   emissiveIntensity?: number;
@@ -49,15 +28,53 @@ export interface ToonOpts {
   vertexColors?: boolean;
   /** Текстура деталей (умножается на цвет). */
   map?: THREE.Texture;
+  /** Явно задать металличность и шероховатость (иначе — по палитре). */
+  metal?: number;
+  rough?: number;
+  /** Для склеенных моделей: шероховатость/металл берутся из вершин. */
+  pbrAttr?: boolean;
 }
 
-export function toon(color: THREE.ColorRepresentation, o: ToonOpts = {}): THREE.MeshToonMaterial {
-  const key = `${new THREE.Color(color).getHexString()}|${o.emissive ?? ''}|${o.emissiveIntensity ?? ''}|${o.transparent ?? ''}|${o.opacity ?? ''}|${o.side ?? ''}|${o.vertexColors ?? ''}|${o.map?.uuid ?? ''}`;
-  let m = cache.get(key) as THREE.MeshToonMaterial | undefined;
+/**
+ * Реалистичная поверхность: металл блестит и отражает небо, кожа и ткань матовые.
+ * Тип поверхности определяется по палитре (металлы, кожа) и текстуре (ткань, дерево, камень).
+ */
+const METAL_HEX = new Set([
+  0xd6dde3, 0x9fd4ff, 0xd4a6ff, 0xffe07a, 0xff7a6a, 0xffc93c, 0xffd54a, 0xffcf4a, 0xc7ced6, 0x8a96a0, 0x6d7680, 0x4a4a52, 0x6a6e76,
+  0x8a8e96, 0xc8a24a, 0xa8822a, 0xb8c2cc, 0xcfd8dc, 0xa9b4bf, 0x7aa6d8, 0x8e62c9, 0xe7b84a, 0x6a1c22, 0x9aa6b2, 0x5b8fd0, 0x8a5ac7,
+  0xf0c04a, 0x7d8894, 0x8e9aa6, 0xe0e8f0, 0x6a6a6a, 0xd8dee4, 0xfff0a0, 0x6f7b85, 0x3a3a42,
+]);
+const SKIN_HEX = new Set([0xffd3ac, 0xf5b98f, 0xe8b890, 0xffd0a8]);
+const ROUGH_BY_TEX: Record<string, number> = { cloth: 0.95, wood: 0.85, bark: 0.92, rock: 0.9, stone: 0.88, leaf: 0.8, grass: 0.95 };
+
+/** Приглушаем «конфетные» цвета: чуть меньше насыщенности и яркости — ближе к натуральным. */
+export function natural(c: THREE.Color): THREE.Color {
+  const l = c.r * 0.3 + c.g * 0.59 + c.b * 0.11;
+  return c.setRGB(l + (c.r - l) * 0.8, l + (c.g - l) * 0.8, l + (c.b - l) * 0.8).multiplyScalar(0.94);
+}
+
+export interface Surface {
+  rough: number;
+  metal: number;
+}
+export function surfaceOf(hex: number, o: ToonOpts = {}): Surface {
+  if (o.metal !== undefined) return { metal: o.metal, rough: o.rough ?? 0.35 };
+  if (METAL_HEX.has(hex)) return { metal: 0.85, rough: o.rough ?? (hex === 0xffc93c || hex === 0xffd54a ? 0.3 : 0.38) };
+  if (SKIN_HEX.has(hex)) return { metal: 0, rough: 0.55 };
+  const texRough = o.map ? ROUGH_BY_TEX[(o.map.name || '').replace(/[^a-z]/g, '')] : undefined;
+  return { metal: 0, rough: o.rough ?? texRough ?? 0.72 };
+}
+
+export function toon(color: THREE.ColorRepresentation, o: ToonOpts = {}): THREE.MeshStandardMaterial {
+  const key = `${new THREE.Color(color).getHexString()}|${o.emissive ?? ''}|${o.emissiveIntensity ?? ''}|${o.transparent ?? ''}|${o.opacity ?? ''}|${o.side ?? ''}|${o.vertexColors ?? ''}|${o.map?.uuid ?? ''}|${o.metal ?? ''}|${o.rough ?? ''}|${o.pbrAttr ?? ''}`;
+  let m = cache.get(key) as THREE.MeshStandardMaterial | undefined;
   if (!m) {
-    m = new THREE.MeshToonMaterial({
-      color,
-      gradientMap: GRADIENT,
+    const hex = new THREE.Color(color).getHex();
+    const sf = surfaceOf(hex, o);
+    m = new THREE.MeshStandardMaterial({
+      color: o.vertexColors ? new THREE.Color(color) : natural(new THREE.Color(color)),
+      roughness: sf.rough,
+      metalness: sf.metal,
       emissive: o.emissive ?? 0x000000,
       emissiveIntensity: o.emissiveIntensity ?? 1,
       transparent: o.transparent ?? false,
@@ -65,11 +82,34 @@ export function toon(color: THREE.ColorRepresentation, o: ToonOpts = {}): THREE.
       side: o.side ?? THREE.FrontSide,
       vertexColors: o.vertexColors ?? false,
       map: o.map ?? null,
+      normalMap: o.map ? normalFor(o.map) : null,
+      envMapIntensity: 0.55,
     });
-    withRim(m);
+    m.userData.surface = sf;
+    // Исходный цвет из палитры (до приглушения) — по нему ищут материалы, например для текстур
+    m.userData.hex = hex;
+    if (m.normalMap) m.normalScale.set(0.6, 0.6);
+    if (o.pbrAttr) withPbrAttr(m);
     cache.set(key, m);
   }
   return m;
+}
+
+/**
+ * Склеенные модели хранят шероховатость и металличность каждой детали в вершинах
+ * (атрибут pbr) — один меш, но меч блестит, а плащ остаётся матовым.
+ */
+function withPbrAttr(m: THREE.MeshStandardMaterial) {
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nattribute vec2 pbr;\nvarying vec2 vPbr;')
+      .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPbr = pbr;');
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying vec2 vPbr;')
+      .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vPbr.x;')
+      .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = vPbr.y;');
+  };
+  m.customProgramCacheKey = () => 'pbr-attr';
 }
 
 const basicCache = new Map<string, THREE.MeshBasicMaterial>();
@@ -83,6 +123,7 @@ export function glow(color: THREE.ColorRepresentation, opacity = 1, additive = t
       opacity,
       blending: additive ? THREE.AdditiveBlending : THREE.NormalBlending,
       depthWrite: false,
+      toneMapped: false,
     });
     basicCache.set(key, m);
   }
@@ -158,8 +199,12 @@ export function outlineMaterial(thickness: number, sway = 0, fade = false) {
 }
 
 /** Тун-материал с покачиванием на ветру (для крон деревьев, травы). fade — просвечивание перед героем. */
-export function swayToon(color: THREE.ColorRepresentation, amount: number, opts: THREE.MeshToonMaterialParameters = {}, fade = false): THREE.MeshToonMaterial {
-  const m = new THREE.MeshToonMaterial({ color, gradientMap: GRADIENT, ...opts });
+export function swayToon(color: THREE.ColorRepresentation, amount: number, opts: THREE.MeshStandardMaterialParameters = {}, fade = false): THREE.MeshStandardMaterial {
+  const m = new THREE.MeshStandardMaterial({ color: natural(new THREE.Color(color)), roughness: 0.82, metalness: 0, envMapIntensity: 0.7, ...opts });
+  if (opts.map && !opts.normalMap) {
+    m.normalMap = normalFor(opts.map);
+    m.normalScale.set(0.5, 0.5);
+  }
   m.onBeforeCompile = (sh) => {
     sh.uniforms.time = TIME;
     sh.uniforms.focus = FOCUS;
@@ -203,7 +248,14 @@ export function swayToon(color: THREE.ColorRepresentation, amount: number, opts:
 }
 
 /** Инстансированная копия-контур для InstancedMesh. */
-export function instancedOutline(mesh: THREE.InstancedMesh, thickness = 0.04, sway = 0, fade = false): THREE.InstancedMesh {
+/**
+ * Мультяшный контур выключен: реалистичный рендер обходится без чёрной обводки
+ * (и экономит отрисовку на каждый склеенный меш). Функции оставлены, чтобы
+ * не трогать сотни мест сборки моделей.
+ */
+export const OUTLINES = false;
+export function instancedOutline(mesh: THREE.InstancedMesh, thickness = 0.04, sway = 0, fade = false): THREE.Object3D {
+  if (!OUTLINES) return new THREE.Group();
   const o = new THREE.InstancedMesh(mesh.geometry, outlineMaterial(thickness, sway, fade), mesh.count);
   o.instanceMatrix = mesh.instanceMatrix;
   o.frustumCulled = false;
@@ -211,6 +263,7 @@ export function instancedOutline(mesh: THREE.InstancedMesh, thickness = 0.04, sw
 }
 
 export function addOutline<T extends THREE.Mesh>(mesh: T, thickness = 0.035): T {
+  if (!OUTLINES) return mesh;
   const o = new THREE.Mesh(mesh.geometry, outlineMaterial(thickness));
   o.name = 'outline';
   o.raycast = () => {};

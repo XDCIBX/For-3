@@ -21,9 +21,52 @@ function make(key: string, size: number, draw: Draw, repeat = true): THREE.Canva
   t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
   t.anisotropy = 4;
+  t.name = key;
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
   cache.set(key, t);
   return t;
+}
+
+const normalCache = new Map<string, THREE.Texture>();
+/**
+ * Карта нормалей из яркости текстуры (тёмное — углубления): ткань, кора, камень
+ * получают объём от освещения. Считается один раз на текстуру.
+ */
+export function normalFor(tex: THREE.Texture, strength = 2.2): THREE.Texture | null {
+  const img = tex.image as HTMLCanvasElement | undefined;
+  if (!img || !(img instanceof HTMLCanvasElement)) return null;
+  const key = tex.uuid;
+  let n = normalCache.get(key);
+  if (n) return n;
+  const w = img.width;
+  const h = img.height;
+  const src = img.getContext('2d')!.getImageData(0, 0, w, h).data;
+  const lum = new Float32Array(w * h);
+  for (let i = 0; i < w * h; i++) lum[i] = (src[i * 4] * 0.3 + src[i * 4 + 1] * 0.59 + src[i * 4 + 2] * 0.11) / 255;
+  const c = document.createElement('canvas');
+  c.width = w;
+  c.height = h;
+  const g = c.getContext('2d')!;
+  const out = g.createImageData(w, h);
+  const at = (x: number, y: number) => lum[((y + h) % h) * w + ((x + w) % w)];
+  for (let y = 0; y < h; y++)
+    for (let x = 0; x < w; x++) {
+      const dx = (at(x + 1, y) - at(x - 1, y)) * strength;
+      const dy = (at(x, y + 1) - at(x, y - 1)) * strength;
+      const l = Math.hypot(dx, dy, 1);
+      const o = (y * w + x) * 4;
+      out.data[o] = ((-dx / l) * 0.5 + 0.5) * 255;
+      out.data[o + 1] = ((dy / l) * 0.5 + 0.5) * 255;
+      out.data[o + 2] = ((1 / l) * 0.5 + 0.5) * 255;
+      out.data[o + 3] = 255;
+    }
+  g.putImageData(out, 0, 0);
+  n = new THREE.CanvasTexture(c);
+  n.wrapS = tex.wrapS;
+  n.wrapT = tex.wrapT;
+  n.repeat.copy(tex.repeat);
+  normalCache.set(key, n);
+  return n;
 }
 
 const grey = (v: number, a = 1) => {
@@ -563,10 +606,11 @@ export function repeated(tex: THREE.Texture, rx: number, ry: number): THREE.Text
 export function texturize(root: THREE.Object3D, table: Record<number, THREE.Texture>, make: (hex: number, map: THREE.Texture) => THREE.Material) {
   root.traverse((o) => {
     const m = o as THREE.Mesh;
-    const mat = m.material as THREE.MeshToonMaterial | undefined;
-    if (!m.isMesh || !mat || !(mat as THREE.Material & { isMeshToonMaterial?: boolean }).isMeshToonMaterial) return;
+    const mat = m.material as THREE.MeshStandardMaterial | undefined;
+    if (!m.isMesh || !mat || !(mat as THREE.Material & { isMeshStandardMaterial?: boolean }).isMeshStandardMaterial) return;
     if (mat.map || mat.transparent || mat.vertexColors || mat.emissive.getHex() !== 0) return;
-    const tex = table[mat.color.getHex()];
-    if (tex) m.material = make(mat.color.getHex(), tex);
+    const hex = (mat.userData.hex as number | undefined) ?? mat.color.getHex();
+    const tex = table[hex];
+    if (tex) m.material = make(hex, tex);
   });
 }

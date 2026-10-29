@@ -27,6 +27,37 @@ export function skyTexture(top: string, mid: string, bottom: string): THREE.Text
   return t;
 }
 
+/**
+ * Окружение для отражений и рассеянного света: процедурное небо
+ * (верх, горизонт, низ и яркое пятно солнца), свёрнутое в PMREM один раз на сцену.
+ */
+export function makeEnvironment(renderer: THREE.WebGLRenderer, top: string, horizon: string, bottom: string, sun: string, sunAt: [number, number] = [0.3, 0.32]): THREE.Texture {
+  const c = document.createElement('canvas');
+  c.width = 256;
+  c.height = 128;
+  const g = c.getContext('2d')!;
+  const gr = g.createLinearGradient(0, 0, 0, 128);
+  gr.addColorStop(0, top);
+  gr.addColorStop(0.48, horizon);
+  gr.addColorStop(0.52, horizon);
+  gr.addColorStop(1, bottom);
+  g.fillStyle = gr;
+  g.fillRect(0, 0, 256, 128);
+  const sg = g.createRadialGradient(sunAt[0] * 256, sunAt[1] * 128, 0, sunAt[0] * 256, sunAt[1] * 128, 34);
+  sg.addColorStop(0, sun);
+  sg.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = sg;
+  g.fillRect(0, 0, 256, 128);
+  const tex = new THREE.CanvasTexture(c);
+  tex.mapping = THREE.EquirectangularReflectionMapping;
+  tex.colorSpace = THREE.SRGBColorSpace;
+  const pm = new THREE.PMREMGenerator(renderer);
+  const env = pm.fromEquirectangular(tex).texture;
+  pm.dispose();
+  tex.dispose();
+  return env;
+}
+
 export function makeSun(intensity: number, color: number, pos: [number, number, number], extent: number, mapSize: number): THREE.DirectionalLight {
   const sun = new THREE.DirectionalLight(color, intensity);
   sun.position.set(...pos);
@@ -48,39 +79,52 @@ export function makeSun(intensity: number, color: number, pos: [number, number, 
 /** Стилизованная вода: глубина, блики, пена у берега. */
 export function waterMaterial(deep: number, shallow: number, shoreR: number, fadeR: number): THREE.ShaderMaterial {
   return new THREE.ShaderMaterial({
+    fog: true,
     uniforms: {
+      ...THREE.UniformsUtils.clone(THREE.UniformsLib.fog),
       time: TIME,
       deep: { value: new THREE.Color(deep) },
       shallow: { value: new THREE.Color(shallow) },
+      sky: { value: new THREE.Color(0xb8cad6) },
       shoreR: { value: shoreR },
       fadeR: { value: fadeR },
     },
     vertexShader: /* glsl */ `
       varying vec3 vW;
+      #include <fog_pars_vertex>
       void main() {
         vec4 w = modelMatrix * vec4(position, 1.0);
         vW = w.xyz;
-        gl_Position = projectionMatrix * viewMatrix * w;
+        vec4 mvPosition = viewMatrix * w;
+        gl_Position = projectionMatrix * mvPosition;
+        #include <fog_vertex>
       }`,
     fragmentShader: /* glsl */ `
       uniform float time;
       uniform vec3 deep;
       uniform vec3 shallow;
+      uniform vec3 sky;
       uniform float shoreR;
       uniform float fadeR;
       varying vec3 vW;
+      #include <fog_pars_fragment>
       void main() {
         float r = length(vW.xz);
         float k = 1.0 - smoothstep(shoreR, fadeR, r);
         vec3 col = mix(deep, shallow, k * k);
-        float w1 = sin(vW.x * 0.55 + time * 1.1) * sin(vW.z * 0.48 - time * 0.9);
-        float w2 = sin((vW.x - vW.z) * 1.1 + time * 1.7) * 0.5 + 0.5;
-        float band = smoothstep(0.55, 0.62, w1 * 0.55 + w2 * 0.45);
-        col = mix(col, col * 1.25 + vec3(0.06), band * 0.55);
-        float sparkle = smoothstep(0.985, 1.0, sin(vW.x * 2.3 + time * 2.5) * sin(vW.z * 2.1 - time * 2.0));
-        col += sparkle * 0.6;
+        // Рябь: возмущённая нормаль, отражение неба по Френелю и блик солнца
+        float nx = cos(vW.x * 0.55 + time * 1.1) * 0.5 + cos((vW.x - vW.z) * 1.3 + time * 1.7) * 0.35 + cos(vW.x * 2.1 - time * 2.2) * 0.12;
+        float nz = cos(vW.z * 0.48 - time * 0.9) * 0.5 - cos((vW.x - vW.z) * 1.3 + time * 1.7) * 0.35 + cos(vW.z * 1.9 + time * 2.0) * 0.12;
+        vec3 n = normalize(vec3(nx * 0.12, 1.0, nz * 0.12));
+        vec3 v = normalize(cameraPosition - vW);
+        float fres = pow(1.0 - max(dot(n, v), 0.0), 4.0);
+        col = mix(col, sky, clamp(0.12 + fres * 0.8, 0.0, 0.85));
+        vec3 h = normalize(v + normalize(vec3(-0.45, 0.8, 0.38)));
+        col += vec3(1.0, 0.95, 0.85) * pow(max(dot(n, h), 0.0), 220.0) * 1.6;
         gl_FragColor = vec4(col, 1.0);
+        #include <tonemapping_fragment>
         #include <colorspace_fragment>
+        #include <fog_fragment>
       }`,
   });
 }

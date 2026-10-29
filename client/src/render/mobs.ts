@@ -68,8 +68,9 @@ function eyePair(head: THREE.Group, x: number, y: number, z: number, r: number, 
   for (const s of [-1, 1]) {
     const e = new THREE.Mesh(G.sphere(r, 12, 8), toon(iris));
     e.position.set(s * x, y, z);
-    e.scale.set(1, 1.1, 0.6);
-    const p = new THREE.Mesh(G.sphere(r * 0.5, 8, 6), toon(pupil));
+    e.scale.set(1, 0.6, 0.5);
+    const p = new THREE.Mesh(G.sphere(r * 0.45, 8, 6), toon(pupil, { rough: 0.15 }));
+    p.scale.set(0.6, 1, 1);
     p.position.set(s * x, y - r * 0.1, z + r * 0.4);
     head.add(e, p);
     if (angry) {
@@ -77,6 +78,12 @@ function eyePair(head: THREE.Group, x: number, y: number, z: number, r: number, 
       head.add(brow);
     }
   }
+}
+
+/** Голова поменьше — пропорции ближе к реальным. */
+function shrinkHead(r: Rig, headR: number, k: number) {
+  r.head.scale.setScalar(k);
+  r.head.position.y -= headR * 0.85 * (1 - k);
 }
 
 function biped(o: { skin: number; torsoCol: number; legCol: number; bodyR: number; bodyH: number; headR: number; legLen: number; armLen: number; armR: number; hipW: number }): Rig {
@@ -153,23 +160,22 @@ export class MobModel {
     let scale = 1;
     switch (kind) {
       case 'slime': {
-        const hue = [0x6fd64a, 0x4ab8e8, 0xe86ab8][Math.floor(Math.random() * 3)];
+        const hue = [0x5a8a3a, 0x3a7290, 0x7a4a6a][Math.floor(Math.random() * 3)];
         const g = new THREE.Group();
-        const blob = new THREE.Mesh(G.sphere(0.55, 20, 14), toon(hue, { transparent: true, opacity: 0.88 }));
+        // Студенистая масса: блестящая, полупрозрачная, с ядром и обломками внутри
+        const blob = new THREE.Mesh(G.sphere(0.55, 24, 16), toon(hue, { transparent: true, opacity: 0.78, rough: 0.12 }));
         blob.scale.set(1, 0.8, 1);
         blob.position.y = 0.44;
-        addOutline(blob, 0.035);
-        const core = new THREE.Mesh(G.sphere(0.25, 12, 8), toon(new THREE.Color(hue).multiplyScalar(0.6)));
-        core.position.y = 0.38;
-        const shine = new THREE.Mesh(G.sphere(0.1, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.8 }));
-        shine.position.set(-0.22, 0.72, 0.25);
-        shine.scale.set(1, 0.6, 0.5);
-        const face = new THREE.Group();
-        face.position.set(0, 0.5, 0.47);
-        eyePair(face, 0.15, 0.05, 0, 0.09, 0xffffff);
-        const mouth = part(G.torus(0.07, 0.02, Math.PI, 6, 10), 0x1a1210, { pos: [0, -0.1, 0.02], rot: [0, 0, Math.PI], outline: false });
-        face.add(mouth);
-        g.add(blob, core, shine, face);
+        const core = new THREE.Mesh(G.sphere(0.25, 12, 8), toon(new THREE.Color(hue).multiplyScalar(0.45).getHex(), { rough: 0.4 }));
+        core.position.y = 0.36;
+        g.add(blob, core);
+        for (let i = 0; i < 4; i++) {
+          const a = i * 1.7;
+          const bit = new THREE.Mesh(i % 2 ? G.box(0.1, 0.04, 0.04) : G.ico(0.05, 0), toon(i % 2 ? 0xcfc4a8 : 0x5a5248));
+          bit.position.set(Math.cos(a) * 0.28, 0.3 + (i % 3) * 0.12, Math.sin(a) * 0.28);
+          bit.rotation.set(a, a * 0.7, 0);
+          g.add(bit);
+        }
         g.userData.anim = true;
         this.slime = g;
         this.inner.add(g);
@@ -178,8 +184,9 @@ export class MobModel {
         break;
       }
       case 'goblin': {
-        const skin = 0x86c64f;
-        const r = biped({ skin, torsoCol: 0x8a5a33, legCol: 0x5d4027, bodyR: 0.22, bodyH: 0.15, headR: 0.3, legLen: 0.36, armLen: 0.38, armR: 0.065, hipW: 0.1 });
+        const skin = 0x7a8f4a;
+        const r = biped({ skin, torsoCol: 0x6a4a30, legCol: 0x4d3a27, bodyR: 0.2, bodyH: 0.24, headR: 0.3, legLen: 0.52, armLen: 0.5, armR: 0.06, hipW: 0.1 });
+        shrinkHead(r, 0.3, 0.72);
         const head = part(G.sphere(0.3, 16, 12), skin, { outline: 0.03 });
         head.scale.set(1.15, 0.95, 1);
         r.head.add(head);
@@ -201,12 +208,13 @@ export class MobModel {
         r.handR.add(club);
         this.rig = r;
         this.inner.add(r.body);
-        height = 1.35;
+        height = 1.5;
         break;
       }
       case 'skeleton': {
-        const bone = 0xf2ebd6;
-        const r = biped({ skin: bone, torsoCol: 0x4a4038, legCol: bone, bodyR: 0.17, bodyH: 0.2, headR: 0.28, legLen: 0.45, armLen: 0.42, armR: 0.045, hipW: 0.1 });
+        const bone = 0xd8ceb4;
+        const r = biped({ skin: bone, torsoCol: 0x3a342e, legCol: bone, bodyR: 0.16, bodyH: 0.32, headR: 0.28, legLen: 0.64, armLen: 0.56, armR: 0.04, hipW: 0.1 });
+        shrinkHead(r, 0.28, 0.7);
         // Рёбра поверх торса
         for (let i = 0; i < 3; i++) r.torso.add(part(G.torus(0.17 - i * 0.015, 0.025, Math.PI * 2, 4, 14), bone, { pos: [0, 0.26 + i * 0.1, 0], rot: [Math.PI / 2, 0, 0], scale: [1, 0.8, 1], outline: false }));
         const skull = part(G.sphere(0.28, 16, 12), bone, { outline: 0.03 });
@@ -237,35 +245,36 @@ export class MobModel {
         r.handL.add(holder);
         this.rig = r;
         this.inner.add(r.body);
-        height = 1.55;
+        height = 1.8;
         break;
       }
       case 'orc':
       case 'troll': {
         const troll = kind === 'troll';
-        const skin = troll ? 0x8aa5b8 : 0x6f8f3a;
+        const skin = troll ? 0x7d8a86 : 0x5f7438;
         const r = biped({
           skin,
-          torsoCol: troll ? 0x8aa5b8 : 0x5a4636,
+          torsoCol: troll ? 0x7d8a86 : 0x4a3a2c,
           legCol: troll ? 0x6a4a30 : 0x4a3a2c,
           bodyR: 0.38,
-          bodyH: 0.3,
+          bodyH: 0.4,
           headR: 0.3,
-          legLen: 0.42,
-          armLen: 0.55,
+          legLen: 0.56,
+          armLen: 0.68,
           armR: 0.12,
           hipW: 0.18,
         });
         // Пузо
-        r.torso.add(part(G.sphere(0.36, 16, 12), troll ? 0xa8c0cf : 0x86a64a, { pos: [0, 0.35, 0.12], scale: [1, 0.9, 0.8], outline: 0.03 }));
+        r.torso.add(part(G.sphere(0.36, 16, 12), troll ? 0x8e9a92 : 0x6a7f40, { pos: [0, 0.4, 0.12], scale: [1, 0.9, 0.8], outline: 0.03 }));
         const head = part(G.sphere(0.3, 16, 12), skin, { outline: 0.03 });
         head.scale.set(1.1, 0.95, 1);
         r.head.add(head);
         r.head.position.z = 0.1;
+        shrinkHead(r, 0.3, troll ? 0.74 : 0.78);
         r.head.add(part(G.box(0.4, 0.16, 0.24), skin, { pos: [0, -0.16, 0.12], outline: 0.025 }));
         for (const s of [-1, 1]) r.head.add(part(G.cone(0.045, 0.16, 6), 0xfff6e0, { pos: [s * 0.13, -0.04, 0.26], outline: 0.012 }));
         eyePair(r.head, 0.11, 0.08, 0.23, 0.06, troll ? 0xffe14a : 0xff7a3a, 0x1a1210, true);
-        r.head.add(part(G.sphere(0.08, 8, 6), troll ? 0x7d95a8 : 0x5f7f30, { pos: [0, 0.0, 0.3], scale: [1.2, 1, 1], outline: 0.015 }));
+        r.head.add(part(G.sphere(0.08, 8, 6), troll ? 0x6f7c78 : 0x52662e, { pos: [0, 0.0, 0.3], scale: [1.2, 1, 1], outline: 0.015 }));
         if (troll) {
           for (const s of [-1, 1]) r.head.add(part(G.cone(0.08, 0.35, 8), 0xfff2d6, { pos: [s * 0.22, 0.28, -0.02], rot: [-0.3, 0, -s * 0.5], outline: 0.02 }));
           // Корона из костей
@@ -299,7 +308,7 @@ export class MobModel {
         this.rig = r;
         this.inner.add(r.body);
         shadow = troll ? 3.6 : 2.0;
-        height = troll ? 3.4 : 2.2;
+        height = troll ? 3.9 : 2.5;
         break;
       }
     }

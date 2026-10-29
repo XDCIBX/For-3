@@ -5,7 +5,17 @@ import { clothTex, texturize, woodTex } from './textures';
 import { bake, unbake } from './bake';
 import { buildAmulet, buildArmor, buildBoots, buildHelmet, buildRing, buildWeapon, type Built, type Rig } from './equipment';
 
-const SKIN = 0xffd3ac;
+const SKIN = 0xdfa983;
+/** Реалистичные пропорции: голова ~1/7 роста, длинные ноги и руки (гном — коренастый). */
+const PROPS: Record<HeroClass, { leg: number; arm: number; head: number; k: number }> = {
+  warrior: { leg: 1.6, arm: 1.32, head: 0.56, k: 0.9 },
+  mage: { leg: 1.6, arm: 1.32, head: 0.56, k: 0.9 },
+  archer: { leg: 1.62, arm: 1.32, head: 0.55, k: 0.9 },
+  hunter: { leg: 1.62, arm: 1.32, head: 0.55, k: 0.9 },
+  summoner: { leg: 1.6, arm: 1.32, head: 0.56, k: 0.9 },
+  werewolf: { leg: 1.55, arm: 1.42, head: 0.66, k: 0.92 },
+  dwarf: { leg: 1.12, arm: 1.15, head: 0.7, k: 1 },
+};
 const DARK = 0x24160f;
 
 export interface HeroAnimInput {
@@ -38,22 +48,22 @@ const HELM_COLORS: Record<string, Record<Rarity, number>> = {
   helm: { common: 0x9aa6b2, rare: 0x5b8fd0, epic: 0x8a5ac7, legendary: 0xf0c04a, relic: 0x6a1c22 },
   hood: { common: 0x7a6a55, rare: 0x2f6aa8, epic: 0x4a2f78, legendary: 0xc9343a, relic: 0x5a0f14 },
 };
-function eye(x: number): THREE.Group {
+function eye(x: number, iris = 0x5a3a22): THREE.Group {
   const g = new THREE.Group();
-  const white = new THREE.Mesh(G.sphere(0.1, 14, 10), toon(0xffffff));
-  white.scale.set(0.85, 1.15, 0.5);
-  const pupil = new THREE.Mesh(G.sphere(0.06, 12, 8), toon(0x1a1210));
-  pupil.position.set(0, -0.01, 0.04);
-  pupil.scale.set(0.9, 1.1, 0.6);
-  const hl = new THREE.Mesh(G.sphere(0.022, 8, 6), new THREE.MeshBasicMaterial({ color: 0xffffff }));
-  hl.position.set(0.02, 0.03, 0.075);
-  g.add(white, pupil, hl);
-  g.position.set(x, 0.02, 0.33);
+  const white = new THREE.Mesh(G.sphere(0.075, 12, 8), toon(0xece6dc, { rough: 0.25 }));
+  white.scale.set(1, 0.55, 0.45);
+  const pupil = new THREE.Mesh(G.sphere(0.04, 10, 8), toon(iris, { rough: 0.2 }));
+  pupil.position.set(0, 0, 0.022);
+  pupil.scale.set(1, 1, 0.55);
+  const dot = new THREE.Mesh(G.sphere(0.018, 8, 6), toon(0x0a0806, { rough: 0.15 }));
+  dot.position.set(0, 0, 0.042);
+  g.add(white, pupil, dot);
+  g.position.set(x, 0.03, 0.345);
   g.rotation.y = x * 0.9;
   return g;
 }
 
-/** Модель героя: чиби-пропорции, процедурная анимация, видимая экипировка. */
+/** Модель героя: реалистичные пропорции, процедурная анимация, видимая экипировка. */
 export class HeroModel {
   readonly cls: HeroClass;
   readonly root = new THREE.Group();
@@ -176,19 +186,13 @@ export class HeroModel {
     headM.scale.set(1.05, 0.97, 1);
     this.head.add(headM);
     // У охотника глаза скрыты повязкой
-    this.eyes = cls === 'hunter' ? [] : [eye(-0.14), eye(0.14)];
+    const iris = cls === 'werewolf' ? 0xd8a020 : cls === 'mage' ? 0x4a6a8a : cls === 'summoner' ? 0x3a6a5a : 0x5a3a22;
+    this.eyes = cls === 'hunter' ? [] : [eye(-0.14, iris), eye(0.14, iris)];
     for (const e of this.eyes) e.userData.anim = true;
     if (this.eyes.length) this.head.add(...this.eyes);
-    const cheek = toon(0xff9a8a, { transparent: true, opacity: 0.6 });
-    for (const x of cls === 'werewolf' ? [] : [-0.23, 0.23]) {
-      const c = new THREE.Mesh(G.sphere(0.06, 8, 6), cheek);
-      c.position.set(x, -0.1, 0.3);
-      c.scale.set(1, 0.6, 0.4);
-      this.head.add(c);
-    }
     if (cls !== 'werewolf') {
       // У гнома нос картошкой
-      const nose = part(G.sphere(cls === 'dwarf' ? 0.09 : 0.055, 8, 6), 0xf5b98f, { pos: [0, -0.04, 0.39], outline: 0.015 });
+      const nose = part(G.sphere(cls === 'dwarf' ? 0.09 : 0.06, 10, 8), 0xd99a76, { pos: [0, -0.05, 0.385], scale: cls === 'dwarf' ? [1, 1, 1] : [0.7, 1.1, 1], outline: 0.015 });
       this.head.add(nose);
     }
     this.head.add(this.headgear);
@@ -216,6 +220,7 @@ export class HeroModel {
     }
 
     this.buildClassParts();
+    this.applyProportions();
 
     // Эффекты состояния
     for (let i = 0; i < 3; i++) {
@@ -248,6 +253,22 @@ export class HeroModel {
     this.root.add(this.shieldBubble);
 
     this.setEquip(null);
+  }
+
+  /** Вытягивает ноги и руки, уменьшает голову, добавляет шею; рост остаётся прежним. */
+  private applyProportions() {
+    const P = PROPS[this.cls];
+    for (const leg of [this.legL, this.legR]) leg.scale.y = P.leg;
+    this.hips.position.y = this.torsoG.position.y = 0.555 * P.leg;
+    for (const arm of [this.armL, this.armR]) arm.scale.y = P.arm;
+    // Кисти без растяжения — иначе оружие перекосит
+    for (const hand of [this.handL, this.handR]) hand.scale.y = 1 / P.arm;
+    this.head.scale.setScalar(P.head);
+    const r = 0.39 * P.head;
+    this.head.position.y = 0.76 + 0.07 + r;
+    const neckCol = this.cls === 'werewolf' ? FUR : this.cls === 'warrior' ? 0x7d8894 : SKIN;
+    this.torsoG.add(part(G.cyl(0.085 * (this.cls === 'werewolf' ? 1.6 : 1), 0.11 * (this.cls === 'werewolf' ? 1.5 : 1), 0.2, 10), neckCol, { pos: [0, 0.79, 0] }));
+    this.bodyScale.multiplyScalar(P.k);
   }
 
   private buildClassParts() {

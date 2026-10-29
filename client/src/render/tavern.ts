@@ -24,7 +24,7 @@ export class TavernStage implements Stage {
   constructor() {
     const s = this.scene;
     s.background = new THREE.Color(0x1e1420);
-    s.add(new THREE.HemisphereLight(0xffd8a8, 0x3a2418, 1.0));
+    s.add(new THREE.HemisphereLight(0xffd8a8, 0x3a2418, 0.3));
     this.sun = makeSun(0.9, 0xffc890, [6, 14, 10], 14, 1024);
     s.add(this.sun, this.sun.target);
 
@@ -199,16 +199,22 @@ export class TavernStage implements Stage {
     const k = this.keeper;
     const apron = part(G.capsule(0.45, 0.4), 0xe8e0d0, { pos: [0, 0.95, 0.05], outline: 0.035 });
     const shirt = part(G.capsule(0.48, 0.35), 0x3a6ab0, { pos: [0, 1.0, -0.05], outline: 0.035 });
-    const head = part(G.sphere(0.42, 16, 12), 0xffc8a0, { pos: [0, 1.85, 0], outline: 0.035 });
-    const beard = part(G.cone(0.42, 0.9, 14), 0xd8682a, { pos: [0, 1.38, 0.22], rot: [Math.PI + 0.2, 0, 0], outline: 0.03 });
-    const nose = part(G.sphere(0.12, 10, 8), 0xff9a7a, { pos: [0, 1.82, 0.42], outline: 0.02 });
-    const hat = part(G.cyl(0.3, 0.42, 0.25, 14), 0x5a3a22, { pos: [0, 2.2, 0], outline: 0.025 });
-    k.add(shirt, apron, head, beard, nose, hat);
+    // Голова отдельной группой — уменьшена до реалистичных пропорций
+    const hg = new THREE.Group();
+    hg.position.set(0, 1.62, 0.02);
+    hg.scale.setScalar(0.68);
+    const head = part(G.sphere(0.42, 16, 12), 0xdfa983, {});
+    const beard = part(G.cone(0.42, 0.9, 14), 0xb8622a, { pos: [0, -0.47, 0.22], rot: [Math.PI + 0.2, 0, 0] });
+    const nose = part(G.sphere(0.12, 10, 8), 0xd08a6a, { pos: [0, -0.03, 0.42] });
+    const hat = part(G.cyl(0.3, 0.42, 0.25, 14), 0x5a3a22, { pos: [0, 0.35, 0] });
+    hg.add(head, beard, nose, hat);
+    k.add(shirt, apron, hg);
     for (const x of [-0.15, 0.15]) {
-      const e = new THREE.Mesh(G.sphere(0.06, 8, 6), toon(0x1a1210));
-      e.position.set(x, 1.95, 0.37);
-      k.add(e);
-      k.add(part(G.box(0.16, 0.05, 0.05), 0xd8682a, { pos: [x, 2.05, 0.38], rot: [0, 0, -x * 2], outline: false }));
+      const e = new THREE.Mesh(G.sphere(0.045, 8, 6), toon(0x1a1210, { rough: 0.2 }));
+      e.position.set(x, 0.1, 0.38);
+      e.scale.set(1, 0.7, 0.6);
+      hg.add(e);
+      hg.add(part(G.box(0.16, 0.05, 0.05), 0xb8622a, { pos: [x, 0.2, 0.38], rot: [0, 0, -x * 2] }));
     }
     const armL = part(G.capsule(0.13, 0.4), 0x3a6ab0, { pos: [-0.55, 1.1, 0.1], rot: [0.3, 0, 0.3], outline: 0.025 });
     k.add(armL);

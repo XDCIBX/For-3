@@ -23,20 +23,20 @@ export class ArenaStage implements Stage {
 
   constructor() {
     const s = this.scene;
-    s.background = skyTexture('#ff9a5a', '#ffc78a', '#ffe8c8');
-    s.add(new THREE.HemisphereLight(0xffe2c0, 0x7a5a3a, 1.3));
-    this.sun = makeSun(2.2, 0xffd0a0, [-20, 34, 14], 26, 2048);
+    s.background = skyTexture('#b8785a', '#dcae8a', '#eedcc6');
+    s.add(new THREE.HemisphereLight(0xffe2c0, 0x7a5a3a, 0.35));
+    this.sun = makeSun(2.4, 0xffd0a0, [-20, 34, 14], 26, 2048);
     s.add(this.sun, this.sun.target);
 
     const R = ARENA_RADIUS;
     // Песок с узором
-    const sand = new THREE.Mesh(new THREE.CircleGeometry(R + 1, 64).rotateX(-Math.PI / 2), toon(0xe9c98a, { map: repeated(sandTex(), 7, 7) }));
+    const sand = new THREE.Mesh(new THREE.CircleGeometry(R + 1, 64).rotateX(-Math.PI / 2), toon(0xc4a57a, { map: repeated(sandTex(), 7, 7) }));
     sand.receiveShadow = true;
     s.add(sand);
     for (const [r, w, c] of [
-      [R - 0.6, 0.25, 0xd4ae6a],
-      [4, 0.2, 0xd4ae6a],
-      [1.4, 0.15, 0xc79a5a],
+      [R - 0.6, 0.25, 0xa88a60],
+      [4, 0.2, 0xa88a60],
+      [1.4, 0.15, 0x96764c],
     ] as const) {
       const ring = new THREE.Mesh(new THREE.RingGeometry(r - w, r, 64).rotateX(-Math.PI / 2), toon(c));
       ring.position.y = 0.02;
@@ -91,19 +91,19 @@ export class ArenaStage implements Stage {
     }
     // Толпа
     const n = 300;
-    const body = new THREE.CapsuleGeometry(0.25, 0.3, 4, 8).translate(0, 0.45, 0);
-    const head = new THREE.SphereGeometry(0.22, 10, 8).translate(0, 0.98, 0);
+    const body = new THREE.CapsuleGeometry(0.22, 0.5, 4, 8).translate(0, 0.5, 0);
+    const head = new THREE.SphereGeometry(0.14, 10, 8).translate(0, 1.1, 0);
     this.crowd = new THREE.InstancedMesh(body, toon(0xffffff), n);
-    this.crowdHeads = new THREE.InstancedMesh(head, toon(0xffd3ac), n);
+    this.crowdHeads = new THREE.InstancedMesh(head, toon(0xdfa983), n);
     const c = new THREE.Color();
-    const shirts = [0xe0533d, 0x3a7ad0, 0x3dbb5a, 0xffd54a, 0x8a5cff, 0xff8a3a, 0xf2efe6, 0x5a3a22];
+    const shirts = [0x8a3a30, 0x3a5070, 0x4a6a3a, 0xa08a4a, 0x5a4a6a, 0x9a6a3a, 0xc8c0b0, 0x5a3a22];
     for (let i = 0; i < n; i++) {
       const tier = i % tiers;
       const a = Math.random() * Math.PI * 2;
       const r = R + 2.75 + tier * 1.5;
       this.crowdBase.push({ x: Math.cos(a) * r, y: 2.7 + tier * 1.0, z: Math.sin(a) * r, ph: Math.random() * 10, a });
       this.crowd.setColorAt(i, c.set(shirts[i % shirts.length]));
-      this.crowdHeads.setColorAt(i, c.set([0xffd3ac, 0xe8b088, 0xc08a5a, 0x8ad35e][i % 7 === 0 ? 3 : i % 3]));
+      this.crowdHeads.setColorAt(i, c.set([0xdfa983, 0xc89470, 0x9a6a48, 0x6a8a48][i % 7 === 0 ? 3 : i % 3]));
     }
     s.add(this.crowd, this.crowdHeads);
 
@@ -126,7 +126,7 @@ export class ArenaStage implements Stage {
     }
 
     // Знамёна на стене
-    const bcols = [0xe0533d, 0x8a5cff, 0x3dbb5a, 0xffb321];
+    const bcols = [0x8a3a30, 0x5a4a7a, 0x4a6a3a, 0xa8802a];
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
       const b = new THREE.Mesh(new THREE.PlaneGeometry(1.2, 2.4, 1, 6), toon(bcols[i % 4], { side: THREE.DoubleSide }));

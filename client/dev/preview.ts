@@ -4,21 +4,25 @@ import { HeroModel } from '../src/render/heroes';
 import { buildWeapon } from '../src/render/equipment';
 import { MobModel } from '../src/render/mobs';
 import { MinionModel } from '../src/render/minions';
+import { makeEnvironment } from '../src/render/env';
 import { makeItem, TEMPLATE_BY_ID, emptyEquip } from '@game/shared';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
 renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.95;
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x8cc4ea);
+scene.environment = makeEnvironment(renderer, '#4a8ad0', '#d8ecf6', '#5a6a3a', 'rgba(255,250,230,1)');
 const cam = new THREE.PerspectiveCamera(35, innerWidth / innerHeight, 0.1, 100);
 cam.position.set(0, 4, 9);
 cam.lookAt(0, 1, 0);
-scene.add(new THREE.HemisphereLight(0xdff2ff, 0x6a8a4a, 1.6));
-const sun = new THREE.DirectionalLight(0xfff1d6, 2.2);
+scene.add(new THREE.HemisphereLight(0xdff2ff, 0x6a8a4a, 0.35));
+const sun = new THREE.DirectionalLight(0xfff1d6, 3);
 sun.position.set(4, 8, 6);
 scene.add(sun);
-const ground = new THREE.Mesh(new THREE.CircleGeometry(8, 32).rotateX(-Math.PI / 2), new THREE.MeshToonMaterial({ color: 0x7cc35a }));
+const ground = new THREE.Mesh(new THREE.CircleGeometry(8, 32).rotateX(-Math.PI / 2), new THREE.MeshStandardMaterial({ color: 0x5e8a44, roughness: 0.95 }));
 scene.add(ground);
 
 const q = new URLSearchParams(location.search);
