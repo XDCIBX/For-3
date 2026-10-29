@@ -27,10 +27,11 @@ export class MinionModel {
 
   constructor(kind: MinionKind) {
     this.kind = kind;
-    this.root.add(blobShadow(kind === 'golem' ? 1.9 : kind === 'wolf' ? 1.1 : 0.9));
+    this.root.add(blobShadow(kind === 'golem' ? 1.9 : kind === 'wolf' ? 1.1 : kind === 'turret' ? 1.2 : 0.9));
     this.root.add(this.body);
     if (kind === 'wolf') this.height = this.buildWolf();
     else if (kind === 'golem') this.height = this.buildGolem();
+    else if (kind === 'turret') this.height = this.buildTurret();
     else this.height = this.buildTotem();
     bake(this.body);
   }
@@ -183,6 +184,43 @@ export class MinionModel {
     return 2.3;
   }
 
+  /** Турель гнома: тренога, бронзовый корпус с шестернёй и двумя стволами. */
+  private buildTurret(): number {
+    const B = this.body;
+    for (let i = 0; i < 3; i++) {
+      const a = (i / 3) * Math.PI * 2;
+      B.add(part(G.cyl(0.04, 0.05, 0.75, 6), 0x5a3a22, { pos: [Math.sin(a) * 0.25, 0.32, Math.cos(a) * 0.25], rot: [Math.cos(a) * 0.5, 0, -Math.sin(a) * 0.5], outline: 0.012 }));
+      B.add(part(G.sphere(0.06, 6, 4), 0x4a4a52, { pos: [Math.sin(a) * 0.45, 0.03, Math.cos(a) * 0.45], outline: 0.008 }));
+    }
+    B.add(part(G.cyl(0.18, 0.22, 0.12, 10), 0x4a4a52, { pos: [0, 0.68, 0], outline: 0.015 }));
+    const head = this.head;
+    head.userData.anim = true;
+    head.position.y = 0.92;
+    head.add(part(G.box(0.46, 0.32, 0.44), 0xc8a24a, { outline: 0.02 }));
+    head.add(part(G.box(0.48, 0.06, 0.46), 0xa8822a, { pos: [0, 0.12, 0], outline: false }));
+    for (const x of [-0.11, 0.11]) {
+      head.add(part(G.cyl(0.06, 0.06, 0.55, 10), 0x6a6e76, { pos: [x, 0, 0.42], rot: [Math.PI / 2, 0, 0], outline: 0.012 }));
+      head.add(part(G.torus(0.065, 0.02, Math.PI * 2, 4, 10), 0xc8a24a, { pos: [x, 0, 0.68], outline: false }));
+    }
+    // Глазок прицела
+    const eye = new THREE.Mesh(G.sphere(0.06, 10, 8), toon(0xff7a3a, { emissive: 0xff5a1a, emissiveIntensity: 1 }));
+    eye.position.set(0, 0.06, 0.23);
+    head.add(eye);
+    this.glows.push(eye);
+    const gear = new THREE.Group();
+    gear.add(part(G.cyl(0.13, 0.13, 0.04, 10), 0x8a8e96, { rot: [0, 0, Math.PI / 2], outline: 0.01 }));
+    for (let i = 0; i < 8; i++) {
+      const a = (i / 8) * Math.PI * 2;
+      gear.add(part(G.box(0.04, 0.05, 0.05), 0x8a8e96, { pos: [0, Math.cos(a) * 0.15, Math.sin(a) * 0.15], rot: [a, 0, 0], outline: false }));
+    }
+    gear.position.x = 0.25;
+    gear.userData.anim = true;
+    head.add(gear);
+    this.top = gear;
+    B.add(head);
+    return 1.4;
+  }
+
   playAttack() {
     this.atkT = 0;
   }
@@ -212,6 +250,12 @@ export class MinionModel {
       this.armL.rotation.x = -sw * 0.4 - lift * 2.4;
       this.armR.rotation.x = sw * 0.4 - lift * 2.4;
       this.head.rotation.y = Math.sin(t * 0.8) * 0.15;
+    } else if (this.kind === 'turret') {
+      // Отдача стволов и вращение шестерни
+      const rec = this.atkT < 0.15 ? Math.sin((this.atkT / 0.15) * Math.PI) : 0;
+      this.head.position.z = -rec * 0.1;
+      this.head.rotation.x = -rec * 0.08;
+      if (this.top) this.top.rotation.x += dt * (3 + (this.atkT < 0.6 ? 14 : 0));
     } else if (this.top) {
       this.top.position.y = 1.95 + Math.sin(t * 2.5) * 0.08;
       this.top.scale.setScalar(1 + atk * 0.35);

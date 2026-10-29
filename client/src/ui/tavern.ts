@@ -5,7 +5,7 @@ import { CLASS_BG, el, esc } from './dom';
 import { COIN, MUG, classIcon, itemIcon } from './icons';
 
 const EMPTY_ICON: Record<string, string> = { weapon: 'weapon', helmet: 'helm', armor: 'plate', boots: 'boots', amulet: 'amulet', ring: 'ring' };
-const DEFAULT_WEAPON: Record<string, string> = { warrior: 'sword', mage: 'staff', archer: 'bow', hunter: 'glaives', summoner: 'totemstaff' };
+const DEFAULT_WEAPON: Record<string, string> = { warrior: 'sword', mage: 'staff', archer: 'bow', hunter: 'glaives', summoner: 'totemstaff', werewolf: 'claws', dwarf: 'blunderbuss' };
 
 const MAIN_STATS: StatKey[] = ['maxHp', 'damage', 'skillPower', 'armor', 'speed', 'attackSpeed', 'crit', 'cdr', 'regen', 'lifesteal'];
 

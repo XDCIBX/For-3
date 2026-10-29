@@ -70,7 +70,10 @@ class App {
     const rh = el(`<div class="rotate-hint enabled"><div class="phone"></div>Поверните устройство горизонтально</div>`);
     document.body.appendChild(rh);
     requestAnimationFrame((t) => this.loop(t));
-    window.addEventListener('resize', () => this.updateTavernShift());
+    window.addEventListener('resize', () => {
+      this.updateTavernShift();
+      this.updateMenuShift();
+    });
     this.startPing();
     if (import.meta.env.DEV) (window as unknown as { __app: App }).__app = this;
     setTimeout(() => document.getElementById('boot')?.classList.add('hide'), 300);
@@ -115,13 +118,9 @@ class App {
   private showMenu(error = '') {
     this.screen = 'menu';
     this.clearUi();
-    this.engine.showMenu([
-      { cls: 'warrior', name: null },
-      { cls: 'mage', name: null },
-      { cls: 'archer', name: null },
-    ]);
+    // Все классы у костра: передний ряд — бойцы, задний — маги и охотник
+    this.engine.showMenu((['warrior', 'werewolf', 'dwarf', 'archer', 'mage', 'summoner', 'hunter'] as const).map((cls) => ({ cls, name: null })));
     sfx.music('calm');
-    this.engine.menuShift = window.innerWidth > 760 ? 0.36 : 0;
     this.ui.appendChild(
       menuScreen(
         this.settings,
@@ -134,7 +133,20 @@ class App {
         error,
       ),
     );
+    this.updateMenuShift();
+    window.requestAnimationFrame(() => this.updateMenuShift());
   }
+
+  /** Сдвиг сцены меню вправо от панели с кнопками, чтобы герои были видны. */
+  private updateMenuShift() {
+    const box = this.screen === 'menu' ? this.ui.querySelector('.menu-box') : null;
+    if (!box || window.innerWidth < window.innerHeight) {
+      this.engine.menuShift = 0;
+      return;
+    }
+    this.engine.menuShift = Math.min(0.62, box.getBoundingClientRect().right / window.innerWidth);
+  }
+
 
   private applySettings() {
     saveSettings(this.settings);
@@ -154,6 +166,7 @@ class App {
         start: () => this.conn?.send({ t: 'start' }),
         addBot: () => this.conn?.send({ t: 'addBot' }),
         kick: (id) => this.conn?.send({ t: 'kick', id }),
+        botCls: (id, cls) => this.conn?.send({ t: 'botcls', id, cls }),
         leave: () => this.leave(),
       },
       !!this.conn?.local,
@@ -421,7 +434,11 @@ class App {
           else if (id === 'bolt' || id === 'spiritbolt') sfx.magic();
           else if (id === 'wolves' || id === 'golem' || id === 'totem') sfx.bell();
           else if (id === 'shadowdash') sfx.dash();
-          else if (id === 'demon') sfx.shout();
+          else if (id === 'demon' || id === 'howl' || id === 'beast') sfx.shout();
+          else if (id === 'rend') sfx.swing();
+          else if (id === 'pounce') sfx.dash();
+          else if (id === 'blast' || id === 'bomb') sfx.bow();
+          else if (id === 'turret') sfx.buy();
           else if (id === 'fireball') sfx.fireball();
           else if (id === 'shot' || id === 'multishot') sfx.bow();
           else if (id === 'charge' || id === 'roll') sfx.dash();
@@ -435,7 +452,7 @@ class App {
             this.haptic(ImpactStyle.Heavy);
           } else if (e.k === 'nova') sfx.freeze();
           else if (e.k === 'warcry') sfx.shout();
-          else if (e.k === 'gslam') sfx.slam();
+          else if (e.k === 'gslam' || e.k === 'quake' || e.k === 'pland') sfx.slam();
           else if (e.k === 'hwind') sfx.shout();
           else if (e.k === 'hthrow') sfx.swing();
           else if (e.k === 'hcatch') sfx.slam();

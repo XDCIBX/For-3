@@ -353,6 +353,103 @@ export class Effects {
     this.fx.burst(x, 0.3, z, { n: big ? 26 : 14, speed: 1.5, up: 4, life: 0.8, size: 0.2, colors: [0x6ff0ff, 0xffffff, 0x2ab8c8], drag: 1.5, radius: r * 0.5 });
   }
 
+  /** Удар когтями: три рваные полосы веером. */
+  rend(x: number, z: number, rot: number) {
+    for (let i = -1; i <= 1; i++) {
+      const mat = texMat(trailTex(), i === 0 ? 0xffe0b0 : 0xff9a4a, 0.85);
+      const m = new THREE.Mesh(trailGeo, mat);
+      const a = rot + i * 0.28;
+      m.position.set(x + Math.sin(a) * 2.2, 0.9 + i * 0.15, z + Math.cos(a) * 2.2);
+      m.rotation.set(0, a + Math.PI / 2 + 0.5, 0);
+      m.scale.set(0.12, 1, 2.2);
+      this.add(m, 0.22, (k) => {
+        mat.opacity = 0.85 * (1 - k);
+        m.scale.z = 2.2 * (0.6 + k * 0.6);
+      });
+    }
+    for (let i = 0; i < 6; i++) {
+      const a = rot + (Math.random() - 0.5) * 1.4;
+      this.fx.glow({ x: x + Math.sin(a) * 1.8, y: 0.9, z: z + Math.cos(a) * 1.8, vx: Math.sin(a) * 2.5, vy: 0.8, vz: Math.cos(a) * 2.5, life: 0.3, size: 0.15, color: 0xffc080, drag: 3 });
+    }
+  }
+
+  /** Оборотень оттолкнулся для прыжка. */
+  pounce(x: number, z: number) {
+    this.ring(x, z, 1.4, 0xffc080, 0.3);
+    this.dust(x, z, 10);
+  }
+
+  /** Приземление после прыжка: ударная волна, комья земли. */
+  pounceLand(x: number, z: number, r: number) {
+    this.ring(x, z, r * 1.1, 0xffb060, 0.45);
+    this.decal(scorchTex(), x, z, r * 0.6, 0xb8a080, 1.6, { additive: false, grow: 0.05, opacity: 0.5 });
+    this.fx.burst(x, 0.2, z, { n: 18, speed: r * 2, up: 4, life: 0.7, size: 0.28, colors: [0x7a6a5a, 0x9a8a7a], gravity: 12 }, false);
+    this.dust(x, z, 12);
+    this.shake = Math.max(this.shake, 0.35);
+  }
+
+  /** Вой: звуковые волны расходятся кольцами. */
+  howl(x: number, z: number, r: number) {
+    for (let i = 0; i < 3; i++) {
+      const mat = texMat(ringTex(), 0xffd070, 0.9);
+      const m = new THREE.Mesh(flatGeo, mat);
+      m.position.set(x, 1.4, z);
+      m.rotation.x = 0.0;
+      this.add(m, 0.7, (k) => {
+        const kk = Math.max(0, k - i * 0.18) / (1 - i * 0.18);
+        m.scale.setScalar(Math.max(0.01, r * (0.15 + easeOut(kk) * 0.9)));
+        m.position.y = 1.4 - kk * 1.2;
+        mat.opacity = 0.75 * (1 - kk) * (k > i * 0.18 ? 1 : 0);
+      });
+    }
+    this.flash(x, 1.6, z, 0xffd070, 1.6, 0.3);
+    this.shake = Math.max(this.shake, 0.3);
+  }
+
+  /** Превращение в зверя: вихрь шерсти и золотистая вспышка. */
+  beast(x: number, z: number) {
+    this.ring(x, z, 2.6, 0xffa040, 0.55, 0.1);
+    this.decal(runeTex(), x, z, 1.8, 0xffa040, 0.9, { spin: -3, grow: 0.15 });
+    this.flash(x, 1.4, z, 0xffb060, 2.6, 0.4);
+    this.fx.burst(x, 1.0, z, { n: 26, speed: 4, up: 3, life: 0.8, size: 0.24, colors: [0x8a5a36, 0x4a2a1a, 0xd8b088], drag: 2, gravity: 4 }, false);
+    for (let i = 0; i < 16; i++) {
+      const a = (i / 16) * Math.PI * 2;
+      this.fx.glow({ x: x + Math.cos(a) * 0.9, y: 0.3, z: z + Math.sin(a) * 0.9, vx: Math.cos(a) * 1.5, vy: 3.5, vz: Math.sin(a) * 1.5, life: 0.7, size: 0.25, color: i % 2 ? 0xffa040 : 0xff5a2a, drag: 1.5 });
+    }
+    this.shake = Math.max(this.shake, 0.4);
+  }
+
+  /** Выстрел мушкетона: вспышка у дула и клубы дыма. */
+  muzzle(x: number, z: number, rot: number, big = true) {
+    const mx = x + Math.sin(rot) * (big ? 1.0 : 0.75);
+    const mz = z + Math.cos(rot) * (big ? 1.0 : 0.75);
+    const y = big ? 0.95 : 0.95;
+    this.flash(mx, y, mz, 0xffd070, big ? 1.4 : 0.8, 0.12);
+    this.fx.burst(mx, y, mz, { n: big ? 8 : 4, speed: 2.5, up: 0.5, life: 0.25, size: 0.16, colors: [0xffe080, 0xff9a30], drag: 3 });
+    for (let i = 0; i < (big ? 3 : 1); i++) this.fx.puff({ x: mx, y, z: mz, vx: Math.sin(rot) * 1.5, vy: 0.6, vz: Math.cos(rot) * 1.5, life: 0.9, size: 0.45, grow: 1.1, color: 0xd8d0c8, alpha: 0.4 });
+  }
+
+  /** Землетрясение: трещины и каменная волна. */
+  quake(x: number, z: number, r: number) {
+    this.ring(x, z, r * 1.1, 0xd8a050, 0.6);
+    this.ring(x, z, r * 0.6, 0xffffff, 0.35);
+    this.decal(scorchTex(), x, z, r * 0.75, 0x9a8a70, 2.5, { additive: false, grow: 0.04, opacity: 0.6 });
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2;
+      const d = r * (0.5 + Math.random() * 0.5);
+      this.fx.burst(x + Math.cos(a) * d, 0.2, z + Math.sin(a) * d, { n: 3, speed: 1.5, up: 5, life: 0.8, size: 0.3, colors: [0x7a6a5a, 0x9a8a7a, 0x6a5a4a], gravity: 14 }, false);
+    }
+    this.fx.burst(x, 0.4, z, { n: 12, speed: r, up: 1, life: 1.2, size: 0.9, grow: 1, colors: [0xc8b090], alpha: 0.4 }, false);
+    this.shake = Math.max(this.shake, 0.7);
+  }
+
+  /** Турель собрана: искры и болтики. */
+  turretUp(x: number, z: number) {
+    this.ring(x, z, 1.4, 0xffc040, 0.4);
+    this.fx.burst(x, 0.8, z, { n: 16, speed: 3, up: 3, life: 0.6, size: 0.15, colors: [0xffd060, 0xffffff, 0xc8a24a], gravity: 8 });
+    this.dust(x, z, 6);
+  }
+
   /** Волна духов от тотема: бирюзовое кольцо расходится до края круга. */
   totemPulse(x: number, z: number, r: number) {
     this.ring(x, z, r, 0x6ff0ff, 0.45, 0.1, 0.1);
@@ -464,6 +561,7 @@ export class Effects {
       bolt: [0xc8a0ff, 0x8a5cff, 0xffffff],
       glaive: [0x5dff8a, 0xffffff],
       spirit: [0x6ff0ff, 0xffffff, 0x2ab8c8],
+      pellet: [0xffd070, 0xffffff, 0x9a9aa2],
       hammer: [0xffd060, 0x9a8a7a, 0xffffff],
       earrow: [0xff6a5a, 0xffffff],
       slime: [0x8aff6a],
@@ -658,6 +756,13 @@ export class ProjView {
       o.add(g);
       trail(0xffd8a0, 1.6, 3.2, 0.45);
       this.height = 1.6;
+    } else if (kind === 'pellet') {
+      // Дробина: раскалённый свинцовый шарик с дымным следом
+      o.add(new THREE.Mesh(G.sphere(0.09, 8, 6), new THREE.MeshBasicMaterial({ color: 0xfff0c0 })));
+      const g = glowSprite(0xffa040, 0.6, 0.7);
+      this.glows.push(g);
+      o.add(g);
+      trail(0xffd8a0, 0.14, 1.4, 0.6);
     } else if (kind === 'spirit') {
       o.add(new THREE.Mesh(G.sphere(0.13, 12, 8), new THREE.MeshBasicMaterial({ color: 0xe8ffff })));
       for (const [c, s] of [
@@ -680,7 +785,7 @@ export class ProjView {
     this.obj.position.set(this.x + this.vx * t, this.height, this.z + this.vz * t);
     this.obj.rotation.y = Math.atan2(this.vx, this.vz);
     this.glows.forEach((g, i) => {
-      const base = (this.kind === 'fireball' ? [2.0, 1.2] : this.kind === 'glaive' ? [1.4] : this.kind === 'hammer' ? [3.2] : [1.3, 0.8])[i];
+      const base = (this.kind === 'fireball' ? [2.0, 1.2] : this.kind === 'glaive' ? [1.4] : this.kind === 'hammer' ? [3.2] : this.kind === 'pellet' ? [0.6] : [1.3, 0.8])[i];
       g.scale.setScalar(base * (1 + Math.sin(this.t * (20 + i * 7)) * 0.12));
     });
     if (this.spin && this.tumble) this.spin.rotation.x += dt * 16;
@@ -718,8 +823,8 @@ export class ZoneView {
     this.kind = z.k;
     this.data = z;
     this.localT = z.t;
-    const col = z.k === 'rain' ? 0x8ad0ff : z.k === 'burn' ? 0xff6a20 : z.k === 'meteor' ? 0xff6a1a : 0xff2a2a;
-    if (z.k === 'slam') {
+    const col = z.k === 'rain' ? 0x8ad0ff : z.k === 'burn' ? 0xff6a20 : z.k === 'meteor' ? 0xff6a1a : z.k === 'bomb' ? 0xffa030 : 0xff2a2a;
+    if (z.k === 'slam' || z.k === 'bomb') {
       this.fill = new THREE.Mesh(flatGeo, texMat(dangerTex(), col, 0.85, false));
       this.ring = new THREE.Mesh(flatGeo, texMat(ringTex(), col, 1, false));
     } else if (z.k === 'burn') {
@@ -743,6 +848,24 @@ export class ZoneView {
       this.meteor = m;
       this.obj.add(m);
     }
+    if (z.k === 'bomb') {
+      // Пороховая бочка с тлеющим фитилём
+      const b = new THREE.Group();
+      const barrel = new THREE.Mesh(G.cyl(0.3, 0.3, 0.55, 12), toon(0x8a5a2b));
+      addOutline(barrel, 0.025);
+      b.add(barrel);
+      for (const y of [-0.18, 0.18]) {
+        const hoop = new THREE.Mesh(G.torus(0.31, 0.03, Math.PI * 2, 4, 14), toon(0x4a4a52));
+        hoop.rotation.x = Math.PI / 2;
+        hoop.position.y = y;
+        b.add(hoop);
+      }
+      const fuse = glowSprite(0xffb030, 0.7, 0.9);
+      fuse.position.y = 0.4;
+      b.add(fuse);
+      this.meteor = b;
+      this.obj.add(b);
+    }
     if (z.k === 'rain') {
       for (let i = 0; i < 12; i++) {
         const a = new THREE.Group();
@@ -759,7 +882,21 @@ export class ZoneView {
     this.localT += dt;
     const z = this.data;
     const t = this.localT;
-    if (z.k === 'slam' || z.k === 'meteor') {
+    if (z.k === 'bomb' && this.meteor) {
+      // Бочка прилетает по дуге и, подскочив, ждёт взрыва
+      const k = Math.min(1, t / Math.max(0.01, z.delay));
+      const fk = Math.min(1, k / 0.6);
+      this.fill.scale.setScalar(Math.max(0.01, z.r * k));
+      (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.6 + Math.sin(t * 30) * 0.4;
+      const hop = fk < 1 ? Math.sin(fk * Math.PI) * 3.5 : Math.abs(Math.sin((k - 0.6) * 14)) * 0.25 * (1 - k);
+      this.meteor.position.set(-(1 - fk) * 4, 0.3 + hop, -(1 - fk) * 1.5);
+      this.meteor.rotation.z = (1 - fk) * 6;
+      this.meteor.scale.setScalar(1 + (k > 0.8 ? Math.sin(t * 50) * 0.08 : 0));
+      if (Math.random() < 0.6) {
+        const p = this.meteor.position;
+        fx.glow({ x: z.x + p.x, y: p.y + 0.45, z: z.z + p.z, vx: Math.random() - 0.5, vy: 1.5, vz: Math.random() - 0.5, life: 0.35, size: 0.14, color: Math.random() < 0.5 ? 0xffd060 : 0xff7a20 });
+      }
+    } else if (z.k === 'slam' || z.k === 'meteor') {
       const k = Math.min(1, t / Math.max(0.01, z.delay));
       this.fill.scale.setScalar(Math.max(0.01, z.r * k));
       (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.6 + Math.sin(t * 22) * 0.4;

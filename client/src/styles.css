@@ -335,11 +335,72 @@ input.field:focus {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 0 10px;
   border-radius: 14px;
   background: rgba(0, 0, 0, 0.25);
   border: 3px solid var(--ink);
-  min-height: 56px;
+  /* Одинаковая высота у пустых и занятых мест: ничего не съезжает при добавлении ботов */
+  height: 60px;
+  flex: none;
+  box-sizing: border-box;
+}
+.slot.add-bot {
+  width: 100%;
+  font: inherit;
+  font-weight: 800;
+  color: var(--gold);
+  cursor: pointer;
+  opacity: 0.9;
+  background: rgba(255, 201, 60, 0.08);
+  border-color: rgba(255, 201, 60, 0.7);
+}
+.slot.add-bot:active {
+  transform: scale(0.98);
+}
+.slot .avatar.pickable {
+  cursor: pointer;
+  position: relative;
+  box-shadow: 0 0 0 2px var(--gold);
+}
+.slot .avatar.pickable::after {
+  content: '▾';
+  position: absolute;
+  right: -4px;
+  bottom: -6px;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--ink);
+  background: var(--gold);
+  border-radius: 6px;
+  padding: 0 2px;
+}
+.slot.bot-pick {
+  gap: 4px;
+  padding: 0 6px;
+  overflow-x: auto;
+}
+.slot .bp-lbl {
+  font-weight: 800;
+  font-size: 12px;
+  color: var(--muted);
+  flex: none;
+}
+.slot .bp {
+  flex: 1 1 0;
+  min-width: 26px;
+  max-width: 44px;
+  aspect-ratio: 1;
+  padding: 3px;
+  border-radius: 9px;
+  border: 2px solid var(--ink);
+  cursor: pointer;
+}
+.slot .bp.sel {
+  box-shadow: 0 0 0 3px var(--gold);
+}
+.slot .bp:disabled {
+  filter: grayscale(0.9) brightness(0.55);
+  cursor: not-allowed;
 }
 .slot.empty {
   opacity: 0.6;
@@ -382,8 +443,13 @@ input.field:focus {
 }
 .classes {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
-  gap: 6px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 5px;
+}
+/* На больших экранах — два ряда, чтобы помещались имена классов */
+@media (min-width: 980px) and (min-height: 560px) {
+  .classes { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .cls-card .cn { font-size: 13px; letter-spacing: 0; }
 }
 .cls-card {
   position: relative;
@@ -398,8 +464,9 @@ input.field:focus {
   transition: transform 0.12s;
 }
 .cls-card .ci {
-  width: 40px;
-  height: 40px;
+  width: 100%;
+  max-width: 40px;
+  aspect-ratio: 1;
   margin: 0 auto;
 }
 .cls-card .cn {
@@ -1402,7 +1469,10 @@ input.field:focus {
   .cls-info .desc { display: none; }
   .code { font-size: 24px; letter-spacing: 4px; }
   .code-box { padding: 6px 12px; }
-  .slot { min-height: 40px; padding: 4px 8px; gap: 6px; }
+  .slot { height: 44px; padding: 0 8px; gap: 6px; }
+  .slot .bp-lbl { display: none; }
+  .slot.bot-pick { gap: 3px; padding: 0 4px; }
+  .slot .bp { min-width: 22px; padding: 2px; border-radius: 7px; }
   .slot .avatar { width: 30px; height: 30px; border-radius: 9px; padding: 2px; }
   .slot .nm { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .slot .sub { font-size: 11px; }
@@ -1411,10 +1481,10 @@ input.field:focus {
   .lobby { gap: 8px; }
   .lobby-left, .lobby-right { gap: 6px; }
   .lobby .btn { padding: 7px 12px; font-size: 15px; }
-  .cls-card { padding: 5px; border-radius: 12px; }
-  .cls-card .ci { width: 32px; height: 32px; }
+  .cls-card { padding: 4px 2px; border-radius: 10px; }
+  .cls-card .ci { max-width: 30px; }
   .cls-card .cn { display: none; }
-  .cls-card .owner { font-size: 9px; }
+  .cls-card .owner { display: none; }
   .cls-info { padding: 6px 10px; }
   .cls-info h3 { font-size: 16px; }
   .skill-row .d { display: none; }

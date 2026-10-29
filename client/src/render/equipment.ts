@@ -691,6 +691,87 @@ export function buildWeapon(tpl: string, r: Rarity, out: Built): THREE.Group {
       if (rank >= 2) w.add(gem(glowCol, 0.04, [0, 0.62, 0.19], out));
       break;
     }
+    case 'claws': {
+      // Наруч и три изогнутых когтя вдоль пальцев
+      const clawCol = rank >= 2 ? metal : 0xe8e0d0;
+      P(G.cyl(0.11, 0.1, 0.16, 10), grip, [0, -0.06, 0]);
+      P(G.torus(0.105, 0.02, Math.PI * 2, 4, 12), guard, [0, 0.02, 0], [Math.PI / 2, 0, 0], undefined, false);
+      for (let i = -1; i <= 1; i++) {
+        const c = new THREE.Group();
+        const len = 0.34 + rank * 0.04 - Math.abs(i) * 0.05;
+        c.add(new THREE.Mesh(G.cone(0.035, len, 4), shine ? metalMat : toon(clawCol)));
+        c.children[0].position.y = len / 2;
+        addOutline(c.children[0] as THREE.Mesh, 0.012);
+        c.position.set(i * 0.06, 0.08, 0.04);
+        c.rotation.set(0.35, 0, -i * 0.15);
+        w.add(c);
+      }
+      if (rank >= 2) w.add(gem(glowCol, 0.04, [0, -0.04, 0.11], out));
+      if (rank >= 3) w.add(halo(glowCol, 0.18, [0, 0.25, 0.08], out, 0.3));
+      break;
+    }
+    case 'knuckles': {
+      // Кастет с клыками зверя
+      P(G.box(0.22, 0.08, 0.1), guard, [0, 0.04, 0.02]);
+      for (let i = 0; i < 4; i++) P(G.torus(0.035, 0.014, Math.PI * 2, 4, 8), guard, [(i - 1.5) * 0.055, 0.04, 0.02], [0, 0, 0], undefined, false);
+      for (let i = 0; i < 4; i++) P(G.cone(0.03, 0.16 + (i % 2) * 0.05, 5), 0xfff6e0, [(i - 1.5) * 0.055, 0.15, 0.04], [0.2, 0, 0], undefined, 0.008);
+      P(G.cyl(0.1, 0.1, 0.12, 10), grip, [0, -0.08, 0]);
+      if (rank >= 2) w.add(gem(glowCol, 0.04, [0, 0.05, 0.08], out));
+      if (rank >= 3) w.add(halo(glowCol, 0.16, [0, 0.16, 0.04], out, 0.3));
+      break;
+    }
+    case 'sickles': {
+      // Серп-полумесяц на короткой рукояти
+      P(G.cyl(0.03, 0.035, 0.22, 8), grip, [0, 0, 0]);
+      wraps(-0.07, 3, 0.038);
+      const blade = new THREE.Mesh(G.torus(0.22, 0.04, Math.PI * 1.1, 4, 14), metalMat);
+      blade.position.set(0.12, 0.2, 0);
+      blade.rotation.set(0, 0, Math.PI * 0.05);
+      blade.scale.set(1, 1.1, 0.45);
+      addOutline(blade, 0.014);
+      w.add(blade);
+      if (rank >= 1) P(G.torus(0.22, 0.012, Math.PI * 1.1, 3, 14), rank >= 2 ? glowCol : 0xffffff, [0.12, 0.2, 0.012], [0, 0, Math.PI * 0.05], [1.12, 1.22, 0.4], false);
+      if (rank >= 3) w.add(halo(glowCol, 0.2, [0.12, 0.32, 0], out, 0.3));
+      break;
+    }
+    case 'blunderbuss':
+    case 'handcannon':
+    case 'runerifle': {
+      // Огнестрел гнома: приклад назад (-y), ствол вперёд (+y)
+      const cannon = tpl === 'handcannon';
+      const rifle = tpl === 'runerifle';
+      const len = rifle ? 0.95 : cannon ? 0.55 : 0.75;
+      const brass = rank >= 2 ? GOLD : 0xc8a24a;
+      // Приклад и ложа
+      P(G.box(0.1, 0.36, 0.14), WOOD, [0, -0.2, -0.04], [-0.25, 0, 0], undefined, 0.015);
+      P(G.box(0.08, len * 0.7, 0.09), WOOD, [0, len * 0.3, -0.02], undefined, undefined, 0.012);
+      // Ствол
+      const barrel = new THREE.Mesh(G.cyl(cannon ? 0.085 : 0.05, cannon ? 0.075 : 0.05, len, 12), rank >= 1 ? metalMat : toon(0x6a6e76));
+      barrel.position.set(0, len * 0.45, 0.06);
+      addOutline(barrel, 0.014);
+      w.add(barrel);
+      // Раструб у мушкетона, дульное кольцо у пушки
+      if (tpl === 'blunderbuss') P(G.cone(0.11, 0.18, 12), brass, [0, len * 0.95, 0.06], [Math.PI, 0, 0], undefined, 0.012);
+      else P(G.torus(cannon ? 0.09 : 0.055, 0.025, Math.PI * 2, 4, 12), brass, [0, len * 0.92, 0.06], [Math.PI / 2, 0, 0], undefined, false);
+      for (const f of [0.2, 0.55]) P(G.torus(cannon ? 0.09 : 0.055, 0.018, Math.PI * 2, 4, 12), brass, [0, len * f, 0.06], [Math.PI / 2, 0, 0], undefined, false);
+      // Курок и спуск
+      P(G.box(0.03, 0.08, 0.05), 0x4a4a52, [0, 0.04, 0.12], [0.4, 0, 0], undefined, 0.006);
+      P(G.torus(0.035, 0.01, Math.PI * 2, 4, 8), 0x4a4a52, [0, -0.02, -0.07], [0, Math.PI / 2, 0], undefined, false);
+      if (rifle) {
+        // Светящиеся руны вдоль ствола и прицел
+        for (let i = 0; i < 3; i++) {
+          const r = new THREE.Mesh(G.box(0.06, 0.03, 0.02), toon(rank === 0 ? 0x7ae0ff : glowCol, { emissive: rank === 0 ? 0x4ab8ff : glowCol, emissiveIntensity: 0.9 }));
+          r.position.set(0, len * (0.3 + i * 0.2), 0.115);
+          w.add(r);
+          out.glow.push(r);
+        }
+        P(G.cyl(0.025, 0.025, 0.2, 8), 0x2a2a30, [0, len * 0.35, 0.14], undefined, undefined, 0.008);
+      }
+      if (cannon) P(G.sphere(0.07, 8, 6), 0x4a4a52, [0, 0.0, 0.06], undefined, undefined, 0.01);
+      if (rank >= 2) w.add(gem(glowCol, 0.04, [0.06, -0.1, -0.02], out));
+      if (rank >= 3) w.add(halo(glowCol, 0.2, [0, len * 0.9, 0.06], out, 0.3));
+      break;
+    }
     case 'crossbow': {
       // Ложа с металлическими накладками
       P(G.box(0.1, 0.08, 0.72), WOOD, [0, 0, 0.15], undefined, undefined, 0.015);

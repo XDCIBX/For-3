@@ -162,6 +162,7 @@ export interface LobbyActions {
   start(): void;
   addBot(): void;
   kick(id: string): void;
+  botCls(id: string, cls: HeroClass): void;
   leave(): void;
 }
 
@@ -170,6 +171,8 @@ export class LobbyScreen {
   readonly el: HTMLElement;
   private act: LobbyActions;
   private viewCls: HeroClass | null = null;
+  /** Бот, для которого сейчас открыт выбор класса. */
+  private pickFor: string | null = null;
   private lastKey = '';
 
   constructor(act: LobbyActions, local: boolean) {
@@ -188,7 +191,6 @@ export class LobbyScreen {
           <div class="slots"></div>
           <div class="lobby-actions">
             <button class="btn ghost" id="leave">← Выйти</button>
-            <button class="btn" id="bot">🤖 + Бот</button>
           </div>
         </div>
         <div class="lobby-mid"></div>
@@ -207,10 +209,6 @@ export class LobbyScreen {
       sfx.click();
       act.leave();
     });
-    this.el.querySelector('#bot')!.addEventListener('click', () => {
-      sfx.click();
-      act.addBot();
-    });
     this.el.querySelector('#start')!.addEventListener('click', () => {
       sfx.click();
       act.start();
@@ -227,7 +225,8 @@ export class LobbyScreen {
     const me = st.me;
     if (!me) return;
     const players = st.order.map((id) => st.players.get(id)!).filter(Boolean);
-    const key = JSON.stringify([st.code, players.map((p) => [p.id, p.n, p.c, p.rdy, p.host, p.bot]), this.viewCls]);
+    if (this.pickFor && !players.some((p) => p.id === this.pickFor && p.bot)) this.pickFor = null;
+    const key = JSON.stringify([st.code, players.map((p) => [p.id, p.n, p.c, p.rdy, p.host, p.bot]), this.viewCls, this.pickFor, me.host]);
     if (key === this.lastKey) return;
     this.lastKey = key;
     const code = this.el.querySelector('.code')!;
@@ -238,12 +237,38 @@ export class LobbyScreen {
     for (let i = 0; i < MAX_PLAYERS; i++) {
       const p = players[i];
       if (!p) {
-        slots.appendChild(el(`<div class="slot empty">Ожидание героя…</div>`));
+        // Хозяин добавляет бота прямо в пустое место — кнопка не съезжает
+        if (me.host) {
+          const b = el(`<button class="slot empty add-bot">🤖 Добавить бота</button>`);
+          b.addEventListener('click', () => {
+            sfx.click();
+            this.act.addBot();
+          });
+          slots.appendChild(b);
+        } else slots.appendChild(el(`<div class="slot empty">Ожидание героя…</div>`));
+        continue;
+      }
+      if (me.host && p.bot && this.pickFor === p.id) {
+        // Выбор класса бота: ряд свободных классов на месте строки
+        const taken = new Set(players.filter((q) => q.id !== p.id).map((q) => q.c));
+        const row = el(`<div class="slot bot-pick"><span class="bp-lbl">Класс:</span></div>`);
+        for (const c of HERO_CLASSES) {
+          const b = el<HTMLButtonElement>(`<button class="bp ${c === p.c ? 'sel' : ''}" style="background:${CLASS_BG[c]}" title="${CLASSES[c].name}" ${taken.has(c) ? 'disabled' : ''}>${classIcon(c)}</button>`);
+          b.addEventListener('click', () => {
+            sfx.click();
+            this.pickFor = null;
+            if (c !== p.c) this.act.botCls(p.id, c);
+            this.lastKey = '';
+            this.update(st);
+          });
+          row.appendChild(b);
+        }
+        slots.appendChild(row);
         continue;
       }
       const s = el(`
         <div class="slot">
-          <div class="avatar" style="background:${CLASS_BG[p.c]}">${classIcon(p.c)}</div>
+          <div class="avatar ${me.host && p.bot ? 'pickable' : ''}" style="background:${CLASS_BG[p.c]}" ${me.host && p.bot ? 'title="Сменить класс бота"' : ''}>${classIcon(p.c)}</div>
           <div style="flex:1;min-width:0">
             <div class="nm">${esc(p.n)} ${p.id === me.id ? '<span style="color:var(--gold)">(вы)</span>' : ''}</div>
             <div class="sub">${CLASSES[p.c].name}${p.host ? ' · хозяин' : ''}${p.bot ? ' · бот' : ''}</div>
@@ -252,6 +277,14 @@ export class LobbyScreen {
           ${me.host && p.bot ? `<button class="btn red small" data-kick="${p.id}">✕</button>` : ''}
         </div>`);
       s.querySelector('[data-kick]')?.addEventListener('click', () => this.act.kick(p.id));
+      if (me.host && p.bot) {
+        s.querySelector('.avatar')!.addEventListener('click', () => {
+          sfx.click();
+          this.pickFor = p.id;
+          this.lastKey = '';
+          this.update(st);
+        });
+      }
       slots.appendChild(s);
     }
 
@@ -303,8 +336,5 @@ export class LobbyScreen {
     const startBtn = this.el.querySelector<HTMLButtonElement>('#start')!;
     startBtn.style.display = me.host ? '' : 'none';
     startBtn.disabled = !players.every((p) => p.rdy);
-    const botBtn = this.el.querySelector<HTMLButtonElement>('#bot')!;
-    botBtn.style.display = me.host ? '' : 'none';
-    botBtn.disabled = players.length >= MAX_PLAYERS;
   }
 }

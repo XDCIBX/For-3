@@ -85,6 +85,31 @@ export function itemIcon(tpl: string, rarity: Rarity): string {
         `<rect x="29" y="40" width="6" height="20" rx="3" fill="#5a3a22" ${O}/><path d="M18 40 C18 22 24 12 32 12 C40 12 46 22 46 40 Z" fill="${M}" ${O}/><rect x="14" y="38" width="36" height="6" rx="3" fill="${gold}" ${O}/><circle cx="32" cy="47" r="4" fill="#6ff0ff" ${O}/><circle cx="32" cy="9" r="4" fill="${gold}" ${O}/><path d="M24 22 C26 18 28 17 30 16" stroke="#fff" stroke-opacity=".7" stroke-width="3" fill="none"/>`,
         defs,
       );
+    case 'claws':
+      return svg(
+        `<rect x="18" y="38" width="28" height="18" rx="5" fill="#5a3a24" ${O}/><rect x="18" y="38" width="28" height="5" fill="${gold}"/><path d="M22 38 C18 26 18 14 24 6 C26 16 28 26 28 38 Z" fill="${M}" ${O}/><path d="M30 38 C28 24 30 12 36 4 C37 16 37 26 36 38 Z" fill="${M}" ${O}/><path d="M38 38 C38 26 40 16 46 10 C46 20 44 30 44 38 Z" fill="${M}" ${O}/>`,
+        defs,
+      );
+    case 'knuckles':
+      return svg(
+        `<rect x="10" y="28" width="44" height="16" rx="8" fill="${M}" ${O}/><circle cx="18" cy="36" r="4" fill="#2a1b14"/><circle cx="28" cy="36" r="4" fill="#2a1b14"/><circle cx="38" cy="36" r="4" fill="#2a1b14"/><circle cx="48" cy="36" r="4" fill="#2a1b14"/><g fill="#fff6e0" ${O}><path d="M14 28 L18 12 L22 28 Z"/><path d="M25 28 L28 8 L32 28 Z"/><path d="M35 28 L38 12 L41 28 Z"/><path d="M45 28 L48 16 L51 28 Z"/></g><rect x="18" y="44" width="28" height="12" rx="4" fill="#5a3a24" ${O}/>`,
+        defs,
+      );
+    case 'sickles':
+      return svg(
+        `<rect x="28" y="38" width="7" height="22" rx="3" fill="#5a3a24" ${O}/><path d="M32 40 C14 38 8 18 22 6 C20 20 28 30 46 30 C42 36 38 40 32 40 Z" fill="${M}" ${O}/><path d="M22 10 C20 22 28 30 42 31" fill="none" stroke="#fff" stroke-opacity=".7" stroke-width="2.5"/>`,
+        defs,
+      );
+    case 'blunderbuss':
+    case 'handcannon':
+    case 'runerifle': {
+      const flare = tpl === 'blunderbuss' ? `<path d="M50 10 L60 4 L60 20 Z" fill="${gold}" ${O}/>` : tpl === 'handcannon' ? `<rect x="46" y="8" width="10" height="14" rx="3" fill="${gold}" ${O}/>` : `<path d="M24 22 H44" stroke="#7ae0ff" stroke-width="3"/>`;
+      const bw = tpl === 'handcannon' ? 12 : 7;
+      return svg(
+        `<g transform="rotate(-30 32 32)"><path d="M6 40 L22 34 L24 46 L10 54 Z" fill="${wood}" ${O}/><rect x="18" y="${16 - bw / 2 + 12}" width="38" height="${bw}" rx="3" fill="${M}" ${O}/>${flare}<rect x="20" y="32" width="18" height="6" fill="${wood}" ${O}/><path d="M26 40 C26 46 32 46 32 40" fill="none" ${O}/></g>`,
+        defs,
+      );
+    }
     case 'bow':
     case 'recurve':
       return svg(
@@ -171,6 +196,22 @@ export function skillIcon(id: string): string {
       return svg(`<path d="M14 24 L22 10 H42 L50 24 L54 46 L42 58 H22 L10 46 Z" fill="#8a8478" ${O}/><path d="M22 30 H30 M34 30 H42" stroke="#6ff0ff" stroke-width="4.5" stroke-linecap="round"/><path d="M24 44 L32 40 L40 44" stroke="#2a1b14" stroke-width="3" fill="none"/><path d="M18 14 L26 18 M46 14 L38 18" stroke="#5aa04a" stroke-width="4" stroke-linecap="round"/>`);
     case 'totem':
       return svg(`<rect x="22" y="18" width="20" height="42" rx="3" fill="#8a5a2b" ${O}/><path d="M22 38 H42" ${O}/><rect x="26" y="24" width="4" height="4" fill="#c9343a"/><rect x="34" y="24" width="4" height="4" fill="#c9343a"/><rect x="26" y="44" width="4" height="4" fill="#2ab8c8"/><rect x="34" y="44" width="4" height="4" fill="#2ab8c8"/><path d="M8 22 L22 26 M56 22 L42 26" stroke="#d9a441" stroke-width="6" stroke-linecap="round"/><circle cx="32" cy="10" r="7" fill="#6ff0ff" ${O}/>`);
+    case 'rend':
+      return svg(`<g stroke-linecap="round"><path d="M14 10 L34 52" stroke="#2a1b14" stroke-width="9"/><path d="M26 8 L44 50" stroke="#2a1b14" stroke-width="9"/><path d="M38 8 L54 46" stroke="#2a1b14" stroke-width="9"/><path d="M14 10 L34 52" stroke="#ffb070" stroke-width="5"/><path d="M26 8 L44 50" stroke="#ffd0a0" stroke-width="5"/><path d="M38 8 L54 46" stroke="#ffb070" stroke-width="5"/></g>`);
+    case 'pounce':
+      return svg(`<path d="M8 50 C18 14 42 10 56 24" fill="none" stroke="#c27a3a" stroke-width="4" stroke-dasharray="5 5"/><path d="M40 34 C40 24 54 22 56 30 L60 26 L58 36 C54 42 44 42 40 34 Z" fill="#8a5a36" ${O}/><path d="M46 26 L48 18 L52 25 Z" fill="#8a5a36" ${O}/><ellipse cx="14" cy="54" rx="10" ry="4" fill="#d8c8a8" ${O}/>`);
+    case 'howl':
+      return svg(`<path d="M20 58 C18 40 22 26 34 22 L40 8 L44 22 C50 26 50 36 46 42 L40 58 Z" fill="#8a5a36" ${O}/><path d="M36 28 L44 22" ${O}/><g fill="none" stroke="#ffd060" stroke-width="3.5" stroke-linecap="round"><path d="M50 10 C56 14 58 20 56 26"/><path d="M54 4 C62 10 64 20 60 30"/><path d="M14 18 C10 22 10 28 12 32"/></g>`);
+    case 'beast':
+      return svg(`<path d="M10 54 C8 34 18 16 32 14 C46 16 56 34 54 54 Z" fill="#4a2a1a" ${O}/><path d="M18 20 L14 4 L26 16 M46 20 L50 4 L38 16" fill="#4a2a1a" ${O}/><circle cx="24" cy="32" r="4.5" fill="#ff3a1a"/><circle cx="40" cy="32" r="4.5" fill="#ff3a1a"/><path d="M22 44 L26 50 L30 44 L34 50 L38 44 L42 50" fill="none" stroke="#fff6e0" stroke-width="3" stroke-linejoin="round"/>`);
+    case 'blast':
+      return svg(`<g transform="rotate(-20 32 32)"><rect x="6" y="30" width="30" height="9" rx="3" fill="#8a8e96" ${O}/><path d="M36 26 L46 22 L46 46 L36 42 Z" fill="#c8a24a" ${O}/></g><g fill="#ffd060" ${O}><circle cx="54" cy="12" r="4"/><circle cx="58" cy="26" r="4"/><circle cx="50" cy="38" r="4"/></g>`);
+    case 'bomb':
+      return svg(`<rect x="12" y="20" width="34" height="36" rx="10" fill="#8a5a2b" ${O}/><path d="M12 30 H46 M12 46 H46" stroke="#4a4a52" stroke-width="4"/><path d="M30 20 C32 12 40 10 44 6" fill="none" ${O}/><circle cx="46" cy="6" r="5" fill="#ffb030" ${O}/><path d="M52 2 L56 0 M54 10 L60 10" stroke="#ffd060" stroke-width="3" stroke-linecap="round"/>`);
+    case 'turret':
+      return svg(`<path d="M14 58 L24 38 M50 58 L40 38 M32 58 V40" ${O} stroke-width="5"/><rect x="18" y="20" width="28" height="20" rx="6" fill="#c8a24a" ${O}/><rect x="40" y="25" width="20" height="8" rx="3" fill="#8a8e96" ${O}/><circle cx="28" cy="30" r="5" fill="#ff7a3a" ${O}/>`);
+    case 'quake':
+      return svg(`<path d="M4 50 H60" ${O} stroke-width="5"/><path d="M32 50 L26 40 L34 34 L28 24 M32 50 L42 42 L38 32" fill="none" stroke="#2a1b14" stroke-width="4" stroke-linejoin="round"/><path d="M8 40 C12 32 18 32 20 40 M44 40 C46 32 52 32 56 40" fill="none" stroke="#d08a2a" stroke-width="4" stroke-linecap="round"/><rect x="24" y="4" width="16" height="18" rx="4" fill="#8a8e96" ${O}/>`);
     case 'rain':
       return svg(`<path d="M8 8 H56" stroke="#8ad0ff" stroke-width="5" stroke-linecap="round"/><g ${O}><path d="M14 16 V46 M30 14 V52 M46 16 V44"/></g><g fill="#e0e8f0" ${O}><path d="M10 44 L14 54 L18 44 Z"/><path d="M26 50 L30 60 L34 50 Z"/><path d="M42 42 L46 52 L50 42 Z"/></g>`);
   }
@@ -185,6 +226,10 @@ export function classIcon(cls: HeroClass): string {
       return svg(`<path d="M6 50 C20 44 44 44 58 50 C50 56 14 56 6 50 Z" fill="#6b3fc4" ${O}/><path d="M18 48 L30 6 C36 10 40 12 46 12 L44 48 Z" fill="#7b4fd4" ${O}/><path d="M19 42 H45" stroke="#ffc93c" stroke-width="5"/><path d="M34 22 L36 27 L41 27 L37 30 L39 35 L34 32 L30 35 L31 30 L27 27 L32 27 Z" fill="#ffe14a"/>`);
     case 'hunter':
       return svg(`<g transform="rotate(35 32 32)"><path d="M29 46 V10 L32 3 L35 10 V46 Z" fill="#d8e8e0" ${O}/><rect x="26" y="46" width="12" height="10" fill="#2c2733" ${O}/></g><g transform="rotate(-35 32 32)"><path d="M29 46 V10 L32 3 L35 10 V46 Z" fill="#d8e8e0" ${O}/><rect x="26" y="46" width="12" height="10" fill="#2c2733" ${O}/></g><path d="M20 30 H44" stroke="#5dff8a" stroke-width="4" stroke-linecap="round"/>`);
+    case 'werewolf':
+      return svg(`<path d="M10 56 C8 36 16 22 32 20 C48 22 56 36 54 56 Z" fill="#8a5a36" ${O}/><path d="M16 26 L12 4 L28 20 M48 26 L52 4 L36 20" fill="#8a5a36" ${O}/><path d="M22 42 C22 34 42 34 42 42 C42 52 22 52 22 42 Z" fill="#d8b088" ${O}/><ellipse cx="32" cy="40" rx="5" ry="3.5" fill="#1a1210"/><circle cx="23" cy="32" r="3.5" fill="#ffd060" ${O}/><circle cx="41" cy="32" r="3.5" fill="#ffd060" ${O}/>`);
+    case 'dwarf':
+      return svg(`<path d="M10 30 C10 12 54 12 54 30 Z" fill="#c8a24a" ${O}/><rect x="8" y="28" width="48" height="6" rx="3" fill="#a8822a" ${O}/><circle cx="32" cy="20" r="5" fill="#fff2b0" ${O}/><path d="M12 36 C12 62 52 62 52 36 C44 44 20 44 12 36 Z" fill="#d8742a" ${O}/><circle cx="32" cy="40" r="5" fill="#f5b98f" ${O}/>`);
     case 'summoner':
       return svg(`<path d="M14 52 C14 30 50 30 50 52 Z" fill="#2a8f9a" ${O}/><path d="M16 26 L12 6 L22 22 M26 22 L26 2 L32 20 M38 20 L42 2 L42 22 M48 22 L54 6 L50 26" fill="#fff" ${O}/><rect x="14" y="22" width="36" height="7" rx="3" fill="#c9343a" ${O}/><circle cx="32" cy="42" r="6" fill="#6ff0ff" ${O}/>`);
     case 'archer':

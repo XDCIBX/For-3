@@ -107,6 +107,38 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
       { id: 'totem', name: 'Тотем духов', desc: 'Тотем на 8 сек.: стреляет по врагам, каждые полсекунды ранит всех врагов в круге волной духов и лечит союзников рядом.', cd: 14, aim: 'point', range: 9, radius: 5.5 },
     ],
   },
+  werewolf: {
+    id: 'werewolf',
+    name: 'Оборотень',
+    title: 'Дитя полнолуния',
+    desc: 'Свирепый боец ближнего боя. Прыгает на добычу, воем наводит ужас и обращается в огромного зверя.',
+    color: '#c27a3a',
+    passive: { name: 'Зов крови', desc: 'Когда здоровья меньше 40%, урон выше на 15%, а регенерация втрое сильнее.' },
+    base: { maxHp: 270, damage: 18, armor: 11, speed: 5.6, attackSpeed: 1, crit: 0.08, cdr: 0, regen: 2.0, lifesteal: 0.03, skillPower: 0 },
+    difficulty: 2,
+    skills: [
+      { id: 'rend', name: 'Удар когтями', desc: 'Размашистый удар когтями по всем врагам перед собой.', cd: 0.55, aim: 'dir', range: 2.6 },
+      { id: 'pounce', name: 'Прыжок хищника', desc: 'Прыжок в выбранную точку: при приземлении ранит и замедляет врагов вокруг.', cd: 7, aim: 'point', range: 8, radius: 2.6 },
+      { id: 'howl', name: 'Вой', desc: 'Вой наводит ужас: враги вокруг ранены, на миг замирают от страха и замедляются.', cd: 10, aim: 'self', range: 0, radius: 6 },
+      { id: 'beast', name: 'Звериная форма', desc: '8 сек. в облике огромного зверя: +25% урона, +20% скорости атаки, на 15% меньше получаемого урона.', cd: 20, aim: 'self', range: 0, radius: 1.5 },
+    ],
+  },
+  dwarf: {
+    id: 'dwarf',
+    name: 'Гном',
+    title: 'Мастер пороха',
+    desc: 'Крепкий гном-инженер с мушкетоном. Ставит турели, швыряет пороховые бочки и сотрясает землю.',
+    color: '#d08a2a',
+    passive: { name: 'Каменная кровь', desc: 'Получает на 12% меньше урона, но бегает медленнее.' },
+    base: { maxHp: 250, damage: 17, armor: 13, speed: 4.9, attackSpeed: 1, crit: 0.06, cdr: 0, regen: 1.8, lifesteal: 0, skillPower: 0 },
+    difficulty: 2,
+    skills: [
+      { id: 'blast', name: 'Залп дробью', desc: 'Мушкетон стреляет веером из трёх дробин. Вблизи попадают все.', cd: 0.65, aim: 'dir', range: 8 },
+      { id: 'bomb', name: 'Пороховая бочка', desc: 'Бочка летит в точку и взрывается: большой урон по площади и оглушение.', cd: 8, aim: 'point', range: 9, radius: 3 },
+      { id: 'turret', name: 'Турель', desc: 'Механическая турель на 12 сек. стреляет по ближайшим врагам и отвлекает их.', cd: 15, aim: 'point', range: 6, radius: 1 },
+      { id: 'quake', name: 'Землетрясение', desc: 'Удар о землю: волна ранит и оглушает всех врагов вокруг.', cd: 14, aim: 'self', range: 0, radius: 5 },
+    ],
+  },
 };
 
 export const STAT_LABELS: Record<keyof Stats, string> = {

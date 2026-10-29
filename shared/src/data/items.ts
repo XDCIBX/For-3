@@ -62,6 +62,14 @@ export const ITEM_TEMPLATES: ItemTemplate[] = [
   { id: 'totemstaff', slot: 'weapon', cls: 'summoner', names: ['Резной посох', 'Посох шамана', 'Тотем Грома', 'Древо Жизни', 'Тотем Первых Предков'], stats: { damage: 5, maxHp: 30 } },
   { id: 'bell', slot: 'weapon', cls: 'summoner', names: ['Медный колокольчик', 'Колокол зова', 'Колокол Предков', 'Глас Небес', 'Колокол Конца Времён'], stats: { damage: 5, attackSpeed: 0.08 } },
   // --- Голова ---
+  { id: 'claws', slot: 'weapon', cls: 'werewolf', names: ['Костяные когти', 'Стальные когти', 'Когти Полнолуния', 'Когти Вожака Стаи', 'Когти Кровавой Луны'], stats: { damage: 6, crit: 0.03 } },
+  { id: 'knuckles', slot: 'weapon', cls: 'werewolf', names: ['Клыкастые кастеты', 'Кастеты охотника', 'Пасть Зверя', 'Клыки Фенрира', 'Челюсти Пожирателя Лун'], stats: { damage: 5, lifesteal: 0.03 } },
+  { id: 'sickles', slot: 'weapon', cls: 'werewolf', names: ['Ржавые серпы', 'Лунные серпы', 'Серпы Затмения', 'Серпы Серебряной Луны', 'Серпы Алой Луны'], stats: { damage: 5, attackSpeed: 0.06 } },
+
+  { id: 'blunderbuss', slot: 'weapon', cls: 'dwarf', names: ['Старый мушкетон', 'Мушкетон рудокопа', 'Громобой', 'Мушкетон Подгорного Короля', 'Пасть Вулкана'], stats: { damage: 6, crit: 0.03 } },
+  { id: 'handcannon', slot: 'weapon', cls: 'dwarf', names: ['Ручная пушка', 'Бронзовая пушка', 'Пушка Кузнеца', 'Драконья Пушка', 'Пушка Багрового Горна'], stats: { damage: 7, armor: 2 } },
+  { id: 'runerifle', slot: 'weapon', cls: 'dwarf', names: ['Шахтёрское ружьё', 'Рунное ружьё', 'Ружьё Глубин', 'Ружьё Древних Рун', 'Ружьё Огненных Рун'], stats: { damage: 5, attackSpeed: 0.06 } },
+
   { id: 'helm', slot: 'helmet', cls: null, names: ['Кожаная шапка', 'Железный шлем', 'Шлем Стража', 'Корона Королей', 'Венец Багрового Короля'], stats: { maxHp: 25, armor: 3 } },
   { id: 'hood', slot: 'helmet', cls: null, names: ['Тряпичный капюшон', 'Капюшон следопыта', 'Капюшон Тени', 'Венец Мудрости', 'Капюшон Алой Тени'], stats: { crit: 0.03, cdr: 0.03 } },
   // --- Доспех ---

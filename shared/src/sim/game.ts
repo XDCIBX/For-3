@@ -60,9 +60,11 @@ export interface Player {
   whirlTick: number;
   /** Демоническая форма охотника. */
   demonT: number;
+  /** Звериная форма оборотня. */
+  beastT: number;
   faceT: number;
   lastHurt: number;
-  dash: { vx: number; vz: number; t: number; hit: Set<number | string>; kind: 'charge' | 'roll' | 'shadow' } | null;
+  dash: { vx: number; vz: number; t: number; hit: Set<number | string>; kind: 'charge' | 'roll' | 'shadow' | 'pounce' } | null;
   /** Внутреннее состояние ИИ ботов. */
   ai: { think: number; tavernT: number; strafe: number; aimErr: number };
 }
@@ -132,6 +134,8 @@ const GOLD_DROP = 0.75 * 1.25 * 1.35;
 const TOTEM_R = 5.5;
 const TOTEM_PULSE = 0.14;
 const TOTEM_PULSE_DUEL = 0.1;
+/** Выстрел турели гнома (доля урона гнома). */
+const TURRET_SHOT = 0.6;
 
 /** Призванный помощник (волк, голем, тотем). */
 export interface Minion {
@@ -283,6 +287,7 @@ export class Game {
       whirlT: 0,
       whirlTick: 0,
       demonT: 0,
+      beastT: 0,
       faceT: 0,
       lastHurt: 99,
       dash: null,
@@ -367,6 +372,16 @@ export class Game {
       case 'addBot':
         if (this.phase === 'lobby' && p.host) this.addBot();
         break;
+      case 'botcls': {
+        const q = this.players.get(String(msg.id));
+        if (this.phase !== 'lobby' || !p.host || !q || !q.bot || !HERO_CLASSES.includes(msg.cls)) return;
+        if ([...this.players.values()].some((o) => o.id !== q.id && o.cls === msg.cls)) return;
+        q.cls = msg.cls;
+        q.stats = computeStats(q.cls, q.equip);
+        q.hp = q.stats.maxHp;
+        this.dirty = true;
+        break;
+      }
       case 'kick': {
         const q = this.players.get(String(msg.id));
         if (this.phase === 'lobby' && p.host && q && q.bot) this.removePlayer(q.id);
@@ -425,7 +440,7 @@ export class Game {
     p.hp = p.stats.maxHp;
     p.shield = p.cls === 'mage' ? this.shieldMax(p) : 0;
     p.cds = [0, 0, 0, 0];
-    p.stunT = p.frozenT = p.slowT = p.invulnT = p.warcryT = p.rageT = p.hasteT = p.whirlT = p.demonT = 0;
+    p.stunT = p.frozenT = p.slowT = p.invulnT = p.warcryT = p.rageT = p.hasteT = p.whirlT = p.demonT = p.beastT = 0;
     p.dash = null;
     p.input = { mx: 0, mz: 0 };
     p.lastHurt = 99;
@@ -783,6 +798,9 @@ export class Game {
     if (p.warcryT > 0) v *= this.phase === 'duel' ? 1.12 : 1.3;
     else if (p.rageT > 0) v *= 1.25;
     if (p.demonT > 0) v *= 1.1;
+    if (p.beastT > 0) v *= this.phase === 'duel' ? 1.2 : 1.25;
+    // Зов крови оборотня
+    if (p.cls === 'werewolf' && p.hp < p.stats.maxHp * 0.4) v *= 1.15;
     const crit = canCrit && this.rng.next() < p.stats.crit;
     if (crit) v *= p.cls === 'archer' ? 2.2 : 2;
     return { v, crit };
@@ -852,6 +870,9 @@ export class Game {
     if (!t.alive || t.invulnT > 0 || t.spectator || !canMovePhase(this.phase)) return 0;
     if (t.warcryT > 0) v *= this.phase === 'duel' ? 0.85 : 0.6;
     if (t.demonT > 0) v *= 0.9;
+    if (t.beastT > 0) v *= this.phase === 'duel' ? 0.87 : 0.85;
+    // Каменная кровь гнома
+    if (t.cls === 'dwarf') v *= 0.88;
     if (t.cls === 'summoner') {
       // Связь душ: треть урона забирает на себя ближайший помощник
       let link: Minion | null = null;
@@ -899,7 +920,7 @@ export class Game {
     this.events.push({ e: 'ndie', id: n.id, x: r2(n.x), z: r2(n.z) });
     // Пассивка призывателя: гибель помощника лечит хозяина
     const o = this.players.get(n.owner);
-    if (slain && o && o.alive) o.hp = Math.min(o.stats.maxHp, o.hp + o.stats.maxHp * 0.1);
+    if (slain && o && o.alive && o.cls === 'summoner') o.hp = Math.min(o.stats.maxHp, o.hp + o.stats.maxHp * 0.1);
   }
 
   private playerDie(p: Player, killer: string | null) {
@@ -908,6 +929,7 @@ export class Game {
     p.dash = null;
     p.whirlT = 0;
     p.demonT = 0;
+    p.beastT = 0;
     p.input = { mx: 0, mz: 0 };
     this.events.push({ e: 'pdie', pid: p.id });
     for (const n of [...this.minions.values()]) if (n.owner === p.id) this.killMinion(n, false);
@@ -960,7 +982,7 @@ export class Game {
       p.faceT = 0.45;
     }
 
-    const atkSpd = p.stats.attackSpeed * (p.hasteT > 0 ? 1.6 : 1) * (p.demonT > 0 ? (this.phase === 'duel' ? 1.25 : 1.4) : 1);
+    const atkSpd = p.stats.attackSpeed * (p.hasteT > 0 ? 1.6 : 1) * (p.demonT > 0 ? (this.phase === 'duel' ? 1.25 : 1.4) : 1) * (p.beastT > 0 ? 1.2 : 1);
     p.cdMax[s] = s === 0 ? def.cd / atkSpd : def.cd * (1 - p.stats.cdr);
     p.cds[s] = p.cdMax[s];
     this.events.push({ e: 'cast', pid: p.id, s, r: r2(p.rot), x: r2(tx), z: r2(tz) });
@@ -1100,6 +1122,59 @@ export class Game {
         this.summon(p, 'totem', tx, tz);
         break;
       }
+      // ---------------- Оборотень
+      case 'werewolf:0': {
+        for (const t of this.targetsFor(p)) {
+          const ox = t.x - p.x;
+          const oz = t.z - p.z;
+          const d = Math.hypot(ox, oz);
+          if (d - t.rad > def.range) continue;
+          if (d > 0.8 && (ox * dx + oz * dz) / d < Math.cos((70 * Math.PI) / 180)) continue;
+          this.hit(p, t, 1.1);
+        }
+        this.events.push({ e: 'fx', k: 'rend', x: r2(p.x), z: r2(p.z), rot: r2(p.rot), pid: p.id });
+        break;
+      }
+      case 'werewolf:1': {
+        // Прыжок занимает 0,4 с, скорость — чтобы долететь до точки
+        const d = Math.max(2, Math.hypot(tx - p.x, tz - p.z));
+        p.dash = { vx: (dx * d) / 0.4, vz: (dz * d) / 0.4, t: 0.4, hit: new Set(), kind: 'pounce' };
+        this.events.push({ e: 'fx', k: 'pounce', x: r2(p.x), z: r2(p.z), rot: r2(p.rot), pid: p.id });
+        break;
+      }
+      case 'werewolf:2': {
+        const duel = this.phase === 'duel';
+        for (const t of this.targetsFor(p)) {
+          if (Math.hypot(t.x - p.x, t.z - p.z) - t.rad < 6) this.hit(p, t, 0.8, { stun: duel ? 0.4 : 0.9, slow: 0.45, slowT: 2.5 });
+        }
+        this.events.push({ e: 'fx', k: 'howl', x: r2(p.x), z: r2(p.z), r: 6, pid: p.id });
+        break;
+      }
+      case 'werewolf:3':
+        p.beastT = 8;
+        this.events.push({ e: 'fx', k: 'beast', x: r2(p.x), z: r2(p.z), r: 3, pid: p.id });
+        break;
+      // ---------------- Гном
+      case 'dwarf:0': {
+        const base = Math.atan2(dx, dz);
+        for (const off of [-0.22, 0, 0.22]) this.fireProj(p, 'pellet', Math.sin(base + off), Math.cos(base + off), 24, def.range, 0.6, 0.32, 0);
+        this.events.push({ e: 'fx', k: 'blast', x: r2(p.x), z: r2(p.z), rot: r2(p.rot), pid: p.id });
+        break;
+      }
+      case 'dwarf:1':
+        this.addZone('bomb', p.id, tx, tz, 3, 0, 0.8, 2.4);
+        break;
+      case 'dwarf:2': {
+        for (const n of [...this.minions.values()]) if (n.owner === p.id && n.kind === 'turret') this.killMinion(n, false);
+        this.summon(p, 'turret', tx, tz);
+        break;
+      }
+      case 'dwarf:3': {
+        const duel = this.phase === 'duel';
+        for (const t of this.targetsFor(p)) if (Math.hypot(t.x - p.x, t.z - p.z) - t.rad < 5) this.hit(p, t, 2.0, { stun: duel ? 0.6 : 1.0 });
+        this.events.push({ e: 'fx', k: 'quake', x: r2(p.x), z: r2(p.z), r: 5, pid: p.id });
+        break;
+      }
     }
   }
 
@@ -1112,6 +1187,7 @@ export class Game {
       wolf: { hp: st.maxHp * 0.32 * hpm, armor: st.armor, speed: 6.2, radius: 0.45, life: 14 },
       golem: { hp: st.maxHp * (this.phase === 'duel' ? 0.9 : 1.1) * hpm, armor: st.armor + 12, speed: 3.6, radius: 0.85, life: 16 },
       totem: { hp: 9999, armor: 999, speed: 0, radius: 0.5, life: 8 },
+      turret: { hp: st.maxHp * 0.55 * hpm, armor: st.armor + 6, speed: 0, radius: 0.6, life: 12 },
     }[kind];
     const pos = { x, z };
     resolveCollision(pos, spec.radius, this.obstacles, this.bound);
@@ -1153,6 +1229,34 @@ export class Game {
       n.pulse -= dt;
       n.retarget -= dt;
       const enemies = this.targetsFor(owner);
+      if (n.kind === 'turret') {
+        if (n.atkCd <= 0) {
+          let best: Target | null = null;
+          let bd = 11;
+          for (const t of enemies) {
+            const d = Math.hypot(t.x - n.x, t.z - n.z) - t.rad;
+            if (d < bd) {
+              bd = d;
+              best = t;
+            }
+          }
+          if (best) {
+            n.atkCd = 0.6;
+            const ddx = best.x - n.x;
+            const ddz = best.z - n.z;
+            const l = Math.hypot(ddx, ddz) || 1;
+            this.minionStrike = true;
+            const pr = this.fireProj(owner, 'pellet', ddx / l, ddz / l, 22, 11, TURRET_SHOT, 0.3, 0);
+            this.minionStrike = false;
+            pr.fromMinion = true;
+            pr.x = n.x + (ddx / l) * 0.6;
+            pr.z = n.z + (ddz / l) * 0.6;
+            n.rot = Math.atan2(ddx, ddz);
+            this.events.push({ e: 'natk', id: n.id });
+          }
+        }
+        continue;
+      }
       if (n.kind === 'totem') {
         // Лечение союзников рядом
         for (const q of this.players.values()) {
@@ -1328,6 +1432,7 @@ export class Game {
       p.rageT = Math.max(0, p.rageT - dt);
       p.hasteT = Math.max(0, p.hasteT - dt);
       p.demonT = Math.max(0, p.demonT - dt);
+      p.beastT = Math.max(0, p.beastT - dt);
       p.faceT = Math.max(0, p.faceT - dt);
       p.lastHurt += dt;
 
@@ -1346,7 +1451,8 @@ export class Game {
       if (p.spectator) continue;
 
       // Регенерация и щит мага
-      p.hp = Math.min(p.stats.maxHp, p.hp + p.stats.regen * dt);
+      const bloodCall = p.cls === 'werewolf' && p.hp < p.stats.maxHp * 0.4 ? 3 : 1;
+      p.hp = Math.min(p.stats.maxHp, p.hp + p.stats.regen * bloodCall * dt);
       if (p.cls === 'mage') {
         const shm = this.shieldMax(p);
         if (p.lastHurt > 4) p.shield = Math.min(shm, p.shield + shm * 0.15 * dt);
@@ -1379,7 +1485,14 @@ export class Game {
             }
           }
         }
-        if (p.dash.t <= 0) p.dash = null;
+        if (p.dash.t <= 0) {
+          if (p.dash.kind === 'pounce') {
+            // Приземление прыжка: удар по площади
+            for (const t of this.targetsFor(p)) if (Math.hypot(t.x - pos.x, t.z - pos.z) - t.rad < 2.6) this.hit(p, t, 1.5, { slow: 0.4, slowT: 1.5 });
+            this.events.push({ e: 'fx', k: 'pland', x: r2(pos.x), z: r2(pos.z), r: 2.6, pid: p.id });
+          }
+          p.dash = null;
+        }
       } else {
         const spd = this.effectiveSpeed(p);
         pos.x += p.input.mx * spd * dt;
@@ -1826,6 +1939,15 @@ export class Game {
           }
           if (zn.t > zn.delay + 0.15) this.zones.delete(zn.id);
           break;
+        case 'bomb':
+          if (!zn.fired && zn.t >= zn.delay) {
+            zn.fired = true;
+            const duel = this.phase === 'duel';
+            if (owner) for (const t of this.targetsFor(owner)) if (Math.hypot(t.x - zn.x, t.z - zn.z) - t.rad < zn.r) this.hit(owner, t, zn.dmg, { stun: duel ? 0.5 : 0.8 });
+            this.events.push({ e: 'fx', k: 'explode', x: r2(zn.x), z: r2(zn.z), r: zn.r });
+          }
+          if (zn.t > zn.delay + 0.15) this.zones.delete(zn.id);
+          break;
         case 'slam':
           if (!zn.fired) {
             zn.fired = true;
@@ -1882,6 +2004,7 @@ export class Game {
       if (p.slowT > 0) st += 'l';
       if (p.spectator) st += 'x';
       if (p.demonT > 0) st += 'm';
+      if (p.beastT > 0) st += 'v';
       const ps: PlayerSnap = {
         id: p.id,
         n: p.name,

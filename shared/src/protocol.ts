@@ -7,6 +7,8 @@ export type GameMsg =
   | { t: 'start' }
   | { t: 'addBot' }
   | { t: 'kick'; id: string }
+  /** Хозяин меняет класс бота. */
+  | { t: 'botcls'; id: string; cls: HeroClass }
   | { t: 'in'; mx: number; mz: number }
   | { t: 'cast'; s: number; dx: number; dz: number; d: number }
   | { t: 'buy'; id: string }
@@ -38,7 +40,7 @@ export interface PlayerSnap {
   rs: number;
   cd: number[];
   cdm: number[];
-  /** Флаги состояния: s — оглушён, f — заморожен, w — вихрь, i — неуязвим, c — боевой клич, h — ускорение, r — ярость, d — рывок, l — замедлен, x — зритель, m — демоническая форма. */
+  /** Флаги состояния: s — оглушён, f — заморожен, w — вихрь, i — неуязвим, c — боевой клич, h — ускорение, r — ярость, d — рывок, l — замедлен, x — зритель, m — демоническая форма, v — звериная форма оборотня. */
   st: string;
   sp: number;
   rdy: boolean;

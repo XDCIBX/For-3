@@ -49,8 +49,8 @@ export function updateBot(g: Game, p: Player, dt: number) {
   const dist = Math.hypot(dx, dz) || 0.01;
   const nx = dx / dist;
   const nz = dz / dist;
-  const melee = p.cls === 'warrior' || p.cls === 'hunter';
-  const desired = melee ? 1.4 : p.cls === 'mage' || p.cls === 'summoner' ? 7.5 : 9;
+  const melee = p.cls === 'warrior' || p.cls === 'hunter' || p.cls === 'werewolf';
+  const desired = melee ? 1.4 : p.cls === 'dwarf' ? 5 : p.cls === 'mage' || p.cls === 'summoner' ? 7.5 : 9;
 
   // Опасность рядом: сколько врагов близко
   const all = g.targetsFor(p);
@@ -115,6 +115,20 @@ export function updateBot(g: Game, p: Player, dt: number) {
       else if (ready(2) && dist < sk[2].range) cast(2);
       else if (ready(0) && dist - target.rad < sk[0].range) cast(0);
       break;
+    case 'werewolf':
+      if (ready(3) && (near(5) >= 3 || target.kind === 'p')) cast(3);
+      else if (ready(2) && (near(6) >= 3 || (target.kind === 'p' && dist < 5))) cast(2);
+      else if (ready(1) && dist > 3 && dist < sk[1].range) cast(1, aim(0.05), dist);
+      else if (ready(0) && dist - target.rad < sk[0].range) cast(0);
+      break;
+    case 'dwarf': {
+      const turret = [...g.minions.values()].some((n) => n.owner === p.id && n.kind === 'turret');
+      if (ready(3) && (near(5) >= 3 || (target.kind === 'p' && dist < 4.5))) cast(3);
+      else if (ready(2) && !turret && dist < 12) cast(2, aim(0.05), Math.min(dist, 4));
+      else if (ready(1) && dist < sk[1].range && (near(9) >= 2 || target.kind === 'p')) cast(1, aim(0.05), dist);
+      else if (ready(0) && dist < sk[0].range) cast(0);
+      break;
+    }
     case 'summoner': {
       const mine = [...g.minions.values()].filter((n) => n.owner === p.id);
       if (ready(1) && !mine.some((n) => n.kind === 'wolf')) cast(1);

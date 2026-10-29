@@ -99,7 +99,7 @@ function loop(now: number) {
   last = now;
   heroes.forEach((h) => {
     if (cast !== null && Math.random() < 0.01) h.playCast(Number(cast));
-    h.update(dt, { speed: Number(q.get('speed') ?? 0), dead: false, stun: false, frozen: false, whirl: false, dash: false, invuln: false, buff: false, demon: q.has('demon') });
+    h.update(dt, { speed: Number(q.get('speed') ?? 0), dead: false, stun: false, frozen: false, whirl: false, dash: false, invuln: false, buff: false, demon: q.has('demon'), beast: q.has('beast') });
   });
   minions.forEach((m) => {
     if (cast !== null && Math.random() < 0.01) m.playAttack();

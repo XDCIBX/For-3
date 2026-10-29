@@ -268,7 +268,12 @@ export class Engine {
       const model = new HeroModel(l.cls);
       const off = i - (list.length - 1) / 2;
       const meIdx = list.findIndex((x) => x.me);
-      if (meIdx >= 0) {
+      if (meIdx < 0 && list.length > 3) {
+        // Главное меню: все классы у костра в два ряда — передний из 4, задний из 3
+        const front = i < 4;
+        const j = front ? i : i - 4;
+        model.root.position.set(front ? (j - 1.5) * 2.05 : (j - 1) * 2.05, 0, front ? 3.0 : 1.2);
+      } else if (meIdx >= 0) {
         // В лобби свой герой — в центре, союзники чуть позади
         const others = list.map((_, j) => j).filter((j) => j !== meIdx);
         if (i === meIdx) model.root.position.set(0, 0, 3.4);
@@ -602,6 +607,28 @@ export class Engine {
               this.effects.hammerCatch(hp.x, hp.y, hp.z);
               break;
             }
+            case 'rend':
+              this.effects.rend(e.x, e.z, e.rot ?? 0);
+              break;
+            case 'pounce':
+              this.effects.pounce(e.x, e.z);
+              break;
+            case 'pland':
+              this.effects.pounceLand(e.x, e.z, e.r ?? 2.6);
+              break;
+            case 'howl':
+              this.effects.howl(e.x, e.z, e.r ?? 6);
+              break;
+            case 'beast':
+              this.effects.beast(e.x, e.z);
+              if (this.arenaStage) this.arenaStage.excitement = 1;
+              break;
+            case 'blast':
+              this.effects.muzzle(e.x, e.z, e.rot ?? 0);
+              break;
+            case 'quake':
+              this.effects.quake(e.x, e.z, e.r ?? 5);
+              break;
             case 'tpulse':
               this.effects.totemPulse(e.x, e.z, e.r ?? 5.5);
               if (e.id !== undefined) this.minions.get(e.id)?.model.playAttack();
@@ -621,11 +648,15 @@ export class Engine {
         case 'matk':
           this.mobs.get(e.id)?.model.playAttack();
           break;
-        case 'natk':
-          this.minions.get(e.id)?.model.playAttack();
+        case 'natk': {
+          const mv = this.minions.get(e.id);
+          mv?.model.playAttack();
+          if (mv?.info.k === 'turret') this.effects.muzzle(mv.model.root.position.x, mv.model.root.position.z, mv.model.root.rotation.y, false);
           break;
+        }
         case 'summon':
-          this.effects.summon(e.x, e.z, e.k !== 'wolf');
+          if (e.k === 'turret') this.effects.turretUp(e.x, e.z);
+          else this.effects.summon(e.x, e.z, e.k !== 'wolf');
           break;
         case 'ndie':
           this.effects.unsummon(e.x, e.z);
@@ -773,6 +804,7 @@ export class Engine {
         invuln: p.st.includes('i'),
         buff: p.st.includes('c') || p.st.includes('r'),
         demon: p.st.includes('m'),
+        beast: p.st.includes('v'),
       });
       if (p.st.includes('m') && Math.random() < dt * 18) this.fx.glow({ x: root.position.x + (Math.random() - 0.5) * 0.8, y: 0.3 + Math.random() * 1.4, z: root.position.z + (Math.random() - 0.5) * 0.8, vy: 2, life: 0.5, size: 0.2, grow: -0.3, color: Math.random() < 0.7 ? 0x5dff8a : 0xb070ff });
       v.bar.update(dt);
@@ -897,9 +929,19 @@ export class Engine {
     cam.clearViewOffset();
     FADE_R.value = 0;
     if (this.mode === 'menu') {
-      const sway = Math.sin(this.menuT * 0.15) * 1.6;
-      cam.position.set(sway, 3.4 * zoom, 2.6 + 7.6 * zoom);
-      cam.lookAt(sway * 0.3, 1.25, 1.6);
+      if (this.menuHeroes.length > 3) {
+        // Вся линейка героев должна поместиться в свободную от меню часть экрана
+        const vis = Math.max(0.3, 1 - this.menuShift);
+        const need = 9.2 / (2 * Math.tan((cam.fov * Math.PI) / 360) * aspect * vis);
+        const d = Math.max(7.6 * zoom, need);
+        const sway = Math.sin(this.menuT * 0.15) * 0.8;
+        cam.position.set(sway, 1.6 + d * 0.33, 2.2 + d);
+        cam.lookAt(sway * 0.3, 1.1, 1.9);
+      } else {
+        const sway = Math.sin(this.menuT * 0.15) * 1.6;
+        cam.position.set(sway, 3.4 * zoom, 2.6 + 7.6 * zoom);
+        cam.lookAt(sway * 0.3, 1.25, 1.6);
+      }
       if (this.menuShift > 0) {
         const w = window.innerWidth;
         const h = window.innerHeight;

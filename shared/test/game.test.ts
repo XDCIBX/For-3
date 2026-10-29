@@ -229,3 +229,36 @@ test('тотем призывателя каждые полсекунды ран
   assert.ok(pulses >= 4 && pulses <= 6, `волн: ${pulses}`);
   assert.ok(mob.hp < mob.maxHp);
 });
+
+test('оборотень прыгает и бьёт при приземлении; гном ставит турель; хозяин меняет класс бота', () => {
+  const g = new Game(21);
+  const a = g.addPlayer('Аня') as Player;
+  const bot = g.addBot() as Player;
+  // Хозяин выбирает боту класс, занятый класс взять нельзя
+  g.handle(a.id, { t: 'botcls', id: bot.id, cls: 'dwarf' });
+  assert.equal(bot.cls, 'dwarf');
+  g.handle(a.id, { t: 'botcls', id: bot.id, cls: a.cls });
+  assert.equal(bot.cls, 'dwarf');
+  g.handle(a.id, { t: 'pick', cls: 'werewolf' });
+  assert.equal(a.cls, 'werewolf');
+  g.startGame();
+  run(g, 3.2);
+  for (const m of [...g.mobs.values()]) g.mobs.delete(m.id);
+  const m = g.spawnMob('orc', a.x + 6, a.z);
+  m.spawnT = 0;
+  m.dmg = 0;
+  const hp0 = m.hp;
+  g.castSkill(a, 1, 1, 0, 6);
+  const fx: string[] = [];
+  for (let i = 0; i < 12; i++) {
+    g.update(DT);
+    for (const e of g.snapshot().E) if (e.e === 'fx') fx.push(e.k);
+  }
+  assert.ok(fx.includes('pounce') && fx.includes('pland'), fx.join());
+  assert.ok(m.hp < hp0, 'приземление ранит');
+  assert.ok(Math.hypot(a.x - m.x, a.z - m.z) < 3, 'оборотень долетел до цели');
+  // Турель гнома
+  bot.alive = true;
+  g.castSkill(bot, 2, 1, 0, 3);
+  assert.ok([...g.minions.values()].some((n) => n.owner === bot.id && n.kind === 'turret'));
+});
