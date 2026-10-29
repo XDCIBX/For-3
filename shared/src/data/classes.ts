@@ -113,8 +113,8 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
     title: 'Дитя полнолуния',
     desc: 'Свирепый боец ближнего боя. Прыгает на добычу, воем наводит ужас и обращается в огромного зверя.',
     color: '#c27a3a',
-    passive: { name: 'Зов крови', desc: 'Когда здоровья меньше 40%, урон выше на 15%, а регенерация втрое сильнее.' },
-    base: { maxHp: 270, damage: 18, armor: 11, speed: 5.6, attackSpeed: 1, crit: 0.08, cdr: 0, regen: 2.0, lifesteal: 0.03, skillPower: 0 },
+    passive: { name: 'Зов крови', desc: 'Когда здоровья меньше 40%, урон выше на 15%, а регенерация втрое сильнее (в дуэлях — только урон).' },
+    base: { maxHp: 270, damage: 21, armor: 13, speed: 5.6, attackSpeed: 1, crit: 0.08, cdr: 0, regen: 2.0, lifesteal: 0.03, skillPower: 0 },
     difficulty: 2,
     skills: [
       { id: 'rend', name: 'Удар когтями', desc: 'Размашистый удар когтями по всем врагам перед собой.', cd: 0.55, aim: 'dir', range: 2.6 },

@@ -1145,7 +1145,8 @@ export class Game {
       case 'werewolf:2': {
         const duel = this.phase === 'duel';
         for (const t of this.targetsFor(p)) {
-          if (Math.hypot(t.x - p.x, t.z - p.z) - t.rad < 6) this.hit(p, t, 0.8, { stun: duel ? 0.4 : 0.9, slow: 0.45, slowT: 2.5 });
+          // В дуэли вой только замедляет — без оцепенения
+          if (Math.hypot(t.x - p.x, t.z - p.z) - t.rad < 6) this.hit(p, t, 0.8, { stun: duel ? 0 : 0.9, slow: 0.45, slowT: 2.5 });
         }
         this.events.push({ e: 'fx', k: 'howl', x: r2(p.x), z: r2(p.z), r: 6, pid: p.id });
         break;
@@ -1451,7 +1452,8 @@ export class Game {
       if (p.spectator) continue;
 
       // Регенерация и щит мага
-      const bloodCall = p.cls === 'werewolf' && p.hp < p.stats.maxHp * 0.4 ? 3 : 1;
+      // Зов крови: в дуэлях без ускоренного лечения, иначе почти каждая дуэль кончается его камбэком
+      const bloodCall = p.cls === 'werewolf' && p.hp < p.stats.maxHp * 0.4 && this.phase !== 'duel' ? 3 : 1;
       p.hp = Math.min(p.stats.maxHp, p.hp + p.stats.regen * bloodCall * dt);
       if (p.cls === 'mage') {
         const shm = this.shieldMax(p);
@@ -1488,7 +1490,7 @@ export class Game {
         if (p.dash.t <= 0) {
           if (p.dash.kind === 'pounce') {
             // Приземление прыжка: удар по площади
-            for (const t of this.targetsFor(p)) if (Math.hypot(t.x - pos.x, t.z - pos.z) - t.rad < 2.6) this.hit(p, t, 1.5, { slow: 0.4, slowT: 1.5 });
+            for (const t of this.targetsFor(p)) if (Math.hypot(t.x - pos.x, t.z - pos.z) - t.rad < 2.6) this.hit(p, t, this.phase === 'duel' ? 1.3 : 1.7, { slow: 0.4, slowT: 1.5 });
             this.events.push({ e: 'fx', k: 'pland', x: r2(pos.x), z: r2(pos.z), r: 2.6, pid: p.id });
           }
           p.dash = null;
