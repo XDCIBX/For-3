@@ -15,7 +15,7 @@ export function overScreen(st: ClientState, onMenu: () => void): HTMLElement {
     <div class="screen over">
       <div class="panel over-box">
         <div class="over-title" style="color:${win ? 'var(--gold)' : '#ff8a7a'}">${win ? '🏆 ПОБЕДА!' : '💀 ПОРАЖЕНИЕ'}</div>
-        <div style="font-weight:700;color:var(--muted)">${win ? 'Остров спасён! Героев воспоют барды.' : `Герои продержались до раунда ${st.result?.round ?? st.round}.`}</div>
+        <div style="font-weight:700;color:var(--muted)">${win ? 'Красный дракон повержен! Все 25 волн пройдены — героев воспоют барды.' : `Герои продержались до волны ${st.result?.round ?? st.round} из 25.`}</div>
         <table class="score">
           <tr><th></th><th style="text-align:left">Герой</th><th>Убийства</th><th>Урон</th><th>ПвП</th><th>Золото</th></tr>
           ${players

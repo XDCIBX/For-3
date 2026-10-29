@@ -1,7 +1,8 @@
 import { Rng } from './rng';
-import { ARENA_RADIUS, WORLD_RADIUS } from './constants';
+import { ARENA_RADIUS, LAIR_ROUND, WORLD_RADIUS } from './constants';
 
-export type ObstacleKind = 'tree' | 'rock' | 'pillar' | 'pond' | 'campfire' | 'tent' | 'stump';
+/** stalagmite, lava, hoard — препятствия логова дракона. */
+export type ObstacleKind = 'tree' | 'rock' | 'pillar' | 'pond' | 'campfire' | 'tent' | 'stump' | 'stalagmite' | 'lava' | 'hoard';
 
 export interface Obstacle {
   x: number;
@@ -22,6 +23,8 @@ export interface Vec2 {
 
 export interface WorldData {
   seed: number;
+  /** Остров (волны 1–20) или логово дракона (21–25). */
+  kind?: 'island' | 'lair';
   radius: number;
   obstacles: Obstacle[];
   spawns: Vec2[];
@@ -132,7 +135,87 @@ export function generateWorld(seed: number): WorldData {
     placed++;
   }
 
-  return { seed, radius: R, obstacles, spawns, pond, ruins };
+  return { seed, radius: R, obstacles, spawns, pond, ruins, kind: 'island' };
+}
+
+/** Карта для волны: с 21-й бой идёт в логове дракона. */
+export function worldFor(seed: number, round: number): WorldData {
+  return round >= LAIR_ROUND ? generateLair(seed) : generateWorld(seed);
+}
+
+/**
+ * Логово дракона: кратер из базальта с лавовым озером, сталагмитами и
+ * грудой сокровищ. Пять пещерных ходов по краю — оттуда лезут мобы.
+ * pond — лавовое озеро, ruins — сокровищница (гнездо дракона).
+ */
+export function generateLair(seed: number): WorldData {
+  const rng = new Rng(seed * 7 + 13);
+  const obstacles: Obstacle[] = [];
+  const R = WORLD_RADIUS;
+  const spawns: Vec2[] = [];
+  const a0 = rng.range(0, Math.PI * 2);
+  for (let i = 0; i < 5; i++) {
+    const a = a0 + (i / 5) * Math.PI * 2 + rng.range(-0.15, 0.15);
+    spawns.push({ x: Math.cos(a) * (R - 3.5), z: Math.sin(a) * (R - 3.5) });
+  }
+  const center = { x: 0, z: 0 };
+  const free = (x: number, z: number, r: number, pad = 0.4) => {
+    for (const o of obstacles) if (Math.hypot(o.x - x, o.z - z) < o.r + r + pad) return false;
+    return true;
+  };
+  const nearPath = (p: Vec2, w: number) => spawns.some((s) => distToSeg(p, center, s) < w);
+
+  // Гнездо с сокровищами — на севере, там просыпается дракон
+  const ruins = { x: 0, z: -17 };
+  obstacles.push({ x: ruins.x, z: ruins.z - 2.2, r: 1.8, kind: 'hoard', low: true, variant: 0, scale: 1, rot: 0 });
+  for (let i = 0; i < 7; i++) {
+    const a = Math.PI * (0.15 + (i / 6) * 0.7) + Math.PI;
+    obstacles.push({ x: ruins.x + Math.cos(a) * 6.5, z: ruins.z - 2 + Math.sin(a) * 4.5, r: 0.7, kind: 'stalagmite', variant: i % 3, scale: rng.range(1.1, 1.6), rot: rng.range(0, 6) });
+  }
+  // Лавовое озеро
+  let pond = { x: 16, z: 10, r: 4 };
+  for (let tries = 0; tries < 40; tries++) {
+    const a = rng.range(0, Math.PI * 2);
+    const d = rng.range(15, 21);
+    const p = { x: Math.cos(a) * d, z: Math.sin(a) * d, r: rng.range(3.4, 4.4) };
+    if (!nearPath(p, p.r + 2) && Math.hypot(p.x - ruins.x, p.z - ruins.z) > p.r + 9) {
+      pond = p;
+      break;
+    }
+  }
+  obstacles.push({ x: pond.x, z: pond.z, r: pond.r, kind: 'lava', low: true, variant: 0, scale: 1, rot: 0 });
+  // Сталагмиты
+  let placed = 0;
+  for (let tries = 0; tries < 900 && placed < 34; tries++) {
+    const a = rng.range(0, Math.PI * 2);
+    const d = Math.sqrt(rng.range(0.1, 1)) * (R - 1.5);
+    const x = Math.cos(a) * d;
+    const z = Math.sin(a) * d;
+    if (d < 8) continue;
+    const r = rng.range(0.45, 0.85);
+    if (nearPath({ x, z }, 2.4)) continue;
+    if (spawns.some((s) => Math.hypot(s.x - x, s.z - z) < 4.5)) continue;
+    if (Math.hypot(x - ruins.x, z - ruins.z) < 6) continue;
+    if (!free(x, z, r, 1.0)) continue;
+    obstacles.push({ x, z, r, kind: 'stalagmite', variant: rng.int(0, 2), scale: rng.range(0.8, 1.5), rot: rng.range(0, Math.PI * 2) });
+    placed++;
+  }
+  // Базальтовые глыбы
+  placed = 0;
+  for (let tries = 0; tries < 500 && placed < 16; tries++) {
+    const a = rng.range(0, Math.PI * 2);
+    const d = rng.range(7, R - 1.5);
+    const x = Math.cos(a) * d;
+    const z = Math.sin(a) * d;
+    const r = rng.range(0.6, 1.4);
+    if (nearPath({ x, z }, 1.8)) continue;
+    if (spawns.some((s) => Math.hypot(s.x - x, s.z - z) < 4)) continue;
+    if (Math.hypot(x - ruins.x, z - ruins.z) < 5) continue;
+    if (!free(x, z, r, 0.8)) continue;
+    obstacles.push({ x, z, r, kind: 'rock', variant: rng.int(0, 2), scale: 1, rot: rng.range(0, Math.PI * 2) });
+    placed++;
+  }
+  return { seed, radius: R, obstacles, spawns, pond, ruins, kind: 'lair' };
 }
 
 export const ARENA_OBSTACLES: Obstacle[] = [0, 1, 2, 3].map((i) => {

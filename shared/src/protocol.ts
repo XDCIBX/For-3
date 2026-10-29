@@ -98,6 +98,9 @@ export interface ZoneSnap {
   t: number;
   dur: number;
   delay: number;
+  /** Конус (дыхание дракона): направление и полуугол. */
+  a?: number;
+  arc?: number;
 }
 
 export type GameEvent =

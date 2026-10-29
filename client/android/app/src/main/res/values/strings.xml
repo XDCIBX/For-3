@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">Три Героя</string>
-    <string name="title_activity_main">Три Героя</string>
+    <string name="app_name">25 waves</string>
+    <string name="title_activity_main">25 waves</string>
     <string name="package_name">com.for3.threeheroes</string>
     <string name="custom_url_scheme">com.for3.threeheroes</string>
 </resources>

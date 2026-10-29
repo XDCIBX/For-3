@@ -7,12 +7,13 @@ import { Effects, ProjView, ZoneView } from './effects';
 import { makeEnvironment, type Stage } from './env';
 import { HeroModel } from './heroes';
 import { IslandStage } from './island';
+import { LairStage } from './lair';
 import { MinionModel } from './minions';
 import { MobModel } from './mobs';
 import { Particles } from './particles';
 import { TavernStage } from './tavern';
 import { FADE_R, FOCUS, TIME, glow } from './toon';
-import { generateWorld } from '@game/shared';
+import { LAIR_ROUND, generateLair, generateWorld } from '@game/shared';
 
 const lerpAngle = (a: number, b: number, t: number) => {
   let d = b - a;
@@ -130,6 +131,7 @@ export class Engine {
   stage!: Stage;
   private islands = new Map<number, IslandStage>();
   private tavernStage: TavernStage | null = null;
+  private lairStage: LairStage | null = null;
   private arenaStage: ArenaStage | null = null;
   heroes = new Map<string, HeroView>();
   mobs = new Map<number, MobView>();
@@ -239,6 +241,8 @@ export class Engine {
           ? makeEnvironment(this.renderer, '#2a1a10', '#8a5a2a', '#3a2414', 'rgba(255,190,110,0.9)', [0.5, 0.45])
           : s.name === 'arena'
             ? makeEnvironment(this.renderer, '#3a4a7a', '#f0b080', '#5a4030', 'rgba(255,210,150,0.95)')
+            : s.name === 'lair'
+              ? makeEnvironment(this.renderer, '#140606', '#7a2a0e', '#3a1006', 'rgba(255,140,60,0.9)', [0.3, 0.6])
             : makeEnvironment(this.renderer, '#4a8ad0', '#d8ecf6', '#5a6a3a', 'rgba(255,250,230,1)');
       s.scene.environment = env;
     }
@@ -319,9 +323,14 @@ export class Engine {
     this.clearMenu();
   }
 
-  stageForPhase(ph: Phase): Stage {
+  stageForPhase(ph: Phase, round = 1): Stage {
     if (ph === 'tavern') return (this.tavernStage ??= new TavernStage());
     if (ph === 'duel_intro' || ph === 'duel' || ph === 'duel_end') return (this.arenaStage ??= new ArenaStage());
+    if (round >= LAIR_ROUND) {
+      // Логово строится один раз на игру
+      if (!this.lairStage || this.lairStage.world.seed !== this.seed) this.lairStage = new LairStage(generateLair(this.seed));
+      return this.lairStage;
+    }
     return this.island(this.seed);
   }
 
@@ -331,7 +340,7 @@ export class Engine {
     this.lastSnap = now;
     this.phase = st.phase;
     if (this.mode !== 'game') return;
-    this.setStage(this.stageForPhase(st.phase));
+    this.setStage(this.stageForPhase(st.phase, st.round));
     const inTavern = st.phase === 'tavern';
 
     // Герои
@@ -543,6 +552,27 @@ export class Engine {
     for (let i = n; i < this.tethers.length; i++) this.tethers[i].visible = false;
   }
 
+  /** Жар в пасти дракона и огнеплюя: искры при замахе, струя огня при дыхании. */
+  private mouthFire(v: MobView, st: string) {
+    const m = v.model.mouthWorld(this.tmpV);
+    if (!m) return;
+    const dragon = v.info.k === 'dragon';
+    const breath = dragon && st.includes('B');
+    const charge = st.includes('L') || st.includes('R') || (!dragon && st.includes('w'));
+    if (breath) {
+      const a = v.model.root.rotation.y;
+      for (let i = 0; i < 3; i++) {
+        const sp = 9 + Math.random() * 5;
+        const da = (Math.random() - 0.5) * 0.9;
+        this.fx.glow({ x: m.x, y: m.y, z: m.z, vx: Math.sin(a + da) * sp, vy: -m.y * 0.9 + Math.random(), vz: Math.cos(a + da) * sp, life: 0.75, size: 0.6, grow: 2.2, color: Math.random() < 0.5 ? 0xff6a10 : 0xffc040, drag: 1.2 });
+      }
+    } else if (charge && Math.random() < 0.5) {
+      this.fx.glow({ x: m.x + (Math.random() - 0.5) * 0.3, y: m.y, z: m.z + (Math.random() - 0.5) * 0.3, vy: 0.8, life: 0.35, size: dragon ? 0.45 : 0.18, grow: -0.5, color: Math.random() < 0.5 ? 0xff7a20 : 0xffd060 });
+    } else if (dragon && Math.random() < 0.08) {
+      this.fx.puff({ x: m.x, y: m.y, z: m.z, vy: 0.6, life: 1.2, size: 0.4, grow: 0.8, color: 0x4a3a36, alpha: 0.35 });
+    }
+  }
+
   private releaseMob(v: MobView) {
     let pool = this.mobPool.get(v.info.k);
     if (!pool) this.mobPool.set(v.info.k, (pool = []));
@@ -658,6 +688,16 @@ export class Engine {
             case 'bossspawn':
               this.effects.spawn(e.x, e.z, true);
               break;
+            case 'dlob': {
+              // Шар летит из пасти дракона к отметке на земле
+              const mv = e.id !== undefined ? this.mobs.get(e.id) : undefined;
+              const from = mv?.model.mouthWorld(new THREE.Vector3()) ?? new THREE.Vector3(e.x, 6, e.z - 6);
+              this.effects.dragonLob(from, e.x, e.z, 1.15);
+              break;
+            }
+            case 'droar':
+              this.effects.dragonRoar(e.x, e.z);
+              break;
           }
           break;
         }
@@ -694,7 +734,7 @@ export class Engine {
         case 'mdie': {
           this.effects.death(e.x, e.z, e.k);
           const killer = e.by;
-          const n = e.k === 'troll' ? 14 : e.k === 'orc' ? 5 : 3;
+          const n = e.k === 'dragon' ? 40 : e.k === 'troll' ? 14 : e.k === 'orc' ? 5 : 3;
           if (killer) this.effects.coins(e.x, e.z, n, () => this.heroPos(killer));
           break;
         }
@@ -853,8 +893,10 @@ export class Engine {
         burn: st.includes('b'),
         slow: st.includes('l'),
         spawning: st.includes('p'),
+        skill: /[BLSR]/.exec(st)?.[0] ?? '',
       });
       v.bar.update(dt);
+      if (v.info.k === 'dragon' || v.info.k === 'spitter') this.mouthFire(v, st);
       if (st.includes('b') && Math.random() < dt * 25) this.fx.glow({ x: root.position.x + (Math.random() - 0.5) * 0.6, y: 0.4 + Math.random() * v.model.height * 0.6, z: root.position.z + (Math.random() - 0.5) * 0.6, vy: 1.5, life: 0.5, size: 0.3, grow: -0.4, color: 0xff7020 });
       if (st.includes('l') && Math.random() < dt * 8) this.fx.glow({ x: root.position.x, y: 0.2, z: root.position.z, vy: 0.4, life: 0.5, size: 0.15, color: 0x7ac8ff });
       if (MOBS[v.info.k].boss && moving && Math.random() < dt * 6) this.effects.dust(root.position.x, root.position.z, 2);
@@ -998,7 +1040,16 @@ export class Engine {
     if (this.phase.startsWith('duel')) {
       offset = new THREE.Vector3(0, 18, 13).multiplyScalar(zoom);
       target.lerp(new THREE.Vector3(0, 0, 0), 0.35);
-    } else offset = new THREE.Vector3(0, 14.5, 12).multiplyScalar(zoom);
+    } else {
+      offset = new THREE.Vector3(0, 14.5, 12).multiplyScalar(zoom);
+      // Бой с драконом: камера выше и захватывает дракона
+      const dragon = [...this.mobs.values()].find((m) => m.info.k === 'dragon');
+      if (dragon) {
+        offset.multiplyScalar(1.3);
+        const dp = dragon.model.root.position;
+        if (dp.distanceTo(target) < 22) target.lerp(new THREE.Vector3(dp.x, 0, dp.z), 0.3);
+      }
+    }
     const want = target.clone().add(offset);
     const kk = 1 - Math.exp(-dt * 6);
     if (this.camPos.distanceTo(want) > 30) this.camPos.copy(want);

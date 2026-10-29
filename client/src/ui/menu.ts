@@ -18,7 +18,7 @@ export function menuScreen(settings: Settings, act: MenuActions, error = ''): HT
   const root = el(`
     <div class="screen menu">
       <div class="menu-box">
-        <div class="logo stroke">ТРИ ГЕРОЯ<small>таверна, клинки и магия</small></div>
+        <div class="logo stroke">25 WAVES<small>25 волн до логова дракона</small></div>
         <div class="panel" style="padding:12px;display:flex;flex-direction:column;gap:9px">
           <div class="label">Имя героя</div>
           <input class="field" id="name" maxlength="14" placeholder="Введите имя" value="${esc(settings.name)}" />
@@ -35,7 +35,7 @@ export function menuScreen(settings: Settings, act: MenuActions, error = ''): HT
         <button class="btn ghost small" id="help">❓ Как играть</button>
         <button class="btn ghost small" id="settings">⚙ Настройки</button>
       </div>
-      <div class="version">v1.0 · Три Героя</div>
+      <div class="version">v1.1 · 25 waves</div>
     </div>`);
   const name = root.querySelector<HTMLInputElement>('#name')!;
   const code = root.querySelector<HTMLInputElement>('#code')!;
@@ -142,10 +142,11 @@ function helpModal(): HTMLElement {
       <div class="panel" style="width:min(560px,94vw);max-height:100%;overflow-y:auto">
         <h2>Как играть</h2>
         <div style="font-size:14px;line-height:1.45">
-          <p>🧙 <b>Трое героев</b> — воин, маг и лучник — защищают остров от волн чудовищ. С каждым раундом мобов всё больше.</p>
-          <p>💰 Золото с убитого моба получает <b>тот, кто нанёс последний удар</b>. Ещё немного золота даётся всем за пройденный раунд.</p>
-          <p>🍺 После раунда герои попадают в <b>таверну</b>. Товар общий: если кто-то купил вещь — она исчезает у всех. Успейте первыми!</p>
-          <p>⚔ Каждый <b>5-й раунд — ПвП</b>: дуэли каждого с каждым. Победа приносит золото, поражение — отнимает.</p>
+          <p>🧙 <b>Трое героев</b> проходят <b>25 волн</b> чудовищ. Волны 1–20 — на острове, с 21-й — в <b>логове дракона</b>, где нападают дракончики, огнеплюи и огненные сгустки. На 25-й волне — финальный босс: <b>красный дракон</b>.</p>
+          <p>💰 Золото с убитого моба получает <b>тот, кто нанёс последний удар</b>. Ещё немного золота даётся всем за пройденную волну.</p>
+          <p>🍺 После волны герои попадают в <b>таверну</b>. Товар общий: если кто-то купил вещь — она исчезает у всех. Успейте первыми!</p>
+          <p>⚔ Волны <b>5, 10, 15, 20 и 24 — ПвП</b>: дуэли каждого с каждым. Победа приносит золото, поражение — отнимает.</p>
+          <p>🐉 Дракон кусает, жжёт дыханием конусом, бьёт хвостом и крыльями вокруг себя и плюётся огненными шарами — уходите из красных отметок и с горящей земли.</p>
           <p>🎮 <b>Управление:</b> левая половина экрана — джойстик. Справа — атака и умения. Коснитесь умения для автоприцела или потяните, чтобы прицелиться вручную. Перетащите на ✕ для отмены.</p>
           <p>⌨ На компьютере: WASD — движение, пробел/клик — атака, 1/2/3 — умения (в сторону курсора).</p>
         </div>

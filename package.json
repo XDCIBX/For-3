@@ -2,7 +2,7 @@
   "name": "three-heroes",
   "private": true,
   "version": "1.0.0",
-  "description": "Три Героя — кооперативная 2.5D игра для 3 игроков (iOS / Android / Web)",
+  "description": "25 waves — кооперативная 2.5D игра для 3 игроков: 25 волн и красный дракон в финале (iOS / Android / Web)",
   "workspaces": ["shared", "server", "client"],
   "scripts": {
     "dev": "npm run dev --workspace client",

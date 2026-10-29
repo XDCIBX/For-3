@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { MobKind } from '@game/shared';
 import { G, addOutline, blobShadow, glow, part, toon } from './toon';
 import { bake } from './bake';
+import { buildCreature, type Creature } from './dragons';
 import { footShape, gait, handShape, headShape, legHeight, limb, torsoShape, type LegPose } from './anatomy';
 
 export interface MobAnimInput {
@@ -16,6 +17,8 @@ export interface MobAnimInput {
   burn: boolean;
   slow: boolean;
   spawning: boolean;
+  /** Умение дракона (B, L, S, R) или пусто. */
+  skill?: string;
 }
 
 interface Rig {
@@ -166,6 +169,8 @@ export class MobModel {
   readonly root = new THREE.Group();
   private rig: Rig | null = null;
   private slime: THREE.Group | null = null;
+  /** Обитатели логова и дракон — свои модели. */
+  private creature: Creature | null = null;
   private inner = new THREE.Group();
   private t = Math.random() * 10;
   private walk = 0;
@@ -193,6 +198,13 @@ export class MobModel {
     let shadow = 1.2;
     let height = 1.4;
     let scale = 1;
+    const cr = buildCreature(kind);
+    if (cr) {
+      this.creature = cr;
+      this.inner.add(cr.group);
+      const dims: Record<string, [number, number]> = { ember: [1.4, 1.0], drake: [1.8, 1.4], spitter: [1.8, 1.4], dragon: [4.8, 6.5] };
+      [height, shadow] = dims[kind] ?? [1.5, 1.2];
+    }
     switch (kind) {
       case 'slime': {
         const hue = [0x5a8a3a, 0x3a7290, 0x7a4a6a][Math.floor(Math.random() * 3)];
@@ -392,6 +404,11 @@ export class MobModel {
     if (this.weapon) this.weapon.visible = true;
   }
 
+  /** Мировая позиция пасти (дракон и дракончики) — оттуда вырывается огонь. */
+  mouthWorld(target: THREE.Vector3): THREE.Vector3 | null {
+    return this.creature ? this.creature.mouth.getWorldPosition(target) : null;
+  }
+
   /** Мировая позиция правой руки — откуда летит и куда возвращается молот. */
   handWorld(target: THREE.Vector3): THREE.Vector3 {
     return this.rig ? this.rig.handR.getWorldPosition(target) : target.copy(this.root.position).setY(this.height * 0.6);
@@ -439,7 +456,9 @@ export class MobModel {
     const windupLean = st.windup ? -0.3 : 0;
     const strike = this.atkT < 0.25 ? Math.sin((this.atkT / 0.25) * Math.PI) : 0;
 
-    if (this.slime) {
+    if (this.creature) {
+      this.creature.update(dt, { moving: mv, windup: st.windup, stun: st.stun, frozen, atk: this.atkT, skill: st.skill ?? '' });
+    } else if (this.slime) {
       const hop = mv ? Math.abs(Math.sin(this.walk * 0.6)) : 0;
       const squash = mv ? 1 - Math.abs(Math.cos(this.walk * 0.6)) * 0.2 : 1 + Math.sin(t * 3) * 0.04;
       this.slime.position.y = hop * 0.35;

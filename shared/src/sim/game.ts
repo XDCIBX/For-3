@@ -3,13 +3,15 @@ import {
   CLEAR_TIME,
   DUEL_END_TIME,
   DUEL_TIME,
+  DRAGON_ROUND,
   INTRO_TIME,
+  LAIR_ROUND,
   MAX_PLAYERS,
   MAX_ROUNDS,
   PLAYER_RADIUS,
-  PVP_EVERY,
   RESPAWN_TIME,
   TAVERN_TIME,
+  isPvpRound,
 } from '../constants';
 import { CLASSES } from '../data/classes';
 import { computeStats, emptyEquip, generateShop, sellValue } from '../data/items';
@@ -18,7 +20,7 @@ import type { GameEvent, GameMsg, MinionSnap, MobSnap, PlayerSnap, Snapshot } fr
 import { Rng } from '../rng';
 import type { Equip, HeroClass, Item, MinionKind, MobKind, Phase, ProjKind, Stats, ZoneKind } from '../types';
 import { HERO_CLASSES } from '../types';
-import { ARENA_OBSTACLES, generateWorld, hitsSolid, resolveCollision, type Obstacle, type WorldData } from '../world';
+import { ARENA_OBSTACLES, generateWorld, hitsSolid, resolveCollision, worldFor, type Obstacle, type WorldData } from '../world';
 import { updateBot } from './bot';
 
 export interface Player {
@@ -102,6 +104,9 @@ export interface Mob {
   throwDist: number;
   hammer: number;
   lastHit: string | null;
+  /** Дракон: текущее умение и перезарядки умений. */
+  skill: { k: 'breath' | 'lob' | 'sweep' | 'roar'; t: number; fired?: boolean } | null;
+  dcd: { breath: number; lob: number; sweep: number; roar: number };
 }
 
 export interface Proj {
@@ -173,6 +178,9 @@ export interface Zone {
   tickT: number;
   fired: boolean;
   dmg: number;
+  /** Конус: направление и полуугол (дыхание дракона). */
+  a?: number;
+  arc?: number;
 }
 
 type Target =
@@ -192,6 +200,15 @@ interface Victim {
 const BOT_NAMES = ['Борис', 'Глаша', 'Тихон', 'Варя', 'Фрол', 'Злата', 'Ерёма', 'Луша'];
 
 const r2 = (v: number) => Math.round(v * 100) / 100;
+const NO_OBSTACLES: Obstacle[] = [];
+
+/** Дракон: длительности умений (с), радиусы и множители урона от его базового урона. */
+const DRAGON = {
+  breath: { windup: 0.9, channel: 1.9, range: 10.5, arc: 0.62, tick: 0.25, dmg: 0.3, cd: 9 },
+  lob: { windup: 0.55, flight: 1.15, r: 2.4, dmg: 1.25, fireR: 1.9, fireDur: 5, fireDmg: 0.18, cd: 6 },
+  sweep: { windup: 1.0, r: 6.6, dmg: 1.5, cd: 7.5 },
+  roar: { dur: 1.4, cd: 24 },
+};
 
 function randToken(): string {
   return Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
@@ -209,7 +226,8 @@ export function isArenaPhase(ph: Phase) {
 
 export class Game {
   readonly seed: number;
-  readonly world: WorldData;
+  /** Карта текущей волны: остров, с 21-й — логово дракона. */
+  world: WorldData;
   readonly rng: Rng;
   phase: Phase = 'lobby';
   round = 0;
@@ -431,7 +449,7 @@ export class Game {
   }
 
   isPvpRound(r = this.round) {
-    return r % PVP_EVERY === 0;
+    return isPvpRound(r);
   }
 
   private resetHero(p: Player, x: number, z: number, rot: number) {
@@ -465,6 +483,8 @@ export class Game {
     this.zones.clear();
     this.minions.clear();
     for (const p of this.players.values()) p.ready = false;
+    const kind = this.round >= LAIR_ROUND ? 'lair' : 'island';
+    if ((this.world.kind ?? 'island') !== kind) this.world = worldFor(this.seed, this.round);
     this.placeAtCamp();
     this.setPhase('intro', INTRO_TIME);
   }
@@ -472,6 +492,15 @@ export class Game {
   private startBattle() {
     const players = this.active().length;
     this.spawnQueue = roundComposition(this.round, players, this.rng);
+    if (this.round >= DRAGON_ROUND) {
+      // Финал: дракон просыпается в гнезде
+      this.spawnQueue = [];
+      const r = this.world.ruins;
+      this.spawnMob('dragon', r.x, r.z + 1);
+      this.mobsTotal = 1;
+      this.setPhase('battle', -1);
+      return;
+    }
     const bossIdx = this.spawnQueue.indexOf('troll');
     if (bossIdx >= 0) {
       // Босс — в конце волны
@@ -524,7 +553,7 @@ export class Game {
     this.zones.clear();
     this.minions.clear();
     this.setPhase('gameover', -1);
-    this.msg(win ? 'Победа! Вы прошли все раунды!' : 'Все герои пали…', win ? 'good' : 'bad');
+    this.msg(win ? 'Победа! Дракон повержен — все 25 волн пройдены!' : 'Все герои пали…', win ? 'good' : 'bad');
   }
 
   private setupDuels() {
@@ -748,10 +777,15 @@ export class Game {
       throwDist: 0,
       hammer: 0,
       lastHit: null,
+      skill: null,
+      dcd: { breath: 5, lob: 3, sweep: 4, roar: 18 },
     };
     this.mobs.set(m.id, m);
     this.events.push({ e: 'fx', k: def.boss ? 'bossspawn' : 'spawn', x, z });
-    if (def.boss) this.msg(`Появился ${def.name}!`, 'bad');
+    if (kind === 'dragon') {
+      this.msg('Красный дракон проснулся!', 'bad');
+      this.events.push({ e: 'fx', k: 'droar', x: r2(x), z: r2(z), id: m.id });
+    } else if (def.boss) this.msg(`Появился ${def.name}!`, 'bad');
     return m;
   }
 
@@ -1599,6 +1633,11 @@ export class Game {
       m.slamCd -= dt;
       if (!m.hammer) m.throwCd -= dt;
       if (m.burnT > 0) m.burnT -= dt;
+      if (m.kind === 'dragon') {
+        // Дракона нельзя надолго обездвижить
+        m.stunT = Math.min(m.stunT, 0.35);
+        m.frozenT = Math.min(m.frozenT, 0.35);
+      }
       if (m.frozenT > 0 || m.stunT > 0) {
         m.windup = -1;
         if (m.throwT >= 0) {
@@ -1650,6 +1689,7 @@ export class Game {
         tgt = best;
       }
       m.target = tgt ? tgt.id : null;
+      if (m.kind === 'dragon' && this.updateDragon(m, dt, tgt)) continue;
 
       if (m.windup >= 0) {
         m.windup -= dt;
@@ -1671,7 +1711,7 @@ export class Game {
         m.rot = Math.atan2(nx, nz);
         const reach = def.range + m.radius + (tgt.n ? tgt.n.radius : PLAYER_RADIUS);
 
-        if (def.boss && m.throwCd <= 0 && dist > 4.5 && dist < 17 && tgt.p) {
+        if (m.kind === 'troll' && m.throwCd <= 0 && dist > 4.5 && dist < 17 && tgt.p) {
           // Бросок молота: замах с подсказкой на земле, куда он полетит
           m.throwT = 0.9;
           m.throwDx = nx;
@@ -1680,7 +1720,7 @@ export class Game {
           this.events.push({ e: 'fx', k: 'hwind', x: r2(m.x), z: r2(m.z), rot: r2(m.rot), r: r2(m.throwDist), id: m.id });
           continue;
         }
-        if (def.boss && m.slamCd <= 0 && dist < 6) {
+        if (m.kind === 'troll' && m.slamCd <= 0 && dist < 6) {
           m.slamCd = 7;
           m.windup = 1.15;
           this.addZone('slam', null, m.x, m.z, 4.6, 0, 1.1, m.dmg * 1.5);
@@ -1717,8 +1757,8 @@ export class Game {
       }
 
       if (mx || mz) {
-        // Обход препятствий
-        for (const o of obs) {
+        // Обход препятствий (летуны пролетают над ними)
+        if (!def.flying) for (const o of obs) {
           const ox = o.x - m.x;
           const oz = o.z - m.z;
           const along = ox * mx + oz * mz;
@@ -1775,7 +1815,7 @@ export class Game {
         }
       }
       const pos = { x: a.x, z: a.z };
-      resolveCollision(pos, a.radius, obs, bound);
+      resolveCollision(pos, a.radius, MOBS[a.kind].flying ? NO_OBSTACLES : obs, bound);
       a.x = pos.x;
       a.z = pos.z;
     }
@@ -1786,11 +1826,19 @@ export class Game {
     const dx = tgt.x - m.x;
     const dz = tgt.z - m.z;
     const dist = Math.hypot(dx, dz) || 0.01;
+    if (def.explode) {
+      // Огненный сгусток взрывается сам: урон вокруг и горящая земля
+      this.burstAt(m.x, m.z, def.explode, m.dmg, 0.3);
+      this.addZone('dfire', null, m.x, m.z, 1.6, 3, 0, m.dmg * 0.14);
+      this.mobs.delete(m.id);
+      this.events.push({ e: 'mdie', id: m.id, k: m.kind, by: null, x: r2(m.x), z: r2(m.z) });
+      return;
+    }
     if (def.ranged) {
       const sp = def.projSpeed ?? 12;
       const pr: Proj = {
         id: this.nextId++,
-        kind: 'earrow',
+        kind: m.kind === 'spitter' ? 'flame' : 'earrow',
         owner: null,
         team: 'm',
         x: m.x + (dx / dist) * 0.6,
@@ -1974,6 +2022,8 @@ export class Game {
           }
         }
         if (!done && (hitsSolid(pr.x, pr.z, pr.r * 0.5, obs) || pr.life <= 0)) done = true;
+        // Плевок огнеплюя оставляет лужицу огня
+        if (done && pr.kind === 'flame') this.addZone('dfire', null, pr.x, pr.z, 1.3, 2.5, 0, pr.dmg * 0.16);
       }
       if (done) this.projs.delete(pr.id);
     }
@@ -2027,6 +2077,41 @@ export class Game {
           }
           this.zones.delete(zn.id);
           break;
+        case 'dball':
+          // Огненный шар дракона упал: взрыв и горящий след
+          if (!zn.fired) {
+            zn.fired = true;
+            this.burstAt(zn.x, zn.z, zn.r, zn.dmg, 0.3);
+            this.addZone('dfire', null, zn.x, zn.z, DRAGON.lob.fireR, DRAGON.lob.fireDur, 0, (zn.dmg / DRAGON.lob.dmg) * DRAGON.lob.fireDmg);
+          }
+          this.zones.delete(zn.id);
+          break;
+        case 'dfire':
+        case 'breath': {
+          zn.tickT -= dt;
+          if (zn.tickT <= 0) {
+            zn.tickT = zn.kind === 'breath' ? DRAGON.breath.tick : 0.5;
+            const inside = (x: number, z: number, rad: number) => {
+              const dx = x - zn.x;
+              const dz = z - zn.z;
+              const d = Math.hypot(dx, dz);
+              if (d - rad > zn.r) return false;
+              if (zn.kind !== 'breath') return true;
+              if (d < 1.2) return true;
+              let da = Math.atan2(dx, dz) - (zn.a ?? 0);
+              da = Math.atan2(Math.sin(da), Math.cos(da));
+              return Math.abs(da) < (zn.arc ?? 0.6) + rad / d;
+            };
+            for (const p of this.players.values()) {
+              if (p.alive && !p.spectator && inside(p.x, p.z, PLAYER_RADIUS)) this.damagePlayer(p, zn.dmg * this.rng.range(0.9, 1.1), false, null);
+            }
+            for (const n of [...this.minions.values()]) {
+              if (n.kind !== 'totem' && inside(n.x, n.z, n.radius)) this.damageMinion(n, zn.dmg, false);
+            }
+          }
+          if (zn.t >= zn.dur) this.zones.delete(zn.id);
+          break;
+        }
         case 'rain':
         case 'burn': {
           zn.tickT -= dt;
@@ -2045,6 +2130,135 @@ export class Game {
           break;
         }
       }
+    }
+  }
+
+  /** Взрыв врага по площади: урон героям и помощникам, короткое оглушение. */
+  private burstAt(x: number, z: number, r: number, dmg: number, stun: number) {
+    for (const p of this.players.values()) {
+      if (p.alive && !p.spectator && Math.hypot(p.x - x, p.z - z) < r + PLAYER_RADIUS) {
+        this.damagePlayer(p, dmg * this.rng.range(0.9, 1.1), false, null);
+        if (stun > 0) p.stunT = Math.max(p.stunT, stun);
+      }
+    }
+    for (const n of [...this.minions.values()]) {
+      if (n.kind !== 'totem' && Math.hypot(n.x - x, n.z - z) < r + n.radius) this.damageMinion(n, dmg, false);
+    }
+    this.events.push({ e: 'fx', k: 'explode', x: r2(x), z: r2(z), r });
+  }
+
+  /**
+   * Умения дракона. Одиночные — укус (обычная атака) и огненный шар в каждого героя;
+   * по конусу — огненное дыхание; по радиусу — удар хвостом и крыльями; издалека —
+   * огненные шары, которые падают по дуге и оставляют горящий след.
+   * Ниже половины здоровья — ярость: рёв с подмогой, чаще шары и дыхание.
+   * Возвращает true, если дракон занят умением (и не ходит/не кусает).
+   */
+  private updateDragon(m: Mob, dt: number, tgt: Victim | null): boolean {
+    const c = m.dcd;
+    c.breath -= dt;
+    c.lob -= dt;
+    c.sweep -= dt;
+    c.roar -= dt;
+    const rage = m.hp < m.maxHp * 0.5;
+    const sk = m.skill;
+    if (sk) {
+      sk.t += dt;
+      if (sk.k === 'breath') {
+        // Медленно ведёт струю огня за целью
+        if (tgt) {
+          const want = Math.atan2(tgt.x - m.x, tgt.z - m.z);
+          let da = want - m.rot;
+          da = Math.atan2(Math.sin(da), Math.cos(da));
+          m.rot += Math.max(-0.55 * dt, Math.min(0.55 * dt, da));
+        }
+        for (const zn of this.zones.values()) if (zn.kind === 'breath' && zn.owner === null && Math.hypot(zn.x - m.x, zn.z - m.z) < 0.01) zn.a = m.rot;
+        if (sk.t >= DRAGON.breath.windup + DRAGON.breath.channel) m.skill = null;
+      } else if (sk.k === 'lob') {
+        if (sk.t >= DRAGON.lob.windup && !sk.fired) {
+          sk.fired = true;
+          this.dragonLob(m, rage);
+        }
+        if (sk.t >= DRAGON.lob.windup + 0.35) m.skill = null;
+      } else if (sk.k === 'sweep') {
+        if (sk.t >= DRAGON.sweep.windup + 0.25) m.skill = null;
+      } else if (sk.k === 'roar') {
+        if (sk.t >= 0.6 && !sk.fired) {
+          sk.fired = true;
+          this.dragonCall(m);
+        }
+        if (sk.t >= DRAGON.roar.dur) m.skill = null;
+      }
+      return true;
+    }
+    if (m.windup >= 0 || !tgt) return false;
+    const dist = Math.hypot(tgt.x - m.x, tgt.z - m.z);
+    const near = [...this.players.values()].some((p) => p.alive && !p.spectator && Math.hypot(p.x - m.x, p.z - m.z) < DRAGON.sweep.r + 0.3);
+    const start = (k: 'breath' | 'lob' | 'sweep' | 'roar') => {
+      m.skill = { k, t: 0 };
+      this.events.push({ e: 'matk', id: m.id });
+    };
+    if (c.roar <= 0) {
+      c.roar = DRAGON.roar.cd * (rage ? 0.6 : 1);
+      start('roar');
+      this.events.push({ e: 'fx', k: 'droar', x: r2(m.x), z: r2(m.z), id: m.id });
+      this.msg(rage ? 'Дракон в ярости и зовёт подмогу!' : 'Дракон зовёт подмогу!', 'bad');
+      return true;
+    }
+    if (near && c.sweep <= 0) {
+      c.sweep = DRAGON.sweep.cd;
+      start('sweep');
+      this.addZone('slam', null, m.x, m.z, DRAGON.sweep.r, 0, DRAGON.sweep.windup, m.dmg * DRAGON.sweep.dmg);
+      return true;
+    }
+    if (dist < DRAGON.breath.range && c.breath <= 0) {
+      c.breath = DRAGON.breath.cd * (rage ? 0.75 : 1);
+      m.rot = Math.atan2(tgt.x - m.x, tgt.z - m.z);
+      start('breath');
+      const zn = this.addZone('breath', null, m.x, m.z, DRAGON.breath.range, DRAGON.breath.windup + DRAGON.breath.channel, DRAGON.breath.windup, m.dmg * DRAGON.breath.dmg);
+      zn.a = m.rot;
+      zn.arc = DRAGON.breath.arc;
+      return true;
+    }
+    if (c.lob <= 0) {
+      c.lob = DRAGON.lob.cd * (rage ? 0.7 : 1);
+      m.rot = Math.atan2(tgt.x - m.x, tgt.z - m.z);
+      start('lob');
+      return true;
+    }
+    return false;
+  }
+
+  /** Огненные шары: по одному в каждого героя (с упреждением), в ярости ещё несколько вокруг. */
+  private dragonLob(m: Mob, rage: boolean) {
+    const L = DRAGON.lob;
+    const spots: { x: number; z: number }[] = [];
+    for (const p of this.players.values()) {
+      if (!p.alive || p.spectator) continue;
+      const lead = this.effectiveSpeed(p) * L.flight * 0.45;
+      const mv = Math.hypot(p.input.mx, p.input.mz) || 1;
+      spots.push({ x: p.x + (p.input.mx / mv) * lead * (p.input.mx || p.input.mz ? 1 : 0), z: p.z + (p.input.mz / mv) * lead * (p.input.mx || p.input.mz ? 1 : 0) });
+      if (rage) {
+        const a = this.rng.range(0, Math.PI * 2);
+        spots.push({ x: p.x + Math.cos(a) * 3.5, z: p.z + Math.sin(a) * 3.5 });
+      }
+    }
+    for (const sp of spots) {
+      const pos = { x: sp.x, z: sp.z };
+      resolveCollision(pos, 0.5, NO_OBSTACLES, this.bound - 1);
+      this.addZone('dball', null, pos.x, pos.z, L.r, 0, L.flight, m.dmg * L.dmg);
+      this.events.push({ e: 'fx', k: 'dlob', x: r2(pos.x), z: r2(pos.z), id: m.id, r: L.r });
+    }
+  }
+
+  /** Рёв ярости: из пещер вылетают огненные сгустки и дракончики. */
+  private dragonCall(m: Mob) {
+    const alive = [...this.mobs.values()].filter((x) => x.kind !== 'dragon').length;
+    const n = Math.max(0, Math.min(5, 12 - alive));
+    for (let i = 0; i < n; i++) {
+      const a = (i / Math.max(1, n)) * Math.PI * 2;
+      const k: MobKind = i % 2 ? 'drake' : 'ember';
+      this.spawnMob(k, m.x + Math.cos(a) * (m.radius + 2), m.z + Math.sin(a) * (m.radius + 2));
     }
   }
 
@@ -2112,6 +2326,8 @@ export class Game {
       if (m.spawnT > 0) st += 'p';
       if (m.throwT >= 0) st += 't';
       if (m.hammer) st += 'h';
+      // Умения дракона: B — дыхание, L — огненные шары, S — удар хвостом и крыльями, R — рёв
+      if (m.skill) st += { breath: 'B', lob: 'L', sweep: 'S', roar: 'R' }[m.skill.k];
       M.push({ id: m.id, k: m.kind, x: r2(m.x), z: r2(m.z), r: r2(m.rot), hp: Math.max(0, Math.ceil(m.hp)), mhp: m.maxHp, st });
     }
     const snap: Snapshot = {
@@ -2128,7 +2344,7 @@ export class Game {
         (n): MinionSnap => ({ id: n.id, k: n.kind, o: n.owner, x: r2(n.x), z: r2(n.z), r: r2(n.rot), hp: Math.max(0, Math.ceil(n.hp)), mhp: Math.round(n.maxHp), l: r2(n.life) }),
       ),
       R: [...this.projs.values()].map((p) => ({ id: p.id, k: p.kind, x: r2(p.x), z: r2(p.z), vx: r2(p.vx), vz: r2(p.vz) })),
-      Z: [...this.zones.values()].map((z) => ({ id: z.id, k: z.kind, x: r2(z.x), z: r2(z.z), r: z.r, t: r2(z.t), dur: z.dur, delay: z.delay })),
+      Z: [...this.zones.values()].map((z) => ({ id: z.id, k: z.kind, x: r2(z.x), z: r2(z.z), r: z.r, t: r2(z.t), dur: z.dur, delay: z.delay, ...(z.a !== undefined ? { a: r2(z.a), arc: z.arc } : {}) })),
       E: this.events,
       duel: isArenaPhase(this.phase) && this.duels[this.duelIdx] ? { a: this.duels[this.duelIdx][0], b: this.duels[this.duelIdx][1], idx: this.duelIdx, total: this.duels.length } : null,
       full,

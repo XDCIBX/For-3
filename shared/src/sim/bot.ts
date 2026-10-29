@@ -77,6 +77,25 @@ export function updateBot(g: Game, p: Player, dt: number) {
     mx -= (p.x / dc) * 1.2;
     mz -= (p.z / dc) * 1.2;
   }
+  // Уклонение от вражеских зон: удар босса, огненные шары и горящая земля, дыхание дракона
+  for (const zn of g.zones.values()) {
+    if (zn.owner !== null) continue;
+    const ex = p.x - zn.x;
+    const ez = p.z - zn.z;
+    const d = Math.hypot(ex, ez) || 0.01;
+    if (zn.kind === 'breath') {
+      if (d > zn.r + 1) continue;
+      let da = Math.atan2(ex, ez) - (zn.a ?? 0);
+      da = Math.atan2(Math.sin(da), Math.cos(da));
+      if (Math.abs(da) > (zn.arc ?? 0.6) + 0.45) continue;
+      const a = (zn.a ?? 0) + (da >= 0 ? 1 : -1) * (Math.PI / 2);
+      mx += Math.sin(a) * 2.4;
+      mz += Math.cos(a) * 2.4;
+    } else if (d < zn.r + 1.1) {
+      mx += (ex / d) * 2.2;
+      mz += (ez / d) * 2.2;
+    }
+  }
   const l = Math.hypot(mx, mz);
   p.input = l > 0.05 ? { mx: mx / Math.max(1, l), mz: mz / Math.max(1, l) } : { mx: 0, mz: 0 };
 

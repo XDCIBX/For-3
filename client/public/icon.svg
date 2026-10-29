@@ -1,14 +1,29 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
   <defs>
-    <radialGradient id="bg" cx="50%" cy="40%" r="70%"><stop offset="0" stop-color="#5a3bb0"/><stop offset="1" stop-color="#1b1330"/></radialGradient>
-    <linearGradient id="bl" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#9fb4c8"/></linearGradient>
+    <radialGradient id="bg" cx="55%" cy="45%" r="70%"><stop offset="0" stop-color="#ff8a2a"/><stop offset="0.45" stop-color="#b8280c"/><stop offset="1" stop-color="#2a0604"/></radialGradient>
+    <linearGradient id="sk" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#e2382a"/><stop offset="1" stop-color="#7a0e08"/></linearGradient>
+    <linearGradient id="hn" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff6e0"/><stop offset="1" stop-color="#c8b48c"/></linearGradient>
   </defs>
   <rect width="128" height="128" rx="28" fill="url(#bg)"/>
-  <g stroke="#2a1b14" stroke-width="4" stroke-linejoin="round">
-    <path d="M40 98 L88 30 L96 38 L48 106 Z" fill="url(#bl)"/>
-    <path d="M34 92 L54 112 L58 106 L40 88 Z" fill="#ffb321"/>
-    <circle cx="36" cy="110" r="6" fill="#e0533d"/>
-    <circle cx="94" cy="96" r="18" fill="#ffd54a"/>
-    <text x="94" y="103" font-family="Arial Black,Arial" font-size="20" text-anchor="middle" fill="#7a4a00" stroke="none">3</text>
+  <g stroke="#2a0604" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round">
+    <!-- Рога -->
+    <g transform="translate(20 8)">
+      <path d="M44 40 C34 24 22 16 10 14 C22 22 30 32 34 46 Z" fill="url(#hn)"/>
+      <path d="M56 36 C52 20 46 10 36 4 C44 16 46 28 46 40 Z" fill="url(#hn)"/>
+    </g>
+    <!-- Шея и голова, пасть раскрыта -->
+    <path d="M18 122 C22 96 30 74 44 58 C52 46 64 40 78 42 L116 50 C120 52 120 58 116 60 L88 64 L82 70 L112 82 C116 84 114 90 110 90 L80 86 C70 86 64 92 58 100 C52 110 48 118 46 122 Z" fill="url(#sk)"/>
+    <!-- Пасть -->
+    <path d="M88 64 L82 70 L110 82 L114 74 Z" fill="#ffb030" stroke="none"/>
+    <path d="M92 63 l3 6 l3 -6 M100 62 l3 6 l3 -6 M90 74 l4 -6 l3 7 M100 78 l3 -6 l3 7" fill="#fff6e0" stroke-width="1.5"/>
+    <!-- Шипы по шее -->
+    <path d="M34 78 l-10 -4 l6 10 Z M28 94 l-11 -2 l8 10 Z M42 64 l-8 -8 l2 12 Z" fill="#3a0806"/>
+    <!-- Глаз -->
+    <path d="M70 50 C74 46 82 46 86 50 C82 54 74 54 70 50 Z" fill="#ffd030"/>
+    <path d="M78 46.5 L78 53.5" stroke="#2a0604" stroke-width="2.5"/>
+    <!-- Ноздря и надбровье -->
+    <path d="M66 44 C74 38 84 40 90 44" fill="none" stroke-width="4"/>
+    <circle cx="108" cy="53" r="2" fill="#2a0604" stroke="none"/>
   </g>
+  <text x="64" y="123" font-family="Arial Black,Arial" font-size="15" font-weight="900" text-anchor="middle" fill="#ffd040" stroke="#2a0604" stroke-width="3" paint-order="stroke">25</text>
 </svg>

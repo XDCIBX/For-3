@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Game, type Player } from '../src/sim/game';
-import { DT, PVP_EVERY } from '../src/constants';
+import { DT, MAX_ROUNDS, PVP_EVERY, isPvpRound } from '../src/constants';
+import { Rng } from '../src/rng';
+import { mobScale, roundComposition } from '../src/data/mobs';
 import { generateWorld } from '../src/world';
 
 function run(g: Game, seconds: number, until?: () => boolean) {
@@ -284,4 +286,100 @@ test('турель гнома не появляется внутри врага 
   g.castSkill(m, 0, tur.x - m.x, tur.z - m.z, 2);
   run(g, 0.6);
   assert.ok(tur.hp < hp0, 'выстрел мага попадает в турель');
+});
+
+test('25 волн: ПвП на 5/10/15/20 и 24-й, с 21-й — логово дракона, на 25-й — дракон', () => {
+  for (const r of [5, 10, 15, 20, 24]) assert.ok(isPvpRound(r), `ПвП на ${r}`);
+  for (const r of [19, 21, 22, 23, 25]) assert.ok(!isPvpRound(r), `не ПвП на ${r}`);
+  assert.equal(MAX_ROUNDS, 25);
+  const rng = new Rng(1);
+  for (const r of [21, 22, 23]) {
+    const list = roundComposition(r, 3, rng);
+    assert.ok(list.length > 60);
+    assert.ok(list.every((k) => k === 'ember' || k === 'drake' || k === 'spitter'), 'в логове — только его обитатели, без боссов');
+  }
+  assert.deepEqual(roundComposition(25, 3, rng), ['dragon']);
+  // Мобы логова сильнее с каждой волной
+  assert.ok(mobScale(22).hp > mobScale(21).hp && mobScale(23).hp > mobScale(22).hp && mobScale(21).hp > mobScale(19).hp * 1.3);
+
+  const g = new Game(77);
+  const p = g.addPlayer('Аня') as Player;
+  g.startRound = 21;
+  g.startGame();
+  assert.equal(g.world.kind, 'lair');
+  assert.ok(g.world.obstacles.some((o) => o.kind === 'lava') && g.world.obstacles.some((o) => o.kind === 'stalagmite'));
+  run(g, 3.5);
+  assert.equal(g.phase, 'battle');
+  run(g, 4);
+  assert.ok([...g.mobs.values()].every((m) => ['ember', 'drake', 'spitter'].includes(m.kind)));
+  void p;
+});
+
+test('огненный сгусток взрывается рядом с героем и оставляет горящую землю', () => {
+  const g = new Game(8);
+  const p = g.addPlayer('Аня') as Player;
+  g.startRound = 21;
+  g.startGame();
+  run(g, 3.2);
+  for (const m of [...g.mobs.values()]) g.mobs.delete(m.id);
+  g.spawnQueue = [];
+  p.stats.maxHp = p.hp = 99999;
+  const e = g.spawnMob('ember', p.x + 3, p.z);
+  e.spawnT = 0;
+  run(g, 3, () => !g.mobs.has(e.id));
+  assert.ok(!g.mobs.has(e.id), 'сгусток взорвался');
+  assert.ok(p.hp < 99999, 'герой получил урон');
+  assert.ok([...g.zones.values()].some((z) => z.kind === 'dfire'));
+});
+
+test('дракон: укус, конус дыхания, удар по кругу, огненные шары с горящим следом; победа над ним завершает игру', () => {
+  const g = new Game(9);
+  const p = g.addPlayer('Аня') as Player;
+  g.startRound = 25;
+  g.startGame();
+  run(g, 3.2);
+  assert.equal(g.phase, 'battle');
+  const d = [...g.mobs.values()].find((m) => m.kind === 'dragon')!;
+  assert.ok(d, 'дракон проснулся в гнезде');
+  p.stats.maxHp = p.hp = 1e7;
+  d.spawnT = 0;
+  const seen = new Set<string>();
+  const zones = new Set<string>();
+  // Огненные шары издалека
+  d.dcd = { breath: 99, lob: 0, sweep: 99, roar: 99 };
+  for (let i = 0; i < Math.round(3 / DT); i++) {
+    g.update(DT);
+    for (const z of g.zones.values()) zones.add(z.kind);
+    for (const ev of g.snapshot().E) if (ev.e === 'fx') seen.add(ev.k);
+  }
+  assert.ok(seen.has('dlob') && zones.has('dball') && zones.has('dfire'), 'шар падает и оставляет след');
+  // Дыхание конусом и удар по кругу вблизи
+  p.x = d.x;
+  p.z = d.z + d.radius + 3;
+  d.dcd = { breath: 0, lob: 99, sweep: 99, roar: 99 };
+  d.skill = null;
+  let breathHits = 0;
+  for (let i = 0; i < Math.round(3 / DT); i++) {
+    g.update(DT);
+    for (const z of g.zones.values()) zones.add(z.kind);
+    for (const ev of g.snapshot().E) if (ev.e === 'dmg' && ev.tp === 'p') breathHits++;
+  }
+  assert.ok(zones.has('breath') && breathHits >= 4, 'дыхание жжёт несколько раз');
+  p.x = d.x;
+  p.z = d.z + d.radius + 2;
+  d.dcd = { breath: 99, lob: 99, sweep: 0, roar: 99 };
+  d.skill = null;
+  d.windup = -1;
+  let slam = false;
+  for (let i = 0; i < Math.round(1.5 / DT); i++) {
+    g.update(DT);
+    g.snapshot();
+    if ([...g.zones.values()].some((z) => z.kind === 'slam')) slam = true;
+  }
+  assert.ok(slam, 'удар хвостом и крыльями по кругу');
+  // Победа
+  g.damageMob(d, 1e9, false, p.id);
+  run(g, 10, () => g.phase === 'gameover');
+  assert.equal(g.phase, 'gameover');
+  assert.equal(g.result?.win, true);
 });

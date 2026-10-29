@@ -46,10 +46,12 @@ export type Phase =
   | 'duel_end'
   | 'gameover';
 
-export type MobKind = 'slime' | 'goblin' | 'skeleton' | 'orc' | 'troll';
+/** Мобы острова, обитатели логова (21–23 волны) и финальный босс — дракон. */
+export type MobKind = 'slime' | 'goblin' | 'skeleton' | 'orc' | 'troll' | 'ember' | 'drake' | 'spitter' | 'dragon';
 
-export type ProjKind = 'arrow' | 'bolt' | 'fireball' | 'earrow' | 'rock' | 'glaive' | 'spirit' | 'hammer' | 'pellet';
+export type ProjKind = 'arrow' | 'bolt' | 'fireball' | 'earrow' | 'rock' | 'glaive' | 'spirit' | 'hammer' | 'pellet' | 'flame';
 
 /** Призванные помощники: призывателя (волк, голем, тотем) и гнома (турель). */
 export type MinionKind = 'wolf' | 'golem' | 'totem' | 'turret';
-export type ZoneKind = 'rain' | 'meteor' | 'burn' | 'slam' | 'bomb';
+/** dball — огненный шар дракона (падает с неба), dfire — горящий след, breath — конус дыхания. */
+export type ZoneKind = 'rain' | 'meteor' | 'burn' | 'slam' | 'bomb' | 'dball' | 'dfire' | 'breath';

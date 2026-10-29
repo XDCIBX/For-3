@@ -10,7 +10,7 @@ if (!js || !css) throw new Error('Не найдены ассеты в index.html
 const script = readFileSync(join(dir, js[1]), 'utf8').replace(/<\/script/gi, '<\\/script');
 const style = readFileSync(join(dir, css[1]), 'utf8');
 
-const page = `<title>Три Героя</title>
+const page = `<title>25 waves</title>
 <meta name="theme-color" content="#1b1330">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -21,7 +21,7 @@ html, body { height: 100%; background: #1b1330; color-scheme: dark; }
 </style>
 <canvas id="game"></canvas>
 <div id="ui"></div>
-<div id="boot"><div class="boot-logo">ТРИ ГЕРОЯ</div><div class="boot-bar"><i></i></div></div>
+<div id="boot"><div class="boot-logo">25 WAVES</div><div class="boot-bar"><i></i></div></div>
 <script type="module">
 ${script}
 </script>

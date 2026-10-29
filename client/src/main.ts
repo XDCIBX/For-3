@@ -8,7 +8,11 @@ import {
   ARENA_RADIUS,
   CLASSES,
   PLAYER_RADIUS,
-  generateWorld,
+  worldFor,
+  isPvpRound,
+  isTrollRound,
+  DRAGON_ROUND,
+  LAIR_ROUND,
   isArenaPhase,
   resolveCollision,
   type GameEvent,
@@ -178,7 +182,7 @@ class App {
     this.screen = 'game';
     this.clearUi();
     this.engine.startGame(this.st.seed, this.st.myId);
-    this.world = generateWorld(this.st.seed);
+    this.world = worldFor(this.st.seed, this.st.round);
     this.hud = new Hud(this.engine);
     this.hud.onPause = () => this.pauseMenu();
     this.ui.appendChild(this.hud.el);
@@ -337,14 +341,22 @@ class App {
     if (this.st.me && this.controls) this.controls.setClass(this.st.me.c);
     switch (ph) {
       case 'intro': {
-        const pvp = st.round % 5 === 0;
-        hud.showBanner(pvp ? 'ПвП РАУНД!' : `РАУНД ${st.round}`, pvp ? 'Дуэли каждого с каждым' : st.round % 5 === 4 ? 'Берегитесь — босс!' : 'Защитите остров!', pvp ? '#ff7a5a' : 'var(--gold)');
+        const pvp = isPvpRound(st.round);
+        const dragon = st.round === DRAGON_ROUND;
+        const lair = st.round >= LAIR_ROUND;
+        if (dragon) hud.showBanner('ФИНАЛ: ДРАКОН!', 'Красный дракон проснулся в своём логове', '#ff4a2a');
+        else
+          hud.showBanner(
+            pvp ? 'ПвП ВОЛНА!' : `ВОЛНА ${st.round}`,
+            pvp ? 'Дуэли каждого с каждым' : lair ? 'Логово дракона: его стражи наступают' : isTrollRound(st.round) ? 'Берегитесь — босс!' : 'Защитите остров!',
+            pvp ? '#ff7a5a' : lair ? '#ff8a4a' : 'var(--gold)',
+          );
         sfx.fanfare();
         sfx.music('battle');
         break;
       }
       case 'clear':
-        hud.showBanner(st.round % 5 === 0 ? 'ДУЭЛИ ОКОНЧЕНЫ' : 'РАУНД ПРОЙДЕН!', `+${15 + 5 * st.round} золота каждому`, '#8aff7a');
+        hud.showBanner(isPvpRound(st.round) ? 'ДУЭЛИ ОКОНЧЕНЫ' : 'ВОЛНА ПРОЙДЕНА!', `+${15 + 5 * st.round} золота каждому`, '#8aff7a');
         sfx.victory();
         break;
       case 'tavern':
@@ -567,6 +579,8 @@ class App {
     const sp = me.sp;
     const pos = { x: p.x + mv.x * sp * dt, z: p.z + mv.z * sp * dt };
     const arena = isArenaPhase(this.st.phase);
+    const wk = this.st.round >= LAIR_ROUND ? 'lair' : 'island';
+    if (this.world && (this.world.kind ?? 'island') !== wk) this.world = worldFor(this.st.seed, this.st.round);
     resolveCollision(pos, PLAYER_RADIUS, arena ? ARENA_OBSTACLES : this.world?.obstacles ?? [], arena ? ARENA_RADIUS : this.world?.radius ?? 33);
     p.x = pos.x;
     p.z = pos.z;

@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.for3.threeheroes',
-  appName: 'Три Героя',
+  appName: '25 waves',
   webDir: 'dist',
   backgroundColor: '#1b1330',
   server: {

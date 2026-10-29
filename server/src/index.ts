@@ -134,5 +134,5 @@ setInterval(() => {
 }, 16);
 
 http.listen(PORT, () => {
-  console.log(`Сервер «Три Героя» запущен: http://0.0.0.0:${PORT}  (WebSocket на том же порту)`);
+  console.log(`Сервер «25 waves» запущен: http://0.0.0.0:${PORT}  (WebSocket на том же порту)`);
 });

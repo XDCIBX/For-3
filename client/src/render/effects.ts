@@ -40,6 +40,7 @@ function glowSprite(color: number, size: number, opacity = 0.8): THREE.Sprite {
 }
 
 const easeOut = (k: number) => 1 - Math.pow(1 - k, 3);
+const lerpA = (a: number, b: number, k: number) => a + Math.atan2(Math.sin(b - a), Math.cos(b - a)) * k;
 
 /** Одноразовые визуальные эффекты: взмахи, ударные волны, взрывы, монеты. */
 export class Effects {
@@ -522,6 +523,35 @@ export class Effects {
     this.shake = Math.max(this.shake, 0.35);
   }
 
+  /** Огненный шар дракона летит по дуге из пасти к отметке на земле. */
+  dragonLob(from: THREE.Vector3, tx: number, tz: number, dur: number) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(G.sphere(0.45, 14, 10), new THREE.MeshBasicMaterial({ color: 0xfff0b0 })));
+    g.add(glowSprite(0xff5a10, 3.4), glowSprite(0xffb030, 2));
+    const fx0 = from.x;
+    const fy0 = from.y;
+    const fz0 = from.z;
+    const peak = 7 + Math.hypot(tx - fx0, tz - fz0) * 0.25;
+    this.flash(fx0, fy0, fz0, 0xffb040, 2.4, 0.3);
+    this.add(g, dur, (k) => {
+      const x = fx0 + (tx - fx0) * k;
+      const z = fz0 + (tz - fz0) * k;
+      const y = fy0 + (0.3 - fy0) * k + Math.sin(k * Math.PI) * peak;
+      g.position.set(x, y, z);
+      g.rotation.x += 0.2;
+      this.fx.glow({ x, y, z, vx: Math.random() - 0.5, vy: Math.random() - 0.2, vz: Math.random() - 0.5, life: 0.5, size: 0.9, grow: -1.2, color: Math.random() < 0.5 ? 0xff7020 : 0xffd040 });
+      if (Math.random() < 0.3) this.fx.puff({ x, y, z, vy: 0.4, life: 1, size: 0.6, grow: 0.8, color: 0x3a2a26, alpha: 0.35 });
+    });
+  }
+
+  /** Рёв дракона: ударная волна, пыль и тряска. */
+  dragonRoar(x: number, z: number) {
+    this.ring(x, z, 9, 0xff7a3a, 0.9, 0.1);
+    this.ring(x, z, 5, 0xffffff, 0.5, 2.5);
+    this.dust(x, z, 18);
+    this.shake = Math.max(this.shake, 0.7);
+  }
+
   /** Подсветка при применении умения: магический круг под ногами. */
   cast(cls: HeroClass, s: number, x: number, z: number) {
     if (cls === 'mage' && s >= 1) {
@@ -583,13 +613,29 @@ export class Effects {
       skeleton: [0xf2ebd6, 0xd8d0b8],
       orc: [0xfff0a0, 0xffffff],
       troll: [0xfff0a0, 0xffffff],
+      ember: [0xffd060, 0xff7a20],
+      drake: [0xffd060, 0xff8a40],
+      spitter: [0xffd060, 0xff8a40],
+      dragon: [0xffd060, 0xff6a20, 0xffffff],
       hero: [0xff6a5a, 0xffffff],
     };
     this.fx.burst(x, 1.0, z, { n: 5, speed: 2.5, up: 2, life: 0.35, size: 0.16, colors: c[kind], gravity: 6 }, kind !== 'slime' && kind !== 'skeleton');
   }
 
   death(x: number, z: number, kind: MobKind) {
-    const big = kind === 'troll' ? 3 : kind === 'orc' ? 1.6 : 1;
+    const big = kind === 'dragon' ? 5 : kind === 'troll' ? 3 : kind === 'orc' ? 1.6 : 1;
+    if (kind === 'ember' || kind === 'drake' || kind === 'spitter' || kind === 'dragon') {
+      // Огненные создания рассыпаются искрами и пеплом
+      this.fx.burst(x, 1.0, z, { n: Math.round(16 * big), speed: 3.5 * Math.sqrt(big), up: 3, life: 0.9, size: 0.22, colors: [0xffd060, 0xff7a20, 0xff3a10], drag: 1.5 });
+      this.fx.burst(x, 0.8, z, { n: Math.round(8 * big), speed: 1.5 * big, up: 1.5, life: 1.4, size: 0.7 * big, grow: 0.9, colors: [0x3a2a26, 0x5a4a44], drag: 2.5, alpha: 0.5 }, false);
+      this.flash(x, 1, z, 0xff8a30, 1.6 * big, 0.35);
+      if (kind === 'dragon') {
+        this.ring(x, z, 14, 0xffb040, 1.4);
+        this.explosion(x, z, 6);
+        this.shake = Math.max(this.shake, 1.2);
+      }
+      return;
+    }
     this.flash(x, 0.8, z, 0xffffff, 1.1 * big, 0.2);
     this.fx.burst(x, 0.6, z, { n: Math.round(12 * big), speed: 2 * big, up: 1.5, life: 1.0, size: 0.6 * big, grow: 0.8, colors: [0xf2efe6, 0xd8d0c8], drag: 2.5, alpha: 0.7 }, false);
     this.fx.burst(x, 0.8, z, { n: Math.round(8 * big), speed: 1.5, up: 3, life: 0.8, size: 0.16, colors: [0xffe14a, 0xffffff], drag: 1 });
@@ -723,6 +769,18 @@ export class ProjView {
         o.add(g);
       }
       trail(0xff7020, 0.8, 3.2, 0.9);
+    } else if (kind === 'flame') {
+      // Плевок огнеплюя: сгусток пламени с дымным хвостом
+      o.add(new THREE.Mesh(G.sphere(0.2, 12, 8), new THREE.MeshBasicMaterial({ color: 0xffe0a0 })));
+      for (const [c, sz] of [
+        [0xff4a10, 1.6],
+        [0xffa030, 1.0],
+      ] as const) {
+        const g = glowSprite(c, sz);
+        this.glows.push(g);
+        o.add(g);
+      }
+      trail(0xff5a10, 0.6, 2.6, 0.85);
     } else if (kind === 'glaive') {
       // Вращающаяся глефа: два серпа и сияние скверны
       const spin = new THREE.Group();
@@ -785,14 +843,14 @@ export class ProjView {
     this.obj.position.set(this.x + this.vx * t, this.height, this.z + this.vz * t);
     this.obj.rotation.y = Math.atan2(this.vx, this.vz);
     this.glows.forEach((g, i) => {
-      const base = (this.kind === 'fireball' ? [2.0, 1.2] : this.kind === 'glaive' ? [1.4] : this.kind === 'hammer' ? [3.2] : this.kind === 'pellet' ? [0.6] : [1.3, 0.8])[i];
+      const base = (this.kind === 'fireball' ? [2.0, 1.2] : this.kind === 'flame' ? [1.6, 1.0] : this.kind === 'glaive' ? [1.4] : this.kind === 'hammer' ? [3.2] : this.kind === 'pellet' ? [0.6] : [1.3, 0.8])[i];
       g.scale.setScalar(base * (1 + Math.sin(this.t * (20 + i * 7)) * 0.12));
     });
     if (this.spin && this.tumble) this.spin.rotation.x += dt * 16;
     else if (this.spin) this.spin.rotation.y += dt * 22;
     this.emitT -= dt;
     if (this.emitT <= 0) {
-      this.emitT = this.kind === 'fireball' ? 0.015 : 0.03;
+      this.emitT = this.kind === 'fireball' || this.kind === 'flame' ? 0.015 : 0.03;
       const p = this.obj.position;
       if (this.kind === 'spirit') fx.glow({ x: p.x, y: p.y, z: p.z, vx: Math.random() - 0.5, vy: Math.random() * 0.8, vz: Math.random() - 0.5, life: 0.4, size: 0.2, color: Math.random() < 0.5 ? 0x6ff0ff : 0xffffff });
       else if (this.kind === 'hammer') {
@@ -800,7 +858,7 @@ export class ProjView {
         if (Math.random() < 0.35) fx.puff({ x: p.x, y: 0.3, z: p.z, vy: 0.4, life: 0.6, size: 0.6, grow: 0.8, color: 0xd8c8a8, alpha: 0.35 });
       } else if (this.kind === 'glaive') fx.glow({ x: p.x, y: p.y, z: p.z, vx: Math.random() - 0.5, vy: 0.3, vz: Math.random() - 0.5, life: 0.3, size: 0.18, color: 0x5dff8a });
       else if (this.kind === 'bolt') fx.glow({ x: p.x, y: p.y, z: p.z, vx: Math.random() - 0.5, vy: Math.random() - 0.5, vz: Math.random() - 0.5, life: 0.35, size: 0.22, color: Math.random() < 0.5 ? 0x9a6aff : 0x6ab8ff });
-      else if (this.kind === 'fireball') {
+      else if (this.kind === 'fireball' || this.kind === 'flame') {
         fx.glow({ x: p.x, y: p.y, z: p.z, vx: Math.random() - 0.5, vy: Math.random(), vz: Math.random() - 0.5, life: 0.4, size: 0.45, grow: -0.6, color: Math.random() < 0.5 ? 0xff7020 : 0xffd040 });
         if (Math.random() < 0.15) fx.puff({ x: p.x, y: p.y, z: p.z, vy: 0.6, life: 0.7, size: 0.4, grow: 0.6, color: 0xd0c8c0, alpha: 0.25 });
       }
@@ -823,11 +881,22 @@ export class ZoneView {
     this.kind = z.k;
     this.data = z;
     this.localT = z.t;
-    const col = z.k === 'rain' ? 0x8ad0ff : z.k === 'burn' ? 0xff6a20 : z.k === 'meteor' ? 0xff6a1a : z.k === 'bomb' ? 0xffa030 : 0xff2a2a;
-    if (z.k === 'slam' || z.k === 'bomb') {
+    const col = z.k === 'rain' ? 0x8ad0ff : z.k === 'burn' || z.k === 'dfire' ? 0xff6a20 : z.k === 'meteor' ? 0xff6a1a : z.k === 'bomb' ? 0xffa030 : z.k === 'dball' ? 0xff4a10 : 0xff2a2a;
+    if (z.k === 'breath') {
+      // Конус дыхания: красная подсказка, потом — пламя
+      const arc = z.arc ?? 0.6;
+      const sector = new THREE.CircleGeometry(1, 28, -Math.PI / 2 - arc, arc * 2).rotateX(-Math.PI / 2);
+      this.fill = new THREE.Mesh(sector, new THREE.MeshBasicMaterial({ color: 0xff2a10, transparent: true, opacity: 0.35, depthWrite: false }));
+      this.ring = new THREE.Mesh(sector, new THREE.MeshBasicMaterial({ color: 0xff7a20, transparent: true, opacity: 0, depthWrite: false, blending: THREE.AdditiveBlending }));
+      const edge = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(Math.sin(-arc), 0, Math.cos(-arc)), new THREE.Vector3(0, 0, 0), new THREE.Vector3(Math.sin(arc), 0, Math.cos(arc))]);
+      const lines = new THREE.Line(edge, new THREE.LineBasicMaterial({ color: 0xffd0a0, transparent: true, opacity: 0.9 }));
+      lines.position.y = 0.09;
+      lines.scale.setScalar(z.r);
+      this.arrows.push(lines as unknown as THREE.Group);
+    } else if (z.k === 'slam' || z.k === 'bomb' || z.k === 'dball') {
       this.fill = new THREE.Mesh(flatGeo, texMat(dangerTex(), col, 0.85, false));
       this.ring = new THREE.Mesh(flatGeo, texMat(ringTex(), col, 1, false));
-    } else if (z.k === 'burn') {
+    } else if (z.k === 'burn' || z.k === 'dfire') {
       this.fill = new THREE.Mesh(flatGeo, texMat(softTex(), col, 0.4));
       this.ring = new THREE.Mesh(flatGeo, texMat(scorchTex(), 0xffffff, 0.85, false));
     } else {
@@ -840,6 +909,10 @@ export class ZoneView {
     this.obj.position.set(z.x, 0, z.z);
     this.fill.scale.setScalar(z.r);
     this.ring.scale.setScalar(z.r);
+    if (z.k === 'breath') {
+      this.obj.add(this.arrows[0]);
+      this.obj.rotation.y = z.a ?? 0;
+    }
     if (z.k === 'meteor') {
       const m = new THREE.Group();
       const rock = new THREE.Mesh(G.dodeca(0.8), toon(0x5a4030, { emissive: 0xff4a10, emissiveIntensity: 0.6 }));
@@ -882,7 +955,25 @@ export class ZoneView {
     this.localT += dt;
     const z = this.data;
     const t = this.localT;
-    if (z.k === 'bomb' && this.meteor) {
+    if (z.k === 'breath') {
+      // Подсказка растёт к началу дыхания, затем конус заливает огнём
+      this.obj.rotation.y = lerpA(this.obj.rotation.y, z.a ?? 0, Math.min(1, dt * 10));
+      const k = Math.min(1, t / Math.max(0.01, z.delay));
+      const live = t >= z.delay && t < z.dur;
+      this.fill.scale.setScalar(Math.max(0.01, z.r * (live ? 1 : k)));
+      (this.fill.material as THREE.MeshBasicMaterial).opacity = live ? 0.06 : 0.22 + Math.sin(t * 24) * 0.1;
+      (this.ring.material as THREE.MeshBasicMaterial).opacity = live ? 0.2 + Math.sin(t * 30) * 0.06 : 0;
+      if (live) {
+        const a0 = this.obj.rotation.y;
+        const arc = z.arc ?? 0.6;
+        for (let i = 0; i < 4; i++) {
+          const a = a0 + (Math.random() * 2 - 1) * arc;
+          const d = 1 + Math.random() * (z.r - 1);
+          fx.glow({ x: z.x + Math.sin(a) * d, y: 0.4 + Math.random() * 0.8, z: z.z + Math.cos(a) * d, vx: Math.sin(a) * 3, vy: 1.2, vz: Math.cos(a) * 3, life: 0.45, size: 0.9 + d * 0.06, grow: 1.2, color: Math.random() < 0.5 ? 0xff5a10 : 0xffb030 });
+        }
+        if (Math.random() < 0.4) fx.puff({ x: z.x + Math.sin(a0) * z.r * 0.8, y: 1, z: z.z + Math.cos(a0) * z.r * 0.8, vy: 1.5, life: 1.2, size: 1, grow: 1.5, color: 0x3a2a26, alpha: 0.3 });
+      }
+    } else if (z.k === 'bomb' && this.meteor) {
       // Бочка прилетает по дуге и, подскочив, ждёт взрыва
       const k = Math.min(1, t / Math.max(0.01, z.delay));
       const fk = Math.min(1, k / 0.6);
@@ -896,7 +987,7 @@ export class ZoneView {
         const p = this.meteor.position;
         fx.glow({ x: z.x + p.x, y: p.y + 0.45, z: z.z + p.z, vx: Math.random() - 0.5, vy: 1.5, vz: Math.random() - 0.5, life: 0.35, size: 0.14, color: Math.random() < 0.5 ? 0xffd060 : 0xff7a20 });
       }
-    } else if (z.k === 'slam' || z.k === 'meteor') {
+    } else if (z.k === 'slam' || z.k === 'meteor' || z.k === 'dball') {
       const k = Math.min(1, t / Math.max(0.01, z.delay));
       this.fill.scale.setScalar(Math.max(0.01, z.r * k));
       (this.ring.material as THREE.MeshBasicMaterial).opacity = 0.6 + Math.sin(t * 22) * 0.4;
@@ -912,14 +1003,15 @@ export class ZoneView {
     } else {
       this.ring.rotation.y += dt * (z.k === 'rain' ? 0.8 : 0.2);
       const fade = Math.max(0, Math.min(1, (z.dur - t) / 0.3, t / 0.15));
-      (this.fill.material as THREE.MeshBasicMaterial).opacity = (z.k === 'burn' ? 0.4 : 0.3) * fade;
-      (this.ring.material as THREE.MeshBasicMaterial).opacity = (z.k === 'burn' ? 0.85 : 0.95) * fade;
+      const burn = z.k === 'burn' || z.k === 'dfire';
+      (this.fill.material as THREE.MeshBasicMaterial).opacity = (burn ? 0.4 : 0.3) * fade;
+      (this.ring.material as THREE.MeshBasicMaterial).opacity = (burn ? 0.85 : 0.95) * fade;
       this.emitT -= dt;
       if (this.emitT <= 0) {
-        this.emitT = z.k === 'rain' ? 0.035 : 0.04;
+        this.emitT = z.k === 'rain' ? 0.035 : z.k === 'dfire' ? 0.06 : 0.04;
         const a = Math.random() * Math.PI * 2;
         const d = Math.sqrt(Math.random()) * z.r;
-        if (z.k === 'burn') {
+        if (burn) {
           fx.glow({ x: z.x + Math.cos(a) * d, y: 0.1, z: z.z + Math.sin(a) * d, vy: 1.5 + Math.random(), life: 0.6, size: 0.5, grow: -0.6, color: Math.random() < 0.5 ? 0xff7020 : 0xffc040 });
           if (Math.random() < 0.3) fx.glow({ x: z.x + Math.cos(a) * d, y: 0.2, z: z.z + Math.sin(a) * d, vy: 2.5, life: 1, size: 0.1, color: 0xffd04a });
         } else {

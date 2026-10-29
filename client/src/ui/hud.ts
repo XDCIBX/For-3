@@ -1,4 +1,4 @@
-import { CLASSES, MAX_ROUNDS, PVP_EVERY, generateWorld, type WorldData } from '@game/shared';
+import { CLASSES, DRAGON_ROUND, MAX_ROUNDS, isPvpRound, roundsToPvp, worldFor, type WorldData } from '@game/shared';
 import type { ClientState } from '../net/state';
 import type { Engine } from '../render/engine';
 import { CLASS_BG, el, esc } from './dom';
@@ -27,7 +27,7 @@ export class Hud {
   private mini: HTMLCanvasElement;
   private miniCtx: CanvasRenderingContext2D;
   private world: WorldData | null = null;
-  private worldSeed = -1;
+  private worldSeed = "";
   private lastGold = -1;
   private teamKey = '';
   private scr = { x: 0, y: 0, vis: false };
@@ -175,17 +175,17 @@ export class Hud {
     const rt = this.q('.rt')!;
     const rs = this.q('.rs')!;
     const mobbar = this.q('.mobbar')!;
-    const pvp = st.round % PVP_EVERY === 0;
-    this.set('rt', `Раунд ${st.round}/${MAX_ROUNDS}${pvp ? ' · ПвП' : ''}`, (v) => (rt.textContent = v));
+    const pvp = isPvpRound(st.round);
+    this.set('rt', `Волна ${st.round}/${MAX_ROUNDS}${pvp ? ' · ПвП' : st.round === DRAGON_ROUND ? ' · Дракон' : ''}`, (v) => (rt.textContent = v));
     if (st.phase === 'battle') {
       rs.textContent = `Врагов осталось: ${st.mobsLeft}`;
       mobbar.style.display = '';
       (mobbar.firstElementChild as HTMLElement).style.width = `${st.mobsTotal ? (st.mobsLeft / st.mobsTotal) * 100 : 0}%`;
     } else {
       mobbar.style.display = 'none';
-      const nextPvp = PVP_EVERY - (st.round % PVP_EVERY);
+      const nextPvp = roundsToPvp(st.round + 1) + 1;
       rs.textContent =
-        st.phase === 'intro' ? 'Приготовьтесь!' : st.phase.startsWith('duel') ? `Дуэль ${(st.duel?.idx ?? 0) + 1} из ${st.duel?.total ?? 0}${st.phase === 'duel' ? ` · ${Math.ceil(st.timer)} с` : ''}` : st.phase === 'clear' ? 'Победа!' : pvp ? '' : `До ПвП: ${nextPvp} р.`;
+        st.phase === 'intro' ? 'Приготовьтесь!' : st.phase.startsWith('duel') ? `Дуэль ${(st.duel?.idx ?? 0) + 1} из ${st.duel?.total ?? 0}${st.phase === 'duel' ? ` · ${Math.ceil(st.timer)} с` : ''}` : st.phase === 'clear' ? 'Победа!' : pvp || st.round >= DRAGON_ROUND - 1 ? '' : `До ПвП: ${nextPvp} р.`;
     }
 
     // Команда
@@ -245,19 +245,21 @@ export class Hud {
     const cv = document.createElement('canvas');
     cv.width = cv.height = W;
     const c = cv.getContext('2d')!;
-    c.fillStyle = '#3a8ac0';
+    const lair = world.kind === 'lair';
+    c.fillStyle = lair ? '#1a0e0c' : '#3a8ac0';
     c.fillRect(0, 0, W, W);
     c.translate(W / 2, W / 2);
-    c.fillStyle = '#f0dca0';
+    c.fillStyle = lair ? '#3a2a24' : '#f0dca0';
     c.beginPath();
     c.arc(0, 0, 35.5 * sc, 0, Math.PI * 2);
     c.fill();
-    c.fillStyle = '#6fbf4a';
+    c.fillStyle = lair ? '#4a3a32' : '#6fbf4a';
     c.beginPath();
     c.arc(0, 0, 33.5 * sc, 0, Math.PI * 2);
     c.fill();
     for (const o of world.obstacles) {
-      c.fillStyle = o.kind === 'tree' ? '#2f7a3a' : o.kind === 'pond' ? '#3a9ad0' : o.kind === 'tent' ? '#d05a3a' : '#9a9a9a';
+      c.fillStyle =
+        o.kind === 'tree' ? '#2f7a3a' : o.kind === 'pond' ? '#3a9ad0' : o.kind === 'tent' ? '#d05a3a' : o.kind === 'lava' ? '#ff6a1a' : o.kind === 'hoard' ? '#ffc93c' : o.kind === 'stalagmite' ? '#6a5a50' : '#9a9a9a';
       c.beginPath();
       c.arc(o.x * sc, o.z * sc, Math.max(1.5, o.r * sc), 0, Math.PI * 2);
       c.fill();
@@ -277,9 +279,10 @@ export class Hud {
     const arena = st.phase.startsWith('duel');
     const R = arena ? 14 : 36;
     const sc = W / 2 / R;
-    if (!arena && st.seed !== this.worldSeed) {
-      this.world = generateWorld(st.seed);
-      this.worldSeed = st.seed;
+    const wk = `${st.seed}|${st.round >= 21 ? 'lair' : 'island'}`;
+    if (!arena && wk !== this.worldSeed) {
+      this.world = worldFor(st.seed, st.round);
+      this.worldSeed = wk;
       this.miniBase = null;
     }
     c.clearRect(0, 0, W, W);
@@ -306,8 +309,9 @@ export class Hud {
     const snap = st.snap;
     if (snap) {
       for (const m of snap.M) {
-        c.fillStyle = m.k === 'troll' ? '#ff2a1a' : '#e8463a';
-        const r = m.k === 'troll' ? 5 : 2.5;
+        const boss = m.k === 'troll' || m.k === 'dragon';
+        c.fillStyle = boss ? '#ff2a1a' : '#e8463a';
+        const r = m.k === 'dragon' ? 8 : boss ? 5 : 2.5;
         c.beginPath();
         c.arc(m.x * sc, m.z * sc, r, 0, Math.PI * 2);
         c.fill();

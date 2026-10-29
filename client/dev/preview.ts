@@ -5,7 +5,7 @@ import { buildWeapon } from '../src/render/equipment';
 import { MobModel } from '../src/render/mobs';
 import { MinionModel } from '../src/render/minions';
 import { makeEnvironment } from '../src/render/env';
-import { makeItem, TEMPLATE_BY_ID, emptyEquip } from '@game/shared';
+import { makeItem, TEMPLATE_BY_ID, emptyEquip, type MobKind } from '@game/shared';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });
@@ -52,9 +52,10 @@ const mobs: MobModel[] = [];
 if (q.get('mobs')) {
   heroes.forEach((h) => h.root.removeFromParent());
   heroes.length = 0;
-  (['slime', 'goblin', 'skeleton', 'orc', 'troll'] as const).forEach((k, i) => {
+  const ml = (q.get('mobs') === '1' ? 'slime,goblin,skeleton,orc,troll' : q.get('mobs')!).split(',') as MobKind[];
+  ml.forEach((k, i) => {
     const m = new MobModel(k);
-    m.root.position.set((i - 2) * 2.2 + (k === 'troll' ? 0.8 : 0), 0, k === 'troll' ? -2 : 0);
+    m.root.position.set((i - (ml.length - 1) / 2) * 2.2 + (k === 'troll' ? 0.8 : 0), 0, k === 'troll' || k === 'dragon' ? -2 : 0);
     m.root.rotation.y = Number(q.get('rot') ?? 0.4);
     scene.add(m.root);
     mobs.push(m);
@@ -123,7 +124,7 @@ function loop(now: number) {
   const thr = q.has('throw');
   mobs.forEach((m) => {
     if (cast !== null && Math.random() < 0.01) m.playAttack();
-    m.update(dt, { moving: Number(q.get('speed') ?? 0) > 0, windup: false, stun: false, frozen: false, burn: false, slow: false, spawning: false, throwWind: thr && cyc < 0.9, hammerOut: thr && cyc >= 0.9 && cyc < 2.3 });
+    m.update(dt, { skill: q.get('skill') ?? '', moving: Number(q.get('speed') ?? 0) > 0, windup: q.has('windup'), stun: false, frozen: false, burn: false, slow: false, spawning: false, throwWind: thr && cyc < 0.9, hammerOut: thr && cyc >= 0.9 && cyc < 2.3 });
   });
   renderer.render(scene, cam);
   requestAnimationFrame(loop);

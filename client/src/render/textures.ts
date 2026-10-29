@@ -614,3 +614,27 @@ export function texturize(root: THREE.Object3D, table: Record<number, THREE.Text
     if (tex) m.material = make(hex, tex);
   });
 }
+
+/** Чешуя: ряды перекрывающихся полукруглых пластин с тёмными краями. */
+export function scaleTex() {
+  return make('scales', 256, (g, s, r) => {
+    g.fillStyle = grey(0.86);
+    g.fillRect(0, 0, s, s);
+    const step = s / 12;
+    for (let row = -1; row < 13; row++) {
+      for (let col = -1; col < 13; col++) {
+        const x = col * step + (row % 2 ? step / 2 : 0);
+        const y = row * step * 0.75;
+        const gr = g.createRadialGradient(x, y + step * 0.1, step * 0.05, x, y, step * 0.62);
+        const v = r.range(0.85, 1);
+        gr.addColorStop(0, grey(v));
+        gr.addColorStop(0.75, grey(v * 0.82));
+        gr.addColorStop(1, grey(0.5));
+        g.fillStyle = gr;
+        g.beginPath();
+        g.arc(x, y, step * 0.6, 0, Math.PI);
+        g.fill();
+      }
+    }
+  });
+}
