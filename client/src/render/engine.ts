@@ -796,7 +796,7 @@ export class Engine {
         const ts = (this.tavernStage as TavernStage).slots[tavernSlot(id)];
         root.position.copy(ts);
         // Медленно поворачивается, показывая экипировку с разных сторон
-        v.rot = lerpAngle(v.rot, isMe ? Math.sin(now / 1000 * 0.45) * 0.4 : 0, Math.min(1, dt * 6));
+        v.rot = isMe ? Math.sin((now / 1000) * 0.45) * 0.4 : 0;
         speed = 0;
       } else if (isMe && this.pred && p.al) {
         root.position.set(this.pred.x, 0, this.pred.z);

@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import type { MobKind } from '@game/shared';
 import { G, addOutline, blobShadow, glow, part, toon } from './toon';
 import { bake } from './bake';
+import { footShape, gait, handShape, headShape, legHeight, limb, torsoShape, type LegPose } from './anatomy';
 
 export interface MobAnimInput {
   moving: boolean;
@@ -27,6 +28,12 @@ interface Rig {
   legR: THREE.Group;
   handR: THREE.Group;
   handL: THREE.Group;
+  kneeL: THREE.Group;
+  kneeR: THREE.Group;
+  elbowL: THREE.Group;
+  elbowR: THREE.Group;
+  thigh: number;
+  shin: number;
 }
 
 /**
@@ -86,46 +93,72 @@ function shrinkHead(r: Rig, headR: number, k: number) {
   r.head.position.y -= headR * 0.85 * (1 - k);
 }
 
-function biped(o: { skin: number; torsoCol: number; legCol: number; bodyR: number; bodyH: number; headR: number; legLen: number; armLen: number; armR: number; hipW: number }): Rig {
+function biped(o: { skin: number; torsoCol: number; legCol: number; bodyR: number; bodyH: number; headR: number; legLen: number; armLen: number; armR: number; hipW: number; bones?: boolean; barefoot?: boolean; stout?: number }): Rig {
   const body = new THREE.Group();
-  const hipY = o.legLen + 0.05;
+  const fs = o.armR * 13;
+  const ankle = 0.1 * fs;
+  const thigh = o.legLen * 0.52;
+  const shin = o.legLen - thigh;
+  const hipY = o.legLen + ankle;
+  const r = o.armR;
+  const bulge = o.bones ? 0 : 0.14;
   const legL = new THREE.Group();
   const legR = new THREE.Group();
-  for (const [leg, s] of [
-    [legL, -1],
-    [legR, 1],
+  const kneeL = new THREE.Group();
+  const kneeR = new THREE.Group();
+  for (const [leg, knee, s] of [
+    [legL, kneeL, -1],
+    [legR, kneeR, 1],
   ] as const) {
     leg.position.set(s * o.hipW, hipY, 0);
-    leg.add(part(G.capsule(o.armR * 1.1, o.legLen * 0.6), o.legCol, { pos: [0, -o.legLen / 2, 0], outline: 0.025 }));
-    leg.add(part(G.sphere(o.armR * 1.4, 10, 8), o.skin, { pos: [0, -o.legLen + 0.02, 0.05], scale: [1, 0.6, 1.4], outline: 0.02 }));
+    leg.add(part(limb(r * (o.bones ? 0.8 : 1.55), r * (o.bones ? 0.7 : 1.1), thigh, bulge), o.legCol, {}));
+    knee.position.y = -thigh;
+    leg.add(knee);
+    knee.add(part(limb(r * (o.bones ? 0.7 : 1.1), r * (o.bones ? 0.6 : 0.8), shin, bulge * 1.4), o.legCol, {}));
+    if (o.bones) knee.add(part(G.sphere(r * 1.1, 8, 6), o.legCol, {}));
+    knee.add(part(footShape(fs, !o.barefoot), o.barefoot ? o.skin : o.legCol === o.skin ? o.skin : 0x3a2a1c, { pos: [0, -shin, 0] }));
     body.add(leg);
   }
   const torso = new THREE.Group();
   torso.position.y = hipY;
   body.add(torso);
-  torso.add(part(G.capsule(o.bodyR, o.bodyH), o.torsoCol, { pos: [0, o.bodyH / 2 + o.bodyR * 0.6, 0], scale: [1, 1, 0.85], outline: 0.035 }));
-  const shoulderY = o.bodyH + o.bodyR * 0.9;
+  // Торс: анатомическая форма, подогнанная под размеры старой капсулы
+  const sy = (o.bodyH + 2 * o.bodyR) / 0.945;
+  const sxz = o.bodyR / 0.29;
+  const ty = -0.4 * o.bodyR + 0.16 * sy;
+  torso.add(part(torsoShape(1, 1.1, o.stout ?? 0), o.torsoCol, { pos: [0, ty, 0], scale: [sxz, sy, sxz] }));
+  const shoulderY = ty + 0.62 * sy;
   const armL = new THREE.Group();
   const armR = new THREE.Group();
   const handL = new THREE.Group();
   const handR = new THREE.Group();
-  for (const [arm, hand, s] of [
-    [armL, handL, -1],
-    [armR, handR, 1],
+  const elbowL = new THREE.Group();
+  const elbowR = new THREE.Group();
+  const upper = o.armLen * 0.5;
+  const fore = o.armLen * 0.45;
+  for (const [arm, elbow, hand, s] of [
+    [armL, elbowL, handL, -1],
+    [armR, elbowR, handR, 1],
   ] as const) {
-    arm.position.set(s * (o.bodyR + o.armR * 0.6), shoulderY, 0);
-    arm.add(part(G.capsule(o.armR, o.armLen * 0.7), o.skin, { pos: [0, -o.armLen / 2, 0], outline: 0.022 }));
-    arm.add(part(G.sphere(o.armR * 1.3, 10, 8), o.skin, { pos: [0, -o.armLen, 0], outline: 0.02 }));
-    hand.position.y = -o.armLen;
-    arm.add(hand);
-    arm.rotation.z = s * 0.15;
+    arm.position.set(s * (o.bodyR * 1.02 + r * 0.5), shoulderY, 0);
+    arm.add(part(limb(r * (o.bones ? 0.75 : 1.2), r * (o.bones ? 0.65 : 0.95), upper, bulge * 1.2), o.skin, {}));
+    elbow.position.y = -upper;
+    arm.add(elbow);
+    elbow.add(part(limb(r * (o.bones ? 0.65 : 0.95), r * (o.bones ? 0.55 : 0.75), fore, bulge), o.skin, {}));
+    if (o.bones) elbow.add(part(G.sphere(r, 8, 6), o.skin, {}));
+    elbow.add(part(handShape(fs * 0.85), o.skin, { pos: [0, -fore, 0], rot: [0, s < 0 ? Math.PI : 0, 0] }));
+    hand.position.y = -fore - 0.06 * fs;
+    elbow.add(hand);
+    arm.rotation.z = s * 0.12;
     torso.add(arm);
   }
+  // Шея
+  torso.add(part(G.cyl(o.bodyR * 0.32, o.bodyR * 0.42, 0.14, 10), o.skin, { pos: [0, ty + 0.78 * sy, 0] }));
   const head = new THREE.Group();
-  head.position.y = shoulderY + o.headR * 0.85;
+  head.position.y = ty + 0.785 * sy + o.headR * 0.85;
   torso.add(head);
-  for (const g of [body, torso, head, armL, armR, legL, legR]) g.userData.anim = true;
-  return { body, torso, head, armL, armR, legL, legR, handL, handR };
+  for (const g of [body, torso, head, armL, armR, legL, legR, kneeL, kneeR, elbowL, elbowR]) g.userData.anim = true;
+  return { body, torso, head, armL, armR, legL, legR, handL, handR, kneeL, kneeR, elbowL, elbowR, thigh, shin };
 }
 
 export class MobModel {
@@ -145,6 +178,8 @@ export class MobModel {
   private catchT = 99;
   private wasOut = false;
   private wasWind = false;
+  private poseL: LegPose = { thigh: 0, knee: 0, ankle: 0 };
+  private poseR: LegPose = { thigh: 0, knee: 0, ankle: 0 };
   private spawnK = 0;
   dying = 0;
   private stars = new THREE.Group();
@@ -185,10 +220,12 @@ export class MobModel {
       }
       case 'goblin': {
         const skin = 0x7a8f4a;
-        const r = biped({ skin, torsoCol: 0x6a4a30, legCol: 0x4d3a27, bodyR: 0.2, bodyH: 0.24, headR: 0.3, legLen: 0.52, armLen: 0.5, armR: 0.06, hipW: 0.1 });
+        const r = biped({ skin, torsoCol: 0x6a4a30, legCol: skin, bodyR: 0.19, bodyH: 0.24, headR: 0.3, legLen: 0.5, armLen: 0.52, armR: 0.055, hipW: 0.09, barefoot: true });
+        // Рваные штаны до колен
+        for (const leg of [r.legL, r.legR]) leg.add(part(limb(0.09, 0.075, 0.24, 0.05), 0x4d3a27, {}));
         shrinkHead(r, 0.3, 0.72);
-        const head = part(G.sphere(0.3, 16, 12), skin, { outline: 0.03 });
-        head.scale.set(1.15, 0.95, 1);
+        const head = part(headShape('human'), skin, { rough: 0.6 });
+        head.scale.set(0.8, 0.72, 0.75);
         r.head.add(head);
         for (const s of [-1, 1]) {
           const ear = part(G.cone(0.1, 0.45, 8), skin, { pos: [s * 0.4, 0.05, -0.02], rot: [0, 0, -s * 1.25], outline: 0.02 });
@@ -213,11 +250,11 @@ export class MobModel {
       }
       case 'skeleton': {
         const bone = 0xd8ceb4;
-        const r = biped({ skin: bone, torsoCol: 0x3a342e, legCol: bone, bodyR: 0.16, bodyH: 0.32, headR: 0.28, legLen: 0.64, armLen: 0.56, armR: 0.04, hipW: 0.1 });
+        const r = biped({ skin: bone, torsoCol: 0x3a342e, legCol: bone, bodyR: 0.16, bodyH: 0.32, headR: 0.28, legLen: 0.64, armLen: 0.58, armR: 0.045, hipW: 0.1, bones: true });
         shrinkHead(r, 0.28, 0.7);
         // Рёбра поверх торса
         for (let i = 0; i < 3; i++) r.torso.add(part(G.torus(0.17 - i * 0.015, 0.025, Math.PI * 2, 4, 14), bone, { pos: [0, 0.26 + i * 0.1, 0], rot: [Math.PI / 2, 0, 0], scale: [1, 0.8, 1], outline: false }));
-        const skull = part(G.sphere(0.28, 16, 12), bone, { outline: 0.03 });
+        const skull = part(headShape('skull'), bone, { scale: 0.7 });
         r.head.add(skull);
         r.head.add(part(G.box(0.28, 0.12, 0.2), bone, { pos: [0, -0.2, 0.08], outline: 0.02 }));
         for (const s of [-1, 1]) {
@@ -262,12 +299,13 @@ export class MobModel {
           legLen: 0.56,
           armLen: 0.68,
           armR: 0.12,
-          hipW: 0.18,
+          hipW: 0.17,
+          stout: 0.6,
         });
         // Пузо
         r.torso.add(part(G.sphere(0.36, 16, 12), troll ? 0x8e9a92 : 0x6a7f40, { pos: [0, 0.4, 0.12], scale: [1, 0.9, 0.8], outline: 0.03 }));
-        const head = part(G.sphere(0.3, 16, 12), skin, { outline: 0.03 });
-        head.scale.set(1.1, 0.95, 1);
+        const head = part(headShape('brute'), skin, { rough: 0.65 });
+        head.scale.set(0.82, 0.72, 0.78);
         r.head.add(head);
         r.head.position.z = 0.1;
         shrinkHead(r, 0.3, troll ? 0.74 : 0.78);
@@ -413,16 +451,46 @@ export class MobModel {
       } else this.slime.position.z = 0;
     } else if (this.rig) {
       const r = this.rig;
-      const sw = mv ? Math.sin(this.walk) * 0.7 : 0;
-      r.legL.rotation.x = sw;
-      r.legR.rotation.x = -sw;
+      // Шаг с коленями: тяжёлые идут вразвалку, гоблины семенят
+      const mvK = mv ? 1 : 0;
+      const runK = this.kind === 'goblin' ? 0.6 : this.kind === 'troll' ? 0 : 0.25;
+      gait(this.walk, mvK, runK, this.poseL);
+      gait(this.walk + Math.PI, mvK, runK, this.poseR);
+      const heavy = this.kind === 'troll' || this.kind === 'orc';
+      const crouch = (heavy ? 0.06 : 0.02) + (st.windup ? 0.12 : 0) + strike * 0.08;
+      for (const pose of [this.poseL, this.poseR]) {
+        pose.thigh -= crouch * 1.7;
+        pose.knee += crouch * 3.3;
+      }
+      r.legL.rotation.set(this.poseL.thigh, 0, heavy ? -0.08 : -0.03);
+      r.legR.rotation.set(this.poseR.thigh, 0, heavy ? 0.08 : 0.03);
+      r.kneeL.rotation.x = this.poseL.knee;
+      r.kneeR.rotation.x = this.poseR.knee;
+      const sw = mv ? Math.sin(this.walk) * 0.6 : 0;
       r.armL.rotation.x = -sw * 0.7;
       let armR = sw * 0.7;
-      if (st.windup) armR = this.kind === 'skeleton' ? -1.5 : -2.6;
-      if (strike > 0) armR = this.kind === 'skeleton' ? -1.5 : -2.6 + (this.atkT / 0.25) * 2.6;
+      let elbR = 0.3 + Math.max(0, -armR) * 0.3 + (heavy ? 0.15 : 0);
+      let elbL = 0.3 + Math.max(0, sw * 0.7) * 0.3 + (heavy ? 0.15 : 0);
+      if (st.windup) {
+        armR = this.kind === 'skeleton' ? -1.5 : -2.6;
+        elbR = this.kind === 'skeleton' ? 1.9 : 1.2;
+      }
+      if (strike > 0) {
+        const k = this.atkT / 0.25;
+        armR = this.kind === 'skeleton' ? -1.5 : -2.6 + k * 2.4;
+        elbR = this.kind === 'skeleton' ? 1.9 * (1 - k) + 0.1 : 1.2 * (1 - k) + 0.1;
+      }
       r.armR.rotation.x = armR;
-      if (this.kind === 'skeleton' && (st.windup || strike > 0)) r.armL.rotation.x = -1.5;
-      r.body.position.y = mv ? Math.abs(Math.sin(this.walk)) * 0.06 * this.scale : 0;
+      if (this.kind === 'skeleton' && (st.windup || strike > 0)) {
+        r.armL.rotation.x = -1.5;
+        elbL = 0.05;
+      }
+      r.elbowL.rotation.x = -elbL;
+      r.elbowR.rotation.x = -elbR;
+      // Стопы на земле: тело опускается вместе со сгибом ног
+      const drop = r.thigh + r.shin - Math.max(legHeight(this.poseL.thigh, this.poseL.knee, r.thigh, r.shin), legHeight(this.poseR.thigh, this.poseR.knee, r.thigh, r.shin));
+      r.body.position.y = -drop * this.scale;
+      r.body.rotation.z = mv && heavy ? Math.sin(this.walk) * 0.05 : 0;
       r.torso.rotation.x = windupLean + strike * 0.35 + (mv ? 0.12 : 0);
       r.torso.rotation.y = 0;
       r.armR.rotation.z = 0;
@@ -432,6 +500,7 @@ export class MobModel {
         const e = 1 - Math.pow(1 - k, 3);
         r.armR.rotation.x = -3.3 * e + Math.sin(t * 30) * 0.03 * k;
         r.armR.rotation.z = 0.35 * e;
+        r.elbowR.rotation.x = -1.0 * e;
         r.armL.rotation.x = -1.0 * e;
         r.torso.rotation.x = -0.45 * e;
         r.torso.rotation.y = -0.6 * e;
@@ -440,6 +509,7 @@ export class MobModel {
         const k = this.throwT / 0.35;
         const e = 1 - Math.pow(1 - k, 4);
         r.armR.rotation.x = -3.3 + e * 3.0;
+        r.elbowR.rotation.x = -1.0 * (1 - e) - 0.05;
         r.armL.rotation.x = -1.0 + e * 0.6;
         r.torso.rotation.x = -0.45 + e * 0.7;
         r.torso.rotation.y = -0.6 + e * 0.9;
@@ -447,6 +517,7 @@ export class MobModel {
         // Молот летит — тянет его к себе вытянутой рукой
         const pull = Math.sin(t * 9) * 0.06;
         r.armR.rotation.x = -1.55 + pull;
+        r.elbowR.rotation.x = -0.1 - pull;
         r.armL.rotation.x = -0.6;
         r.torso.rotation.x = -0.12 + pull * 0.5;
         r.torso.rotation.y = 0.15;

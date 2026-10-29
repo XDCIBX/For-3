@@ -35,6 +35,15 @@ export interface Rig {
   armR: THREE.Group;
   legL: THREE.Group;
   legR: THREE.Group;
+  /** Предплечья (от локтя), голени (от колена), стопы (от лодыжки). */
+  foreL: THREE.Group;
+  foreR: THREE.Group;
+  shinL: THREE.Group;
+  shinR: THREE.Group;
+  footL: THREE.Group;
+  footR: THREE.Group;
+  shinLen: number;
+  foreLen: number;
 }
 
 /** Что построено — чтобы при смене экипировки всё убрать. */
@@ -91,9 +100,12 @@ export function buildArmor(rig: Rig, tpl: string, r: Rarity, cls: HeroClass, out
     // Многослойные наплечники и наручи
     for (const arm of [rig.armL, rig.armR]) {
       const s = arm === rig.armL ? -1 : 1;
-      add(arm, out, part(G.halfSphere(0.19), col, { pos: [0, 0.03, 0], scale: [1.15, 0.85, 1.1], rot: [0, 0, s * 0.15], outline: 0.025 }));
-      add(arm, out, part(G.halfSphere(0.17), col, { pos: [s * 0.02, -0.07, 0], scale: [1.2, 0.6, 1.15], outline: 0.02 }));
-      add(arm, out, part(G.cyl(0.105, 0.095, 0.17, 12), col, { pos: [0, -0.31, 0], outline: 0.018 }));
+      const fore = s < 0 ? rig.foreL : rig.foreR;
+      add(arm, out, part(G.halfSphere(0.17), col, { pos: [0, 0.03, 0], scale: [1.15, 0.85, 1.1], rot: [0, 0, s * 0.15], outline: 0.025 }));
+      add(arm, out, part(G.halfSphere(0.15), col, { pos: [s * 0.02, -0.06, 0], scale: [1.2, 0.6, 1.15], outline: 0.02 }));
+      // Налокотник и наруч
+      add(fore, out, part(G.sphere(0.065, 10, 8), col, { pos: [0, 0.0, -0.03], scale: [1, 0.9, 1.1], outline: 0.012 }));
+      add(fore, out, part(G.cyl(0.07, 0.058, rig.foreLen * 0.62, 12), col, { pos: [0, -rig.foreLen * 0.58, 0], outline: 0.018 }));
       if (rank >= 1) add(arm, out, part(G.torus(0.2, 0.022, Math.PI * 2, 6, 20), trim, { pos: [0, -0.04, 0], rot: [Math.PI / 2, 0, 0], scale: [1.1, 1.05, 1], outline: false }));
       if (rank >= 3) for (const z of [-0.08, 0.08]) add(arm, out, part(G.cone(0.04, 0.16, 6), GOLD, { pos: [s * 0.08, 0.17, z], rot: [0, 0, -s * 0.5], outline: 0.012 }));
     }
@@ -124,7 +136,8 @@ export function buildArmor(rig: Rig, tpl: string, r: Rarity, cls: HeroClass, out
     }
     // Пелерина на плечах и широкие рукава
     add(T, out, part(G.cyl(0.22, 0.44, 0.17, 18), col, { pos: [0, 0.66, 0], outline: 0.025, map: clothTex() }));
-    for (const arm of [rig.armL, rig.armR]) add(arm, out, part(G.cyl(0.09, 0.16, 0.26, 12), col, { pos: [0, -0.24, 0], outline: 0.02, map: clothTex() }));
+    // Расширяющиеся рукава
+    for (const fore of [rig.foreL, rig.foreR]) add(fore, out, part(G.cyl(0.075, 0.13, rig.foreLen * 0.8, 14), col, { pos: [0, -rig.foreLen * 0.5, 0], outline: 0.02, map: clothTex() }));
     // Кушак с концами
     const sash = rank >= 1 ? GOLD : 0x5a3a22;
     add(T, out, part(G.torus(0.315, 0.045, Math.PI * 2, 6, 24), sash, { pos: [0, 0.13, 0], rot: [Math.PI / 2, 0, 0], scale: [1, 0.88, 1], outline: 0.012 }));
@@ -132,7 +145,7 @@ export function buildArmor(rig: Rig, tpl: string, r: Rarity, cls: HeroClass, out
     if (rank >= 1) {
       add(T, out, part(G.torus(0.44, 0.03, Math.PI * 2, 6, 24), GOLD, { pos: [0, 0.58, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
       if (cls !== 'mage') add(T, out, part(G.torus(0.55, 0.035, Math.PI * 2, 6, 28), GOLD, { pos: [0, -0.54, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
-      for (const arm of [rig.armL, rig.armR]) add(arm, out, part(G.torus(0.155, 0.02, Math.PI * 2, 6, 16), GOLD, { pos: [0, -0.37, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+      for (const fore of [rig.foreL, rig.foreR]) add(fore, out, part(G.torus(0.128, 0.018, Math.PI * 2, 6, 16), GOLD, { pos: [0, -rig.foreLen * 0.9, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
     }
     if (rank >= 2) {
       // Руны по подолу
@@ -161,9 +174,9 @@ export function buildArmor(rig: Rig, tpl: string, r: Rarity, cls: HeroClass, out
   for (const s of [-1, 1]) add(T, out, part(G.box(0.12, 0.12, 0.08), LEATHER, { pos: [s * 0.26, 0.06, 0.15], rot: [0, s * 0.7, 0], outline: 0.015 }));
   // Наплечник на левом плече и наручи
   add(rig.armL, out, part(G.halfSphere(0.17), col, { pos: [0, 0.03, 0], scale: [1.15, 0.8, 1.1], outline: 0.02, map: clothTex() }));
-  for (const arm of [rig.armL, rig.armR]) {
-    add(arm, out, part(G.cyl(0.1, 0.09, 0.16, 10), LEATHER, { pos: [0, -0.31, 0], outline: 0.015 }));
-    add(arm, out, part(G.torus(0.1, 0.015, Math.PI * 2, 4, 12), GOLD, { pos: [0, -0.31, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+  for (const fore of [rig.foreL, rig.foreR]) {
+    add(fore, out, part(G.cyl(0.066, 0.056, rig.foreLen * 0.55, 10), LEATHER, { pos: [0, -rig.foreLen * 0.6, 0], outline: 0.015 }));
+    add(fore, out, part(G.torus(0.064, 0.012, Math.PI * 2, 4, 12), GOLD, { pos: [0, -rig.foreLen * 0.6, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
   }
   if (rank >= 1) {
     // Меховой воротник
@@ -269,33 +282,37 @@ export function buildBoots(rig: Rig, tpl: string, r: Rarity, out: Built): number
   const color = greaves
     ? { common: 0x8a6a4a, rare: 0x9aa6b2, epic: 0x8e62c9, legendary: 0xe7b84a, relic: 0x6a1c22 }[r]
     : { common: 0xc8a46a, rare: 0x6a4428, epic: 0x34557f, legendary: LUX[r], relic: 0x8a1020 }[r];
-  for (const leg of [rig.legL, rig.legR]) {
-    const s = leg === rig.legL ? -1 : 1;
+  const SL = rig.shinLen;
+  for (const [shin, foot, s] of [
+    [rig.shinL, rig.footL, -1],
+    [rig.shinR, rig.footR, 1],
+  ] as const) {
     if (greaves) {
       if (rank >= 1) {
-        add(leg, out, part(G.box(0.17, 0.24, 0.07), color, { pos: [0, -0.3, 0.08], outline: 0.015 }));
-        add(leg, out, part(G.sphere(0.085, 10, 8), color, { pos: [0, -0.13, 0.09], scale: [1, 0.9, 0.8], outline: 0.015 }));
+        // Поножи: щиток на голени и наколенник
+        add(shin, out, part(G.box(0.13, SL * 0.7, 0.05), color, { pos: [0, -SL * 0.45, 0.065], rot: [-0.05, 0, 0], outline: 0.015 }));
+        add(shin, out, part(G.sphere(0.075, 10, 8), color, { pos: [0, 0, 0.05], scale: [1, 0.9, 0.8], outline: 0.015 }));
       } else {
         // Деревянные башмаки: высокая подошва
-        add(leg, out, part(G.box(0.22, 0.06, 0.34), WOOD, { pos: [0, -0.54, 0.05], outline: 0.015 }));
+        add(foot, out, part(G.box(0.16, 0.05, 0.33), WOOD, { pos: [0, -0.09, 0.05], outline: 0.015 }));
       }
-      if (rank >= 2) add(leg, out, part(G.box(0.18, 0.03, 0.08), TRIM[r], { pos: [0, -0.2, 0.11], outline: false }));
-      if (rank >= 3) add(leg, out, part(G.cone(0.04, 0.14, 6), GOLD, { pos: [s * 0.06, -0.13, 0.15], rot: [1.2, 0, 0], outline: 0.01 }));
+      if (rank >= 2) add(shin, out, part(G.box(0.14, 0.025, 0.06), TRIM[r], { pos: [0, -SL * 0.15, 0.09], outline: false }));
+      if (rank >= 3) add(shin, out, part(G.cone(0.035, 0.13, 6), GOLD, { pos: [s * 0.05, 0.02, 0.1], rot: [1.2, 0, 0], outline: 0.01 }));
     } else if (rank === 0) {
-      // Лапти: плетёные ремешки
-      for (const y of [-0.42, -0.36]) add(leg, out, part(G.torus(0.12, 0.012, Math.PI * 2, 4, 14), 0x8a6a3a, { pos: [0, y, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+      // Лапти: плетёные ремешки вокруг лодыжки
+      for (const y of [0.0, 0.07]) add(shin, out, part(G.torus(0.07, 0.01, Math.PI * 2, 4, 14), 0x8a6a3a, { pos: [0, -SL + y, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
     } else {
-      // Сапоги с отворотом
-      add(leg, out, part(G.cyl(0.13, 0.12, 0.16, 12), color, { pos: [0, -0.37, 0], outline: 0.015 }));
-      add(leg, out, part(G.torus(0.13, 0.03, Math.PI * 2, 6, 16), rank >= 3 ? 0xffffff : 0x3a2414, { pos: [0, -0.29, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
-      if (rank >= 2) add(leg, out, part(G.box(0.07, 0.05, 0.03), GOLD, { pos: [0, -0.4, 0.13], outline: 0.008 }));
+      // Высокие сапоги с отворотом
+      add(shin, out, part(G.cyl(0.074, 0.07, SL * 0.6, 12), color, { pos: [0, -SL * 0.68, 0], outline: 0.015 }));
+      add(shin, out, part(G.torus(0.078, 0.022, Math.PI * 2, 6, 16), rank >= 3 ? 0xffffff : 0x3a2414, { pos: [0, -SL * 0.38, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+      if (rank >= 2) add(shin, out, part(G.box(0.06, 0.04, 0.03), GOLD, { pos: [0, -SL * 0.8, 0.075], outline: 0.008 }));
       if (rank >= 2) {
         // Крылышки
         const wing = new THREE.Group();
-        for (let i = 0; i < 3; i++) wing.add(part(G.box(0.025, 0.1 + i * 0.03, 0.08), 0xffffff, { pos: [0, i * 0.04, -i * 0.06], rot: [0.5 + i * 0.25, 0, 0], outline: 0.01 }));
-        wing.position.set(s * 0.15, -0.42, -0.02);
-        wing.scale.setScalar(rank >= 3 ? 1.5 : 1);
-        add(leg, out, wing);
+        for (let i = 0; i < 3; i++) wing.add(part(G.box(0.02, 0.09 + i * 0.03, 0.07), 0xffffff, { pos: [0, i * 0.035, -i * 0.05], rot: [0.5 + i * 0.25, 0, 0], outline: 0.01 }));
+        wing.position.set(s * 0.08, 0.0, -0.03);
+        wing.scale.setScalar(rank >= 3 ? 1.4 : 1);
+        add(foot, out, wing);
       }
     }
   }

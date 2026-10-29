@@ -3,19 +3,25 @@ import type { Equip, HeroClass, Item, Rarity } from '@game/shared';
 import { G, RARITY_HEX, blobShadow, glow, part, toon } from './toon';
 import { clothTex, texturize, woodTex } from './textures';
 import { bake, unbake } from './bake';
+import { earShape, footShape, gait, handShape, headShape, legHeight, limb, noseShape, torsoShape, type LegPose } from './anatomy';
 import { buildAmulet, buildArmor, buildBoots, buildHelmet, buildRing, buildWeapon, type Built, type Rig } from './equipment';
 
 const SKIN = 0xdfa983;
-/** Реалистичные пропорции: голова ~1/7 роста, длинные ноги и руки (гном — коренастый). */
-const PROPS: Record<HeroClass, { leg: number; arm: number; head: number; k: number }> = {
-  warrior: { leg: 1.6, arm: 1.32, head: 0.56, k: 0.9 },
-  mage: { leg: 1.6, arm: 1.32, head: 0.56, k: 0.9 },
-  archer: { leg: 1.62, arm: 1.32, head: 0.55, k: 0.9 },
-  hunter: { leg: 1.62, arm: 1.32, head: 0.55, k: 0.9 },
-  summoner: { leg: 1.6, arm: 1.32, head: 0.56, k: 0.9 },
-  werewolf: { leg: 1.55, arm: 1.42, head: 0.66, k: 0.92 },
-  dwarf: { leg: 1.12, arm: 1.15, head: 0.7, k: 1 },
+/**
+ * Анатомия класса: длины бедра/голени/плеча/предплечья, размер головы (доля от
+ * базовой), общий масштаб, коренастость торса и толщина конечностей.
+ */
+const BUILD: Record<HeroClass, { thigh: number; shin: number; upper: number; fore: number; head: number; k: number; stout: number; limb: number }> = {
+  warrior: { thigh: 0.42, shin: 0.4, upper: 0.3, fore: 0.27, head: 0.56, k: 0.9, stout: 0.3, limb: 1.1 },
+  mage: { thigh: 0.42, shin: 0.4, upper: 0.3, fore: 0.27, head: 0.56, k: 0.9, stout: 0, limb: 0.9 },
+  archer: { thigh: 0.43, shin: 0.41, upper: 0.3, fore: 0.28, head: 0.55, k: 0.9, stout: 0, limb: 0.92 },
+  hunter: { thigh: 0.43, shin: 0.41, upper: 0.3, fore: 0.28, head: 0.55, k: 0.9, stout: 0.1, limb: 0.97 },
+  summoner: { thigh: 0.42, shin: 0.4, upper: 0.3, fore: 0.27, head: 0.56, k: 0.9, stout: 0, limb: 0.9 },
+  werewolf: { thigh: 0.44, shin: 0.44, upper: 0.33, fore: 0.32, head: 0.66, k: 0.92, stout: 0.5, limb: 1.25 },
+  dwarf: { thigh: 0.3, shin: 0.27, upper: 0.25, fore: 0.22, head: 0.7, k: 1, stout: 0.8, limb: 1.3 },
 };
+/** Высота лодыжки над землёй (стопа с подошвой). */
+const ANKLE_H = 0.11;
 const DARK = 0x24160f;
 
 export interface HeroAnimInput {
@@ -79,8 +85,18 @@ export class HeroModel {
   private handR = new THREE.Group();
   private legL = new THREE.Group();
   private legR = new THREE.Group();
-  private bootL!: THREE.Mesh;
-  private bootR!: THREE.Mesh;
+  /** Колени, лодыжки и локти — вторые звенья конечностей. */
+  private kneeL = new THREE.Group();
+  private kneeR = new THREE.Group();
+  private ankleL = new THREE.Group();
+  private ankleR = new THREE.Group();
+  private elbowL = new THREE.Group();
+  private elbowR = new THREE.Group();
+  /** Детали сапог (стопа и голенище) — перекрашиваются обувью. */
+  private bootParts: THREE.Mesh[] = [];
+  private readonly B: (typeof BUILD)[HeroClass];
+  private poseL: LegPose = { thigh: 0, knee: 0, ankle: 0 };
+  private poseR: LegPose = { thigh: 0, knee: 0, ankle: 0 };
   private headgear = new THREE.Group();
   private weapon = new THREE.Group();
   private weapon2: THREE.Group | null = null;
@@ -90,6 +106,10 @@ export class HeroModel {
   /** Оборотень: хвост и облик зверя (грива, горящие глаза). */
   private tail: THREE.Group | null = null;
   private beastG = new THREE.Group();
+  private beastTorso = new THREE.Group();
+  private beastHead = new THREE.Group();
+  private demonTorso = new THREE.Group();
+  private demonHead = new THREE.Group();
   private beastK = 0;
   /** Базовые пропорции тела (гном — коренастый). */
   private bodyScale = new THREE.Vector3(1, 1, 1);
@@ -130,61 +150,82 @@ export class HeroModel {
   constructor(cls: HeroClass) {
     this.cls = cls;
     // Группы с собственной анимацией (остальные склеиваются с родителем)
-    for (const g of [this.torsoG, this.head, this.armL, this.armR, this.legL, this.legR]) g.userData.anim = true;
+    this.B = BUILD[cls];
+    for (const g of [this.torsoG, this.head, this.armL, this.armR, this.legL, this.legR, this.kneeL, this.kneeR, this.ankleL, this.ankleR, this.elbowL, this.elbowR, this.handL, this.handR]) g.userData.anim = true;
     this.root.add(blobShadow(1.4));
     this.root.add(this.body);
     this.body.add(this.hips, this.torsoG);
     this.hips.position.y = 0.55;
     this.torsoG.position.y = 0.55;
 
-    // Ноги
-    for (const [leg, x] of [
-      [this.legL, -0.15],
-      [this.legR, 0.15],
+    const B = this.B;
+    const L = B.limb;
+    const hipH = B.thigh + B.shin + ANKLE_H;
+    this.hips.position.y = this.torsoG.position.y = hipH;
+    const skin = cls === 'werewolf' ? FUR : SKIN;
+
+    // Ноги: бедро → колено → голень → лодыжка → стопа
+    for (const [leg, knee, ankle, x] of [
+      [this.legL, this.kneeL, this.ankleL, -0.13],
+      [this.legR, this.kneeR, this.ankleR, 0.13],
     ] as const) {
       leg.position.x = x;
       this.hips.add(leg);
-      const l = part(G.capsule(0.1, 0.22), LEG_COL[cls], { pos: [0, -0.25, 0], outline: 0.025 });
-      leg.add(l);
-      const boot = part(G.sphere(0.14, 12, 8), 0x6a4428, { pos: [0, -0.47, 0.04], scale: [1, 0.7, 1.35], outline: 0.025 });
-      leg.add(boot);
-      if (x < 0) this.bootL = boot;
-      else this.bootR = boot;
+      leg.add(part(limb(0.115 * L, 0.078 * L, B.thigh, 0.1), LEG_COL[cls], { pos: [0, 0, 0] }));
+      knee.position.y = -B.thigh;
+      leg.add(knee);
+      knee.add(part(limb(0.078 * L, 0.055 * L, B.shin, 0.2), LEG_COL[cls], {}));
+      // Голенище сапога
+      const shaft = part(G.cyl(0.072 * L, 0.066 * L, B.shin * 0.55, 12), 0x6a4428, { pos: [0, -B.shin * 0.72, 0] });
+      knee.add(shaft);
+      ankle.position.y = -B.shin;
+      knee.add(ankle);
+      const foot = part(footShape(L), 0x6a4428, {});
+      ankle.add(foot);
+      this.bootParts.push(shaft, foot);
     }
 
-    // Торс
+    // Торс: таз, талия, грудная клетка
     this.baseTorsoColor = TORSO_COL[cls];
-    this.torso = part(G.capsule(0.3, 0.26), this.baseTorsoColor, { pos: [0, 0.32, 0], scale: [1, 1, 0.85], outline: 0.035 });
+    this.torso = part(torsoShape(1, 1.12, B.stout), this.baseTorsoColor, {});
     this.torsoG.add(this.torso);
-    const belt = part(G.cyl(0.31, 0.31, 0.09, 16), 0x5a3a22, { pos: [0, 0.12, 0], scale: [1, 1, 0.86], outline: 0.02 });
-    const buckle = part(G.box(0.12, 0.09, 0.04), 0xffc93c, { pos: [0, 0.12, 0.27], outline: 0.015 });
+    const belt = part(G.cyl(0.272, 0.272, 0.09, 20), 0x5a3a22, { pos: [0, 0.12, 0], scale: [1.02, 1, 0.82] });
+    const buckle = part(G.box(0.11, 0.08, 0.03), 0xffc93c, { pos: [0, 0.12, 0.225], rot: [0, 0, 0] });
     this.torsoG.add(belt, buckle);
 
-    // Руки
-    for (const [arm, hand, x] of [
-      [this.armL, this.handL, -0.37],
-      [this.armR, this.handR, 0.37],
+    // Руки: плечо → локоть → предплечье → кисть
+    for (const [arm, elbow, hand, x] of [
+      [this.armL, this.elbowL, this.handL, -0.34],
+      [this.armR, this.elbowR, this.handR, 0.34],
     ] as const) {
       arm.position.set(x, 0.6, 0);
       this.torsoG.add(arm);
       const sleeve = SLEEVE_COL[cls];
       this.baseSleeveColor = sleeve;
-      const sl = part(G.capsule(0.085, 0.22), sleeve, { pos: [0, -0.2, 0], outline: 0.022 });
-      this.sleeves.push(sl);
-      arm.add(sl);
-      const h = part(G.sphere(cls === 'werewolf' ? 0.12 : 0.1, 12, 8), HAND_COL[cls] ?? SKIN, { pos: [0, -0.42, 0], outline: 0.022 });
-      arm.add(h);
-      hand.position.set(0, -0.42, 0);
-      arm.add(hand);
-      arm.rotation.z = x < 0 ? -0.12 : 0.12;
+      const up = part(limb(0.088 * L, 0.066 * L, B.upper, 0.16), sleeve, {});
+      elbow.position.y = -B.upper;
+      arm.add(up, elbow);
+      const fore = part(limb(0.066 * L, 0.048 * L, B.fore, 0.14), sleeve, {});
+      elbow.add(fore);
+      this.sleeves.push(up, fore);
+      elbow.add(part(handShape(cls === 'werewolf' ? 1.3 : cls === 'dwarf' ? 1.15 : 1, cls === 'werewolf'), HAND_COL[cls] ?? SKIN, { pos: [0, -B.fore - 0.01, 0], rot: [0, x < 0 ? Math.PI : 0, 0] }));
+      hand.position.set(0, -B.fore - 0.07, 0.01);
+      elbow.add(hand);
+      arm.rotation.z = x < 0 ? -0.08 : 0.08;
     }
 
-    // Голова
-    this.head.position.y = 0.98;
+    // Голова: череп с челюстью, скулами и глазницами
+    this.head.scale.setScalar(B.head);
+    this.head.position.y = 0.83 + 0.4 * B.head;
     this.torsoG.add(this.head);
-    const headM = part(G.sphere(0.4, 20, 16), cls === 'werewolf' ? FUR : SKIN, { outline: 0.035 });
-    headM.scale.set(1.05, 0.97, 1);
+    const headM = part(headShape(cls === 'werewolf' || cls === 'dwarf' ? 'brute' : 'human'), skin, { rough: 0.6 });
     this.head.add(headM);
+    if (cls !== 'werewolf') for (const s of [-1, 1]) this.head.add(part(earShape(), skin, { pos: [s * 0.355, 0.0, -0.03], rot: [0, s * 0.35, 0] }));
+    // Шея с кадыком и трапециями
+    const neckCol = cls === 'werewolf' ? FUR : cls === 'warrior' ? 0x7d8894 : SKIN;
+    const nk = cls === 'werewolf' ? 1.6 : cls === 'dwarf' ? 1.35 : 1;
+    this.torsoG.add(part(G.cyl(0.075 * nk, 0.1 * nk, 0.2, 12), neckCol, { pos: [0, 0.8, 0.0] }));
+    this.torsoG.add(part(G.sphere(0.16 * nk, 12, 8), neckCol, { pos: [0, 0.72, -0.02], scale: [1.5, 0.45, 0.9] }));
     // У охотника глаза скрыты повязкой
     const iris = cls === 'werewolf' ? 0xd8a020 : cls === 'mage' ? 0x4a6a8a : cls === 'summoner' ? 0x3a6a5a : 0x5a3a22;
     this.eyes = cls === 'hunter' ? [] : [eye(-0.14, iris), eye(0.14, iris)];
@@ -192,7 +233,7 @@ export class HeroModel {
     if (this.eyes.length) this.head.add(...this.eyes);
     if (cls !== 'werewolf') {
       // У гнома нос картошкой
-      const nose = part(G.sphere(cls === 'dwarf' ? 0.09 : 0.06, 10, 8), 0xd99a76, { pos: [0, -0.05, 0.385], scale: cls === 'dwarf' ? [1, 1, 1] : [0.7, 1.1, 1], outline: 0.015 });
+      const nose = part(noseShape(cls === 'dwarf' ? 1.5 : 1), 0xd59a76, { pos: [0, -0.01, 0.385], rot: [0.15, 0, 0], rough: 0.6 });
       this.head.add(nose);
     }
     this.head.add(this.headgear);
@@ -203,14 +244,13 @@ export class HeroModel {
     } else if (cls === 'warrior' || cls === 'hunter') {
       this.head.add(part(G.box(0.1, 0.022, 0.02), 0x5a2a1a, { pos: [0, -0.18, 0.375], rot: [0, 0, cls === 'warrior' ? 0.12 : 0], outline: false }));
     }
-    // Подошвы и отвороты сапог
-    for (const leg of [this.legL, this.legR]) {
-      leg.add(part(G.cyl(0.13, 0.14, 0.045, 12), 0x2a1a10, { pos: [0, -0.555, 0.05], scale: [1, 1, 1.35], outline: 0.012 }));
-      leg.add(part(G.torus(0.105, 0.03, Math.PI * 2, 5, 14), cls === 'warrior' ? 0x6d7680 : 0x7a5434, { pos: [0, -0.37, 0.01], rot: [Math.PI / 2, 0, 0], outline: 0.008 }));
+    // Отвороты сапог и манжеты на запястьях
+    for (const knee of [this.kneeL, this.kneeR]) {
+      const cuff = part(G.torus(0.074 * L, 0.018, Math.PI * 2, 5, 14), cls === 'warrior' ? 0x6d7680 : 0x7a5434, { pos: [0, -B.shin * 0.45, 0], rot: [Math.PI / 2, 0, 0] });
+      knee.add(cuff);
     }
-    // Манжеты на запястьях
-    for (const arm of [this.armL, this.armR]) {
-      arm.add(part(G.torus(0.09, 0.022, Math.PI * 2, 4, 12), cls === 'warrior' ? 0xc7ced6 : cls === 'mage' ? 0xffc93c : 0x4a2e1a, { pos: [0, -0.33, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+    for (const elbow of [this.elbowL, this.elbowR]) {
+      elbow.add(part(G.torus(0.052 * L, 0.016, Math.PI * 2, 4, 12), cls === 'warrior' ? 0xc7ced6 : cls === 'mage' ? 0xffc93c : 0x4a2e1a, { pos: [0, -B.fore + 0.02, 0], rot: [Math.PI / 2, 0, 0] }));
     }
     // Поясная сумка с клапаном и пряжкой
     if (cls !== 'dwarf' && cls !== 'werewolf') {
@@ -255,20 +295,9 @@ export class HeroModel {
     this.setEquip(null);
   }
 
-  /** Вытягивает ноги и руки, уменьшает голову, добавляет шею; рост остаётся прежним. */
+  /** Общий масштаб класса — рост остаётся примерно прежним. */
   private applyProportions() {
-    const P = PROPS[this.cls];
-    for (const leg of [this.legL, this.legR]) leg.scale.y = P.leg;
-    this.hips.position.y = this.torsoG.position.y = 0.555 * P.leg;
-    for (const arm of [this.armL, this.armR]) arm.scale.y = P.arm;
-    // Кисти без растяжения — иначе оружие перекосит
-    for (const hand of [this.handL, this.handR]) hand.scale.y = 1 / P.arm;
-    this.head.scale.setScalar(P.head);
-    const r = 0.39 * P.head;
-    this.head.position.y = 0.76 + 0.07 + r;
-    const neckCol = this.cls === 'werewolf' ? FUR : this.cls === 'warrior' ? 0x7d8894 : SKIN;
-    this.torsoG.add(part(G.cyl(0.085 * (this.cls === 'werewolf' ? 1.6 : 1), 0.11 * (this.cls === 'werewolf' ? 1.5 : 1), 0.2, 10), neckCol, { pos: [0, 0.79, 0] }));
-    this.bodyScale.multiplyScalar(P.k);
+    this.bodyScale.multiplyScalar(this.B.k);
   }
 
   private buildClassParts() {
@@ -345,8 +374,8 @@ export class HeroModel {
       this.torsoG.add(quiver);
       // Ремень колчана через грудь и кожаный наруч на руке с луком
       this.torsoG.add(part(G.box(0.06, 0.72, 0.03), 0x7a4a26, { pos: [-0.02, 0.4, 0.29], rot: [0, 0, -0.75], outline: 0.008 }));
-      this.armL.add(part(G.cyl(0.1, 0.09, 0.16, 10), 0x7a4a26, { pos: [0, -0.3, 0], outline: 0.012 }));
-      for (const y of [-0.25, -0.34]) this.armL.add(part(G.torus(0.1, 0.012, Math.PI * 2, 4, 12), 0x4a2e1a, { pos: [0, y, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+      this.elbowL.add(part(G.cyl(0.068, 0.058, 0.16, 10), 0x7a4a26, { pos: [0, -0.15, 0], outline: 0.012 }));
+      for (const y of [-0.09, -0.2]) this.elbowL.add(part(G.torus(0.066, 0.012, Math.PI * 2, 4, 12), 0x4a2e1a, { pos: [0, y, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
       // Шарф
       const scarf = part(G.torus(0.27, 0.07, Math.PI * 2, 8, 20), 0xd9a441, { pos: [0, 0.68, 0], rot: [Math.PI / 2, 0, 0], outline: 0.02 });
       this.torsoG.add(scarf);
@@ -400,13 +429,13 @@ export class HeroModel {
     // Светящиеся полосы татуировок на руках
     for (const arm of [this.armL, this.armR]) {
       for (const y of [-0.12, -0.22]) {
-        const band = new THREE.Mesh(G.torus(0.088, 0.012, Math.PI * 2, 4, 14), toon(FEL, { emissive: FEL, emissiveIntensity: 0.8 }));
+        const band = new THREE.Mesh(G.torus(0.086, 0.012, Math.PI * 2, 4, 14), toon(FEL, { emissive: FEL, emissiveIntensity: 0.8 }));
         band.position.y = y;
         band.rotation.x = Math.PI / 2;
         arm.add(band);
       }
-      arm.add(part(G.cyl(0.1, 0.09, 0.13, 10), 0x1c1820, { pos: [0, -0.33, 0], outline: 0.012 }));
     }
+    for (const elbow of [this.elbowL, this.elbowR]) elbow.add(part(G.cyl(0.07, 0.06, 0.14, 10), 0x1c1820, { pos: [0, -0.15, 0], outline: 0.012 }));
     // Демонические крылья и пламя скверны — видны в демонической форме
     this.demonG.userData.anim = true;
     // Крыло летучей мыши: перепонка-силуэт и костяные пальцы
@@ -433,19 +462,25 @@ export class HeroModel {
       wm.add(part(G.cone(0.035, 0.12, 5), 0xd8d2c8, { pos: [0.78, 0.55, 0.01], rot: [0, 0, -0.3], outline: 0.008 }));
       wm.scale.set(s * 1.25, 1.25, 1);
       wing.add(wm);
-      wing.position.set(s * 0.12, 1.05, -0.3);
+      wing.position.set(s * 0.12, 0.55, -0.22);
       this.wings.push(wing);
-      this.demonG.add(wing);
+      this.demonTorso.add(wing);
     }
     const flame = new THREE.Mesh(new THREE.RingGeometry(0.55, 0.95, 32).rotateX(-Math.PI / 2), glow(FEL, 0.55));
     flame.position.y = 0.06;
     this.demonG.add(flame);
     for (const s of [-1, 1]) {
-      const horn = part(G.cone(0.07, 0.38, 8), 0x1a1210, { pos: [s * 0.25, 1.38, 0.05], rot: [-0.5, 0, -s * 0.35], outline: 0.015 });
-      this.demonG.add(horn);
+      const horn = part(G.cone(0.13, 0.7, 8), 0x1a1210, { pos: [s * 0.3, 0.42, 0.05], rot: [-0.5, 0, -s * 0.35], outline: 0.015 });
+      this.demonHead.add(horn);
     }
     this.demonG.visible = false;
     this.body.add(this.demonG);
+    for (const g of [this.demonTorso, this.demonHead]) {
+      g.userData.anim = true;
+      g.visible = false;
+    }
+    this.torsoG.add(this.demonTorso);
+    this.head.add(this.demonHead);
   }
 
   /** Призыватель: перья, раскраска, меховая накидка, бусы из клыков, парящие огоньки духов. */
@@ -526,28 +561,36 @@ export class HeroModel {
     for (const s of [-1, 1]) T.add(part(G.box(0.16, 0.5, 0.05), 0x4a3a5a, { pos: [s * 0.22, 0.36, 0.22], rot: [0, s * 0.45, s * 0.1], outline: 0.012 }));
     // Клочья шерсти на плечах и рваные штанины
     for (const x of [-0.37, 0.37]) for (let i = 0; i < 3; i++) T.add(part(G.cone(0.07, 0.18, 5), FUR, { pos: [x * (1 + i * 0.05), 0.68 - i * 0.04, -0.06 + i * 0.07], rot: [0, 0, -Math.sign(x) * (0.8 + i * 0.2)], outline: 0.01 }));
-    for (const leg of [this.legL, this.legR]) for (let i = 0; i < 3; i++) leg.add(part(G.cone(0.05, 0.12, 4), 0x34405a, { pos: [(i - 1) * 0.06, -0.38, 0.06], rot: [Math.PI, 0, 0], outline: false }));
+    for (const knee of [this.kneeL, this.kneeR]) for (let i = 0; i < 3; i++) knee.add(part(G.cone(0.05, 0.12, 4), 0x34405a, { pos: [(i - 1) * 0.06, -0.12, 0.05], rot: [Math.PI, 0, 0], outline: false }));
     // Пушистый хвост
     const tail = new THREE.Group();
     tail.userData.anim = true;
     tail.add(part(G.capsule(0.11, 0.38), FUR, { pos: [0, 0, -0.2], rot: [-1.0, 0, 0], outline: 0.02 }));
     tail.add(part(G.sphere(0.11, 10, 8), FUR_LIGHT, { pos: [0, 0.16, -0.38], outline: 0.015 }));
-    tail.position.set(0, 0.62, -0.25);
+    tail.position.set(0, 0.04, -0.2);
     this.tail = tail;
-    this.body.add(tail);
+    this.hips.add(tail);
     // Облик зверя: грива вдоль спины, горящие глаза
     this.beastG.userData.anim = true;
+    // Грива по плечам и хребту — в координатах торса
     for (let i = 0; i < 7; i++) {
       const a = (i - 3) * 0.32;
-      this.beastG.add(part(G.cone(0.1, 0.34, 5), 0x4a2a1a, { pos: [Math.sin(a) * 0.3, 1.32 - Math.abs(i - 3) * 0.05, -0.18 - Math.cos(a) * 0.1], rot: [-0.9, 0, -a * 0.8], outline: 0.012 }));
+      this.beastTorso.add(part(G.cone(0.1, 0.34, 5), 0x4a2a1a, { pos: [Math.sin(a) * 0.3, 0.78 - Math.abs(i - 3) * 0.05, -0.12 - Math.cos(a) * 0.1], rot: [-0.9, 0, -a * 0.8], outline: 0.012 }));
     }
-    for (let i = 0; i < 5; i++) this.beastG.add(part(G.cone(0.09, 0.3, 5), 0x4a2a1a, { pos: [0, 1.1 - i * 0.16, -0.36], rot: [-1.4, 0, 0], outline: 0.012 }));
+    for (let i = 0; i < 5; i++) this.beastTorso.add(part(G.cone(0.09, 0.3, 5), 0x4a2a1a, { pos: [0, 0.6 - i * 0.14, -0.28], rot: [-1.4, 0, 0], outline: 0.012 }));
+    // Горящие глаза — в координатах головы
     for (const s of [-1, 1]) {
-      const e = new THREE.Mesh(G.sphere(0.06, 8, 6), toon(0xff3a1a, { emissive: 0xff2a10, emissiveIntensity: 1 }));
-      e.position.set(s * 0.14, 1.57, 0.34);
-      this.beastG.add(e);
-      this.beastG.add(new THREE.Mesh(G.sphere(0.13, 8, 6), glow(0xff4a1a, 0.35)).translateX(s * 0.14).translateY(1.57).translateZ(0.34));
+      const e = new THREE.Mesh(G.sphere(0.07, 8, 6), toon(0xff3a1a, { emissive: 0xff2a10, emissiveIntensity: 1 }));
+      e.position.set(s * 0.14, 0.04, 0.35);
+      this.beastHead.add(e);
+      this.beastHead.add(new THREE.Mesh(G.sphere(0.15, 8, 6), glow(0xff4a1a, 0.35)).translateX(s * 0.14).translateY(0.04).translateZ(0.36));
     }
+    for (const g of [this.beastTorso, this.beastHead]) {
+      g.userData.anim = true;
+      g.visible = false;
+    }
+    this.torsoG.add(this.beastTorso);
+    this.head.add(this.beastHead);
     const ring = new THREE.Mesh(new THREE.RingGeometry(0.6, 1.0, 32).rotateX(-Math.PI / 2), glow(0xffa040, 0.45));
     ring.position.y = 0.05;
     this.beastG.add(ring);
@@ -711,7 +754,7 @@ export class HeroModel {
     this.weapon2?.removeFromParent();
     this.weapon2 = null;
     this.built = { parts: [], glow: [], spin: [] };
-    const rig: Rig = { torso: this.torsoG, head: this.head, armL: this.armL, armR: this.armR, legL: this.legL, legR: this.legR };
+    const rig: Rig = { torso: this.torsoG, head: this.head, armL: this.armL, armR: this.armR, legL: this.legL, legR: this.legR, foreL: this.elbowL, foreR: this.elbowR, shinL: this.kneeL, shinR: this.kneeR, footL: this.ankleL, footR: this.ankleR, shinLen: this.B.shin, foreLen: this.B.fore };
 
     // Доспех: своя модель для лат, мантии и кожаного доспеха
     const armor = eq?.armor ?? null;
@@ -729,7 +772,8 @@ export class HeroModel {
     // Обувь
     const boots = eq?.boots ?? null;
     const bc = boots ? buildBoots(rig, boots.tpl, boots.rarity, this.built) : 0x6a4428;
-    this.bootL.material = this.bootR.material = toon(bc);
+    const bm = toon(bc, { rough: 0.55 });
+    for (const b of this.bootParts) b.material = bm;
 
     if (eq?.amulet) buildAmulet(this.torsoG, eq.amulet.tpl, eq.amulet.rarity, this.built);
     if (eq?.ring) buildRing(this.handR, eq.ring.rarity, this.built);
@@ -772,7 +816,7 @@ export class HeroModel {
       // Посох держит вертикально, как настоящий посох, чуть впереди руки
       this.handR.add(this.weapon);
       this.weapon.rotation.set(0.3, 0, 0);
-      this.weapon.position.set(0, -0.32, 0.1);
+      this.weapon.position.set(0, -0.32, 0.02);
     } else {
       this.handR.add(this.weapon);
       this.weapon.rotation.set(this.cls === 'warrior' ? Math.PI / 2 - 0.45 : Math.PI / 2, 0, 0);
@@ -846,8 +890,16 @@ export class HeroModel {
     this.walkPhase += dt * (4 + sp * 9) * (sp > 0.05 ? 1 : 0);
     const swing = Math.sin(this.walkPhase) * 0.75 * Math.min(1, sp * 1.5);
 
-    // База
-    let bodyY = Math.abs(Math.sin(this.walkPhase)) * 0.09 * Math.min(1, sp * 1.5);
+    // База. Вертикаль тела теперь даёт сгиб ног (см. «прилипание» стоп ниже),
+    // bodyY < 0 означает присед, > 0 — прыжок
+    let bodyY = 0;
+    const mvK = Math.min(1, sp * 1.5);
+    const runK = Math.min(1, Math.max(0, (sp - 0.35) / 0.45));
+    let elbL = NaN;
+    let elbR = NaN;
+    /** Держит ли рука оружие, которое должно оставаться ровным при сгибе локтя. */
+    let keepL = false;
+    let keepR = false;
     const breathe = 1 + Math.sin(t * 2.2) * 0.018;
     let armLx = -swing * 0.9;
     let armRx = swing * 0.9;
@@ -861,22 +913,30 @@ export class HeroModel {
 
     // Оружие в руке в покое
     if (this.cls === 'warrior') {
-      armRx = Math.min(armRx, 0) - 0.35;
-      armLx = -0.5 + armLx * 0.3;
+      // Меч у бедра остриём вперёд, щит прикрывает корпус
+      armRx = Math.min(armRx, 0) * 0.6 - 0.1;
+      armLx = -0.35 + armLx * 0.3;
+      elbR = 0.3 + runK * 0.5;
+      elbL = 1.25;
+      keepL = true;
     } else if (this.cls === 'mage' || this.cls === 'summoner') {
-      armRx = -0.25 + swing * 0.3;
+      armRx = -0.2 + swing * 0.25;
+      elbR = 0.85;
+      keepR = this.weaponTpl !== 'tome';
     } else if (this.cls === 'hunter') {
       // Клинки наготове
-      armRx = -0.45 + swing * 0.4;
-      armLx = -0.45 - swing * 0.4;
-      armLz = -0.3;
-      armRz = 0.3;
+      armRx = -0.1 + swing * 0.5;
+      armLx = -0.1 - swing * 0.5;
+      armLz = -0.25;
+      armRz = 0.25;
+      elbL = elbR = 0.55 + runK * 0.5;
     } else if (this.cls === 'werewolf') {
       // Звериная стойка: сутулится, когти растопырены
       armRx = -0.6 + swing * 0.6;
       armLx = -0.6 - swing * 0.6;
       armLz = -0.45;
       armRz = 0.45;
+      elbL = elbR = 0.55;
       lean += 0.18 + this.beastK * 0.2;
       headTilt = -0.1 - this.beastK * 0.15;
       const run = Math.min(1, sp * 1.4);
@@ -885,23 +945,30 @@ export class HeroModel {
         const ph = this.walkPhase;
         legAmp = 1 + run * 0.45;
         bodyY = Math.abs(Math.sin(ph)) * 0.2 * run;
-        lean += run * (0.2 + Math.sin(ph * 2) * 0.05);
+        lean += run * (0.06 + Math.sin(ph * 2) * 0.03);
         armRx = -0.35 * (1 - run) + Math.sin(ph) * 1.15 * run + 0.35 * run;
         armLx = -0.35 * (1 - run) - Math.sin(ph) * 1.15 * run + 0.35 * run;
         armLz = -0.45 - run * 0.2;
         armRz = 0.45 + run * 0.2;
+        elbL = elbR = 0.6 + run * 0.6;
         torsoYaw = Math.sin(ph) * 0.18 * run;
         bodyRoll = Math.sin(ph) * 0.05 * run;
         headTilt = -0.28 * run - this.beastK * 0.15;
       }
     } else if (this.cls === 'dwarf') {
       // Мушкетон у бедра, обеими руками
-      armRx = -0.75 + swing * 0.15;
-      armLx = -1.0 + swing * 0.15;
-      armLz = 0.35;
+      armRx = -0.35 + swing * 0.15;
+      armLx = -0.55 + swing * 0.15;
+      armLz = 0.3;
       armRz = 0.05;
+      elbR = 0.45;
+      elbL = 0.75;
+      keepR = true;
     } else {
-      armLx = -0.3 + armLx * 0.5;
+      // Лук в опущенной левой руке
+      armLx = -0.25 + armLx * 0.5;
+      elbL = 0.35;
+      keepL = true;
     }
 
     // Атаки и умения
@@ -911,8 +978,9 @@ export class HeroModel {
       const ease = 1 - Math.pow(1 - k, 3);
       if (this.cls === 'warrior') {
         if (this.castS === 0) {
-          armRx = -2.6 + ease * 2.6;
+          armRx = -2.6 + ease * 2.4;
           armRz = 0.4 - ease * 0.8;
+          elbR = 1.6 * (1 - ease) + 0.15;
           torsoYaw = 0.6 - ease * 1.2;
         } else if (this.castS === 1) {
           armLx = -1.5;
@@ -947,6 +1015,8 @@ export class HeroModel {
           armRz = 0.6 - k1 * 0.9;
           armLx = k < 0.5 ? -1.2 : -2.3 + (1 - Math.pow(1 - k2, 3)) * 2.5;
           armLz = k < 0.5 ? -0.6 : -0.6 + k2 * 0.9;
+          elbR = 1.4 * (1 - k1) + 0.15;
+          elbL = k < 0.5 ? 1.3 : 1.4 * (1 - k2) + 0.15;
           torsoYaw = k < 0.5 ? 0.5 - k1 : -0.5 + k2;
         } else if (this.castS === 1) {
           armLx = armRx = 0.9;
@@ -1002,6 +1072,9 @@ export class HeroModel {
             armRx = -1.0;
             armRz = 0.5;
           }
+          const bend = k < 0.3 ? 1.3 * Math.sin((k / 0.3) * Math.PI * 0.5) : k < 0.62 ? 1.3 * (1 - (k - 0.3) / 0.32) + 0.1 : 0.1 + ((k - 0.62) / 0.38) * 0.45;
+          if (sd > 0) elbR = bend;
+          else elbL = bend;
           torsoYaw = yaw;
           lean += 0.3 * lunge;
           bodyY += 0.12 * lunge;
@@ -1067,10 +1140,14 @@ export class HeroModel {
         }
       } else {
         if (this.castS === 0 || this.castS === 1) {
+          // Лучная рука прямая, правая натягивает тетиву к щеке
+          const draw = k < 0.7 ? k / 0.7 : 0;
           armLx = -1.55;
-          armRx = -1.45;
-          armRz = 0.3 + (k < 0.7 ? k * 0.6 : 0);
-          torsoYaw = -0.25;
+          elbL = 0.05;
+          armRx = -1.5;
+          armRz = 0.35 + draw * 0.35;
+          elbR = 1.2 + draw * 1.0;
+          torsoYaw = -0.35;
         } else if (this.castS === 3) {
           armLx = -2.4;
           armRx = -2.2;
@@ -1110,13 +1187,52 @@ export class HeroModel {
       armLx = armRx = -2.8 * e;
     }
 
-    this.legL.rotation.x = swing * legAmp;
-    this.legR.rotation.x = -swing * legAmp;
+    // Ноги: шаг с коленями и стопами; присед — сгибом ног, а не опусканием тела
+    const crouch = Math.max(0, -bodyY) + (this.cls === 'werewolf' ? 0.05 + this.beastK * 0.05 : 0);
+    if (bodyY < 0) bodyY = 0;
+    const B = this.B;
+    for (const [pose, ph] of [
+      [this.poseL, this.walkPhase],
+      [this.poseR, this.walkPhase + Math.PI],
+    ] as const) {
+      gait(ph, mvK, runK, pose);
+      pose.thigh *= legAmp;
+      if (mvK < 0.05) pose.thigh += Math.sin(t * 0.8 + (pose === this.poseL ? 0 : Math.PI)) * 0.025;
+      if (crouch > 0) {
+        pose.thigh -= crouch * 1.7;
+        pose.knee += crouch * 3.3;
+        pose.ankle = -(pose.thigh + pose.knee);
+      }
+    }
+    this.legL.rotation.set(this.poseL.thigh, 0, -0.03);
+    this.legR.rotation.set(this.poseR.thigh, 0, 0.03);
+    this.kneeL.rotation.x = this.poseL.knee;
+    this.kneeR.rotation.x = this.poseR.knee;
+    this.ankleL.rotation.x = this.poseL.ankle;
+    this.ankleR.rotation.x = this.poseR.ankle;
+    // Стопы на земле: тело опускается ровно настолько, насколько согнута опорная нога
+    const drop = B.thigh + B.shin - Math.max(legHeight(this.poseL.thigh, this.poseL.knee, B.thigh, B.shin), legHeight(this.poseR.thigh, this.poseR.knee, B.thigh, B.shin));
+
+    // Руки: плечо и локоть; по умолчанию локоть расслабленно согнут, на бегу — сильнее
+    const relaxed = (ax: number) => 0.2 + Math.max(0, Math.min(1.6, -ax)) * 0.22 + runK * mvK * 0.95;
+    if (Number.isNaN(elbL)) elbL = relaxed(armLx);
+    if (Number.isNaN(elbR)) elbR = relaxed(armRx);
+    if (st.whirl) elbL = elbR = 0.15;
+    if (this.cheerT < 0.9) elbL = elbR = 0.3;
     this.armL.rotation.set(armLx, 0, armLz);
     this.armR.rotation.set(armRx, 0, armRz);
-    this.torsoG.rotation.y = torsoYaw;
-    this.head.rotation.x = headTilt + Math.sin(t * 1.3) * 0.03;
-    this.body.position.y = bodyY;
+    this.elbowL.rotation.x = -elbL;
+    this.elbowR.rotation.x = -elbR;
+    // Посох, лук, мушкетон остаются ровными, когда сгибается локоть
+    this.handL.rotation.x = keepL ? elbL : 0;
+    this.handR.rotation.x = keepR ? elbR : 0;
+
+    // Таз и плечи вращаются навстречу друг другу, таз покачивается
+    const ps = Math.sin(this.walkPhase);
+    this.hips.rotation.set(0, -ps * 0.14 * mvK, Math.cos(this.walkPhase) * 0.035 * mvK);
+    this.torsoG.rotation.set(0, torsoYaw + ps * 0.12 * mvK, -Math.cos(this.walkPhase) * 0.02 * mvK);
+    // Голова держит горизонт, слегка гасит наклон корпуса
+    this.head.rotation.set(headTilt - lean * 0.45 + Math.sin(t * 1.3) * 0.02, -ps * 0.06 * mvK, 0);
     this.body.rotation.set(lean + bodyRoll, this.whirlA, 0);
     this.torsoG.scale.set(1, breathe, 1);
 
@@ -1137,7 +1253,8 @@ export class HeroModel {
     this.beastK += ((beastOn ? 1 : 0) - this.beastK) * Math.min(1, dt * 5);
     const grow = 1 + this.beastK * 0.3;
     this.body.scale.multiply(this.bodyScale).multiplyScalar(grow);
-    this.beastG.visible = this.beastK > 0.05;
+    if (this.deadT <= 0) this.body.position.y = bodyY - drop * this.body.scale.y;
+    this.beastG.visible = this.beastTorso.visible = this.beastHead.visible = this.beastK > 0.05;
     if (this.beastG.visible) this.beastRing?.scale.setScalar(1 + Math.sin(t * 8) * 0.1);
     if (this.tail) {
       this.tail.rotation.y = Math.sin(t * (sp > 0.1 ? 10 : 4)) * 0.35;
@@ -1157,12 +1274,12 @@ export class HeroModel {
     for (const g of this.glowParts) g.scale.setScalar(1 + Math.sin(t * 4 + g.id) * 0.15);
     // Демоническая форма охотника
     const demon = !!st.demon && !st.dead;
-    this.demonG.visible = demon;
+    this.demonG.visible = this.demonTorso.visible = this.demonHead.visible = demon;
     if (demon) {
       const flap = Math.sin(t * 7) * 0.35;
       if (this.wings[0]) this.wings[0].rotation.y = 0.4 + flap;
       if (this.wings[1]) this.wings[1].rotation.y = -0.4 - flap;
-      this.demonG.children[2]?.scale.setScalar(1 + Math.sin(t * 9) * 0.08);
+      this.demonG.children[0]?.scale.setScalar(1 + Math.sin(t * 9) * 0.08);
     }
     if (this.spiritOrbs) {
       this.spiritOrbs.visible = !st.dead;

@@ -98,6 +98,13 @@ if (q.get('minions')) {
 }
 // ?loopcast=1 — умение повторяется ровно раз в 0,6 с (для покадровой проверки)
 if (q.has('loopcast')) setInterval(() => heroes.forEach((h) => h.playCast(Number(q.get('cast') ?? 0))), 600);
+// ?zoom=0.5 — камера ближе (для проверки анатомии)
+if (q.has('zoom')) {
+  const z = Number(q.get('zoom'));
+  cam.position.multiplyScalar(z);
+  cam.position.y = Math.max(cam.position.y, 1.2);
+  cam.lookAt(0, Number(q.get('ly') ?? 1), 0);
+}
 let last = performance.now();
 const cast = q.get('cast');
 function loop(now: number) {
@@ -122,4 +129,6 @@ function loop(now: number) {
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);
-(window as unknown as { ready: boolean }).ready = true;
+(window as unknown as { ready: boolean; heroes: HeroModel[]; THREE: typeof THREE }).ready = true;
+(window as unknown as { heroes: HeroModel[] }).heroes = heroes;
+(window as unknown as { THREE: typeof THREE }).THREE = THREE;
