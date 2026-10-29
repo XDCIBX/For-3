@@ -375,7 +375,9 @@ export class Engine {
       v.bar.setColor(isMe ? 0x5ad04a : enemy ? 0xe8463a : 0x4aa8ff);
       v.bar.set(p.hp / Math.max(1, p.mhp), p.shm ? p.sh / p.mhp : 0);
       const hidden = (!p.con && !p.bot) || p.st.includes('x');
-      v.model.root.visible = !hidden;
+      // В таверне крупным планом показываем только своего героя
+      v.model.root.visible = !hidden && (!inTavern || isMe);
+      if (v.label) v.label.visible = !inTavern;
       v.bar.group.visible = !inTavern && p.al;
       if (isMe) {
         if (this.selfRing.parent !== v.model.root) v.model.root.add(this.selfRing);
@@ -793,7 +795,8 @@ export class Engine {
       if (inTavern) {
         const ts = (this.tavernStage as TavernStage).slots[tavernSlot(id)];
         root.position.copy(ts);
-        v.rot = lerpAngle(v.rot, 0, Math.min(1, dt * 6));
+        // Медленно поворачивается, показывая экипировку с разных сторон
+        v.rot = lerpAngle(v.rot, isMe ? Math.sin(now / 1000 * 0.45) * 0.4 : 0, Math.min(1, dt * 6));
         speed = 0;
       } else if (isMe && this.pred && p.al) {
         root.position.set(this.pred.x, 0, this.pred.z);
@@ -969,11 +972,13 @@ export class Engine {
       return;
     }
     if (this.phase === 'tavern') {
-      // Отдаляем камеру, чтобы трое героев поместились в видимую часть экрана
+      // Крупный план своего героя: целиком по высоте и по ширине свободного промежутка
       const visible = Math.max(0.2, 1 - this.tavernLeft - this.tavernRight);
-      const far = Math.max(10.5, 7.6 / (visible * 2 * Math.tan((cam.fov * Math.PI) / 360) * aspect));
-      cam.position.set(0, 3.2 + far * 0.12, far);
-      cam.lookAt(0, 1.4, 0);
+      const tan = Math.tan((cam.fov * Math.PI) / 360);
+      const spot = (this.tavernStage as TavernStage).slots[1];
+      const d = Math.max(1.45 / tan, 0.85 / (tan * aspect * visible));
+      cam.position.set(spot.x + d * 0.12, 1.25 + d * 0.1, spot.z + d);
+      cam.lookAt(spot.x, 1.0, spot.z);
       if (this.tavernLeft > 0 || this.tavernRight > 0) {
         // Центрируем сцену в свободном промежутке между панелями
         const w = window.innerWidth;

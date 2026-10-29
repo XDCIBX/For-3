@@ -1,7 +1,7 @@
 import { CLASSES, RARITY, SLOTS, SLOT_NAMES, STAT_LABELS, computeStats, formatStat, sellValue, type Item, type StatKey, type Stats } from '@game/shared';
 import type { ClientState } from '../net/state';
 import { sfx } from '../audio/sfx';
-import { CLASS_BG, el, esc } from './dom';
+import { CLASS_BG, el, esc, onTap } from './dom';
 import { COIN, MUG, classIcon, itemIcon } from './icons';
 
 const EMPTY_ICON: Record<string, string> = { weapon: 'weapon', helmet: 'helm', armor: 'plate', boots: 'boots', amulet: 'amulet', ring: 'ring' };
@@ -51,17 +51,29 @@ export class TavernUi {
           <button class="btn green" id="tready">✔ Готов к бою</button>
         </div>
       </div>`);
+    onTap(this.el.querySelector<HTMLElement>('#tready')!, () => {
+      const me = this.st?.me;
+      if (!me) return;
+      sfx.click();
+      this.onReady(!me.rdy);
+    });
+  }
+
+  /** Меняем DOM только при реальных изменениях — лишние мутации ломают касания на iOS. */
+  private setText(sel: string, text: string) {
+    const n = this.el.querySelector<HTMLElement>(sel)!;
+    if (n.textContent !== text) n.textContent = text;
+    return n;
   }
 
   update(st: ClientState) {
     const me = st.me;
     if (!me) return;
     this.st = st;
-    const timer = this.el.querySelector<HTMLElement>('.timer')!;
     const t = Math.ceil(st.timer);
-    timer.textContent = `⏳ ${t}`;
-    timer.classList.toggle('low', t <= 10);
-    (this.el.querySelector('.equip .gold-box b') as HTMLElement).textContent = String(me.g);
+    const timer = this.setText('.timer', `⏳ ${t}`);
+    if (timer.classList.contains('low') !== t <= 10) timer.classList.toggle('low', t <= 10);
+    this.setText('.equip .gold-box b', String(me.g));
 
     // Товары
     const box = this.el.querySelector('.items')!;
@@ -130,13 +142,9 @@ export class TavernUi {
         )
         .join('');
     }
-    const rb = this.el.querySelector<HTMLButtonElement>('#tready')!;
-    rb.textContent = me.rdy ? '✖ Ещё покупаю' : '✔ Готов к бою';
-    rb.className = `btn ${me.rdy ? 'ghost' : 'green'}`;
-    rb.onclick = () => {
-      sfx.click();
-      this.onReady(!me.rdy);
-    };
+    const rb = this.setText('#tready', me.rdy ? '✖ Ещё покупаю' : '✔ Готов к бою');
+    const rc = `btn ${me.rdy ? 'ghost' : 'green'}`;
+    if (rb.className !== rc) rb.className = rc;
   }
 
   /** Характеристики героя: после покупки выросшие значения подсвечиваются, при наведении на товар — прогноз. */
@@ -183,7 +191,7 @@ export class TavernUi {
     card.addEventListener('pointerleave', () => {
       if (this.preview === it) this.setPreview(null);
     });
-    card.addEventListener('click', () => {
+    onTap(card, () => {
       if (card.classList.contains('cant') || card.classList.contains('wrong')) {
         sfx.hurt();
         card.animate([{ transform: 'translateX(-5px)' }, { transform: 'translateX(5px)' }, { transform: 'none' }], { duration: 200 });

@@ -29,3 +29,29 @@ export const RARITY_CSS: Record<string, string> = {
   legendary: '#ffb321',
   relic: '#ff3b3b',
 };
+
+/**
+ * Надёжное нажатие на тач-экранах. iOS иногда не присылает click, если во время касания
+ * меняется DOM (таймер, золото), поэтому срабатываем на pointerup; click остаётся для
+ * мыши и клавиатуры, а дубль после касания отбрасываем. Сдвиг пальца — это прокрутка.
+ */
+export function onTap(node: HTMLElement, fn: () => void) {
+  let down: { id: number; x: number; y: number } | null = null;
+  let tapAt = 0;
+  node.addEventListener('pointerdown', (e) => {
+    if (e.pointerType !== 'mouse') down = { id: e.pointerId, x: e.clientX, y: e.clientY };
+  });
+  node.addEventListener('pointerup', (e) => {
+    if (!down || down.id !== e.pointerId) return;
+    const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+    down = null;
+    if (moved > 14) return;
+    tapAt = performance.now();
+    fn();
+  });
+  node.addEventListener('pointercancel', () => (down = null));
+  node.addEventListener('click', () => {
+    if (performance.now() - tapAt < 800) return;
+    fn();
+  });
+}

@@ -27,6 +27,14 @@ export class TavernStage implements Stage {
     s.add(new THREE.HemisphereLight(0xffd8a8, 0x3a2418, 0.3));
     this.sun = makeSun(0.9, 0xffc890, [6, 14, 10], 14, 1024);
     s.add(this.sun, this.sun.target);
+    // Студийный свет на героя у стойки: тёплый ключевой спереди и холодный контровой сзади
+    const key = new THREE.DirectionalLight(0xffe0b8, 1.6);
+    key.position.set(-2.5, 4, 8);
+    key.target.position.copy(this.slots[1]);
+    const rim = new THREE.DirectionalLight(0x9ab8ff, 1.3);
+    rim.position.set(2.5, 3.5, -2);
+    rim.target.position.copy(this.slots[1]);
+    s.add(key, key.target, rim, rim.target);
 
     // Пол из досок
     const floor = new THREE.Mesh(new THREE.PlaneGeometry(16, 12).rotateX(-Math.PI / 2), toon(0xa8743f, { map: repeated(woodTex(), 4, 3) }));

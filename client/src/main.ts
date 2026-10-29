@@ -596,18 +596,19 @@ class App {
   private startPing() {
     const badge = el(`<div class="ping"></div>`);
     document.body.appendChild(badge);
+    // Трогаем DOM только при изменениях: лишние мутации мешают касаниям на iOS
+    const set = (text: string, cls: string, show: boolean) => {
+      const d = show ? '' : 'none';
+      if (badge.style.display !== d) badge.style.display = d;
+      if (badge.textContent !== text) badge.textContent = text;
+      if (badge.className !== cls) badge.className = cls;
+    };
     const tick = () => {
       const c = this.conn;
-      badge.style.display = c ? '' : 'none';
-      if (!c) return;
-      if (c.local) {
-        badge.textContent = 'соло';
-        badge.className = 'ping solo';
-        return;
-      }
+      if (!c) return set('', 'ping', false);
+      if (c.local) return set('соло', 'ping solo', true);
       const ms = Math.round(c.rtt * 1000);
-      badge.textContent = `${ms} мс`;
-      badge.className = `ping ${ms < 90 ? '' : ms < 180 ? 'mid' : 'bad'}`;
+      set(`${ms} мс`, `ping ${ms < 90 ? '' : ms < 180 ? 'mid' : 'bad'}`, true);
     };
     tick();
     setInterval(tick, 500);
