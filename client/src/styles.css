@@ -49,6 +49,14 @@ body {
   display: block;
 }
 
+/* Мягкое затемнение по краям кадра — обычный CSS-слой, без лишней отрисовки сцены */
+#vignette {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(ellipse at 50% 45%, rgba(0, 0, 0, 0) 58%, rgba(24, 12, 36, 0.22) 85%, rgba(24, 12, 36, 0.42) 100%);
+}
+
 #ui {
   position: fixed;
   inset: 0;

@@ -26,6 +26,8 @@ const TORSO_COL: Record<HeroClass, number> = { warrior: 0xa9b4bf, mage: 0x6b3fc4
 const SLEEVE_COL: Record<HeroClass, number> = { warrior: 0x8e9aa6, mage: 0x6b3fc4, archer: 0x3f8f3a, hunter: 0xe8b890, summoner: 0x2a8f9a, werewolf: 0x6f5a4a, dwarf: 0x3f6a8a };
 const DEFAULT_WEAPON: Record<HeroClass, string> = { warrior: 'sword', mage: 'staff', archer: 'bow', hunter: 'glaives', summoner: 'totemstaff', werewolf: 'claws', dwarf: 'blunderbuss' };
 const HAND_COL: Partial<Record<HeroClass, number>> = { warrior: 0x7d8894, hunter: 0x2c2733, werewolf: 0x5a3a24, dwarf: 0x5a3a22 };
+/** Насколько крупнее рисуется оружие в руках — чтобы его было видно сверху. */
+const WEAPON_SCALE: Record<HeroClass, number> = { warrior: 1.3, mage: 1.15, archer: 1.2, hunter: 1.25, summoner: 1.15, werewolf: 1.35, dwarf: 1.3 };
 const FUR = 0x6f5a4a;
 const FUR_LIGHT = 0xcdb79e;
 const BEARD = 0xd8742a;
@@ -111,6 +113,9 @@ export class HeroModel {
   private equipKey = '';
   private baseTorsoColor: number;
   weaponTpl = '';
+  /** Насколько ярко «искрит» оружие: 0 — нет, больше — чаще (эпические и выше, посохи). */
+  weaponSparkle = 0;
+  weaponSparkleColor = 0xffffff;
 
   constructor(cls: HeroClass) {
     this.cls = cls;
@@ -188,6 +193,28 @@ export class HeroModel {
     }
     this.head.add(this.headgear);
 
+    // Рот: у каждого свой характер (у мага и гнома его прячет борода, у оборотня — морда)
+    if (cls === 'archer' || cls === 'summoner') {
+      this.head.add(part(G.torus(0.055, 0.014, Math.PI, 4, 10), 0x7a2a1a, { pos: [0, -0.17, 0.37], rot: [0, 0, Math.PI], outline: false }));
+    } else if (cls === 'warrior' || cls === 'hunter') {
+      this.head.add(part(G.box(0.1, 0.022, 0.02), 0x5a2a1a, { pos: [0, -0.18, 0.375], rot: [0, 0, cls === 'warrior' ? 0.12 : 0], outline: false }));
+    }
+    // Подошвы и отвороты сапог
+    for (const leg of [this.legL, this.legR]) {
+      leg.add(part(G.cyl(0.13, 0.14, 0.045, 12), 0x2a1a10, { pos: [0, -0.555, 0.05], scale: [1, 1, 1.35], outline: 0.012 }));
+      leg.add(part(G.torus(0.105, 0.03, Math.PI * 2, 5, 14), cls === 'warrior' ? 0x6d7680 : 0x7a5434, { pos: [0, -0.37, 0.01], rot: [Math.PI / 2, 0, 0], outline: 0.008 }));
+    }
+    // Манжеты на запястьях
+    for (const arm of [this.armL, this.armR]) {
+      arm.add(part(G.torus(0.09, 0.022, Math.PI * 2, 4, 12), cls === 'warrior' ? 0xc7ced6 : cls === 'mage' ? 0xffc93c : 0x4a2e1a, { pos: [0, -0.33, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+    }
+    // Поясная сумка с клапаном и пряжкой
+    if (cls !== 'dwarf' && cls !== 'werewolf') {
+      this.torsoG.add(part(G.box(0.12, 0.13, 0.09), 0x6a4428, { pos: [-0.27, 0.06, 0.14], rot: [0, -0.7, 0], outline: 0.012 }));
+      this.torsoG.add(part(G.box(0.13, 0.05, 0.1), 0x5a3a22, { pos: [-0.275, 0.12, 0.145], rot: [0, -0.7, 0], outline: false }));
+      this.torsoG.add(part(G.sphere(0.018, 6, 4), 0xffc93c, { pos: [-0.31, 0.1, 0.2], outline: false }));
+    }
+
     this.buildClassParts();
 
     // Эффекты состояния
@@ -232,9 +259,16 @@ export class HeroModel {
         this.torsoG.add(p);
         this.trimMeshes.push(p);
       }
-      // Плащ
+      // Плащ с золотой каймой и застёжками
       const cape = part(G.box(0.62, 0.8, 0.05), 0xc8412f, { pos: [0, 0.26, -0.3], rot: [0.12, 0, 0], outline: 0.025 });
       this.torsoG.add(cape);
+      this.torsoG.add(part(G.box(0.63, 0.05, 0.06), 0xffc93c, { pos: [0, -0.13, -0.35], rot: [0.12, 0, 0], outline: false }));
+      for (const x of [-0.24, 0.24]) this.torsoG.add(part(G.sphere(0.045, 8, 6), 0xffc93c, { pos: [x, 0.66, -0.24], outline: 0.008 }));
+      // Кольчужная юбка под поясом
+      for (let i = 0; i < 9; i++) {
+        const a = (i / 9) * Math.PI * 2;
+        this.torsoG.add(part(G.box(0.1, 0.14, 0.03), 0x8a96a0, { pos: [Math.sin(a) * 0.3, 0.0, Math.cos(a) * 0.27], rot: [0.15, a, 0], outline: 0.008 }));
+      }
       // Щит
       const shield = new THREE.Group();
       const disc = part(G.cyl(0.34, 0.34, 0.07, 20), 0xb5452f, { rot: [Math.PI / 2, 0, 0], outline: 0.03 });
@@ -252,6 +286,11 @@ export class HeroModel {
       this.trimMeshes.push(robe);
       const trim = part(G.torus(0.51, 0.04, Math.PI * 2, 6, 28), 0xffc93c, { pos: [0, -0.48, 0], rot: [Math.PI / 2, 0, 0], outline: false });
       this.torsoG.add(trim);
+      // Звёзды на мантии и стоячий воротник
+      for (const [a, y] of [[0.4, -0.3], [-0.7, -0.15], [1.6, -0.38], [2.6, -0.25], [-1.8, -0.35]] as const) {
+        this.torsoG.add(part(G.ico(0.035, 0), 0xffe14a, { pos: [Math.sin(a) * (0.38 + (-y) * 0.25), y, Math.cos(a) * (0.38 + (-y) * 0.25)], outline: false }));
+      }
+      this.torsoG.add(part(G.cyl(0.24, 0.2, 0.12, 14, ), 0x4e2a9a, { pos: [0, 0.74, -0.02], outline: 0.015 }));
       // Борода
       const beard = part(G.cone(0.24, 0.5, 14), 0xf3f1ec, { pos: [0, -0.33, 0.24], rot: [Math.PI + 0.35, 0, 0], outline: 0.025 });
       this.head.add(beard);
@@ -283,6 +322,10 @@ export class HeroModel {
       quiver.position.set(0.12, 0.42, -0.36);
       quiver.rotation.set(-0.25, 0, -0.5);
       this.torsoG.add(quiver);
+      // Ремень колчана через грудь и кожаный наруч на руке с луком
+      this.torsoG.add(part(G.box(0.06, 0.72, 0.03), 0x7a4a26, { pos: [-0.02, 0.4, 0.29], rot: [0, 0, -0.75], outline: 0.008 }));
+      this.armL.add(part(G.cyl(0.1, 0.09, 0.16, 10), 0x7a4a26, { pos: [0, -0.3, 0], outline: 0.012 }));
+      for (const y of [-0.25, -0.34]) this.armL.add(part(G.torus(0.1, 0.012, Math.PI * 2, 4, 12), 0x4a2e1a, { pos: [0, y, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
       // Шарф
       const scarf = part(G.torus(0.27, 0.07, Math.PI * 2, 8, 20), 0xd9a441, { pos: [0, 0.68, 0], rot: [Math.PI / 2, 0, 0], outline: 0.02 });
       this.torsoG.add(scarf);
@@ -704,12 +747,25 @@ export class HeroModel {
     } else if (this.cls === 'archer') {
       this.handL.add(this.weapon);
       this.weapon.rotation.set(tpl === 'crossbow' ? 0 : Math.PI / 2, 0, 0);
+    } else if (tpl === 'staff' || tpl === 'totemstaff') {
+      // Посох держит вертикально, как настоящий посох, чуть впереди руки
+      this.handR.add(this.weapon);
+      this.weapon.rotation.set(0.3, 0, 0);
+      this.weapon.position.set(0, -0.32, 0.1);
     } else {
       this.handR.add(this.weapon);
       this.weapon.rotation.set(this.cls === 'warrior' ? Math.PI / 2 - 0.45 : Math.PI / 2, 0, 0);
       this.weapon.position.set(0, 0, 0.02);
     }
 
+    // Крупнее в руках; мирорное отражение у второго клинка сохраняется
+    const wRank = ['common', 'rare', 'epic', 'legendary', 'relic'].indexOf(wIt?.rarity ?? 'common');
+    const magic = ['staff', 'wand', 'orb', 'tome', 'totemstaff', 'bell', 'runerifle'].includes(tpl);
+    this.weaponSparkle = (wRank >= 2 ? wRank - 1 : 0) + (magic ? 1 : 0);
+    this.weaponSparkleColor = wRank >= 1 ? RARITY_HEX[wIt!.rarity] : this.cls === 'summoner' ? 0x6ff0ff : 0x9ad8ff;
+    const ws = WEAPON_SCALE[this.cls];
+    this.weapon.scale.multiplyScalar(ws);
+    this.weapon2?.scale.multiplyScalar(ws);
     this.glowParts = [...this.classGlow, ...this.built.glow];
     this.spinParts = [...this.classSpin, ...this.built.spin];
 
@@ -1101,6 +1157,12 @@ export class HeroModel {
   /** Позиция наконечника оружия/руки в мировых координатах — для эффектов. */
   handWorld(target: THREE.Vector3): THREE.Vector3 {
     return (this.cls === 'archer' ? this.handL : this.handR).getWorldPosition(target);
+  }
+
+  /** Кончик оружия в мировых координатах (для искр). */
+  weaponTip(target: THREE.Vector3): THREE.Vector3 | null {
+    const tip = this.weapon.userData.tip as THREE.Object3D | undefined;
+    return tip ? tip.getWorldPosition(target) : null;
   }
 
   /** Вторая рука — для эффектов парного оружия. */

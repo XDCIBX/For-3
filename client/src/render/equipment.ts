@@ -357,6 +357,22 @@ export function buildWeapon(tpl: string, r: Rarity, out: Built): THREE.Group {
     for (let i = 0; i < n; i++) P(G.torus(rad, 0.012, Math.PI * 2, 4, 10), 0x3a2414, [0, y0 + i * step, 0], [Math.PI / 2, 0, 0], undefined, false);
   };
   const grip = rank >= 4 ? 0x2a0a0e : rank >= 3 ? 0x8a2a2a : LEATHER;
+  // Светлая заточенная кромка по обеим сторонам клинка — блик, по которому оружие видно издалека
+  // У обычных и редких кромка без свечения — так она склеивается с моделью и не добавляет отрисовок
+  const edgeMat = rank >= 2 ? toon(0xffffff, { emissive: glowCol, emissiveIntensity: 0.45 }) : toon(0xf4f8ff);
+  const edges = (width: number, len: number, y0: number, depth = 0.04) => {
+    for (const sx of [-1, 1]) {
+      const e = new THREE.Mesh(G.box(0.022, len, depth), edgeMat);
+      e.position.set(sx * (width / 2 - 0.004), y0 + len / 2, 0);
+      w.add(e);
+    }
+  };
+  // Навершие: кольцо и камень у редких
+  const pommel = (y: number, r: number) => {
+    P(G.sphere(r, 10, 8), guard, [0, y, 0]);
+    P(G.torus(r * 0.95, r * 0.25, Math.PI * 2, 4, 12), rank >= 1 ? GOLD : 0x6a4a2a, [0, y + r * 0.6, 0], [Math.PI / 2, 0, 0], undefined, false);
+    if (rank >= 1) w.add(gem(glowCol, r * 0.55, [0, y, r * 0.8], out));
+  };
   const guard = rank >= 2 ? GOLD : rank === 1 ? 0xc7ced6 : 0x8a6a4a;
 
   switch (tpl) {
@@ -364,8 +380,11 @@ export function buildWeapon(tpl: string, r: Rarity, out: Built): THREE.Group {
       const len = 0.85 + rank * 0.07;
       P(G.cyl(0.04, 0.04, 0.24, 8), grip, [0, 0, 0]);
       wraps(-0.08, 4, 0.043);
-      P(G.sphere(0.065, 10, 8), guard, [0, -0.15, 0]);
-      if (rank >= 2) w.add(gem(glowCol, 0.045, [0, -0.15, 0.05], out));
+      pommel(-0.15, 0.065);
+      // Рикассо и камень в центре гарды
+      M(G.box(0.1, 0.06, 0.05), [0, 0.19, 0], undefined, undefined, 0.01);
+      if (rank >= 1) w.add(gem(glowCol, 0.04, [0, 0.13, 0.05], out));
+      else P(G.sphere(0.035, 8, 6), 0x8a96a0, [0, 0.13, 0.05], undefined, undefined, 0.008);
       // Гарда: прямая или с загнутыми концами
       P(G.box(0.36, 0.06, 0.09), guard, [0, 0.13, 0]);
       for (const s of [-1, 1]) {
@@ -374,7 +393,9 @@ export function buildWeapon(tpl: string, r: Rarity, out: Built): THREE.Group {
       }
       // Клинок с долом
       M(G.box(0.13 + rank * 0.01, len, 0.035), [0, 0.16 + len / 2, 0]);
+      edges(0.13 + rank * 0.01, len, 0.16);
       M(G.cone(0.09 + rank * 0.007, 0.2, 4), [0, 0.16 + len + 0.1, 0], [0, Math.PI / 4, 0], [1, 1, 0.35]);
+      if (rank >= 1) for (let i = 0; i < 2 + rank; i++) P(G.box(0.035, 0.035, 0.045), glowCol, [0, 0.3 + i * 0.14, 0], [0, 0, Math.PI / 4], undefined, false);
       P(G.box(0.03, len * 0.75, 0.04), rank >= 2 ? glowCol : 0x8a96a0, [0, 0.16 + len * 0.42, 0], undefined, undefined, false);
       if (rank >= 3) {
         w.add(halo(glowCol, 0.16, [0, 0.16 + len * 0.5, 0], out, 0.3));
@@ -441,6 +462,18 @@ export function buildWeapon(tpl: string, r: Rarity, out: Built): THREE.Group {
       out.glow.push(crystal);
       w.add(crystal);
       w.add(halo(rank === 0 ? 0x7fd8ff : glowCol, 0.22, [0, 1.42, 0], out, 0.25));
+      // Подвески на шнурках под навершием
+      for (const sx of [-1, 1]) {
+        P(G.cyl(0.006, 0.006, 0.2, 3), 0x3a2414, [sx * 0.07, 1.18, 0], undefined, undefined, false);
+        P(G.sphere(0.03, 6, 4), rank >= 1 ? glowCol : 0xd8c8a0, [sx * 0.07, 1.07, 0], undefined, undefined, 0.006);
+      }
+      // Парящее кольцо рун вокруг кристалла
+      const runeRing = new THREE.Mesh(G.torus(0.2, 0.014, Math.PI * 2, 4, 20), glow(rank === 0 ? 0x9ae0ff : glowCol, 0.7, false));
+      runeRing.rotation.x = Math.PI / 2 - 0.3;
+      runeRing.position.y = 1.42;
+      runeRing.userData.anim = true;
+      out.spin.push(runeRing);
+      w.add(runeRing);
       if (rank >= 2) {
         // Камни, вращающиеся вокруг кристалла
         const orbit = new THREE.Group();
@@ -577,6 +610,7 @@ export function buildWeapon(tpl: string, r: Rarity, out: Built): THREE.Group {
       P(G.sphere(0.05, 8, 6), guard, [0, -0.12, 0]);
       P(G.torus(0.09, 0.022, Math.PI, 5, 10), guard, [0, 0.13, 0], [0, 0, 0]);
       M(G.box(0.085, len, 0.025), [0, 0.13 + len / 2, 0]);
+      edges(0.085, len, 0.13, 0.03);
       M(G.cone(0.06, 0.16, 4), [0, 0.13 + len + 0.08, 0], [0, Math.PI / 4, 0], [1, 1, 0.35]);
       P(G.box(0.022, len * 0.7, 0.03), rank >= 2 ? glowCol : 0x6f7b85, [0, 0.13 + len * 0.45, 0], undefined, undefined, false);
       if (rank >= 2) w.add(gem(glowCol, 0.035, [0, -0.12, 0.04], out));
@@ -799,6 +833,12 @@ export function buildWeapon(tpl: string, r: Rarity, out: Built): THREE.Group {
       break;
     }
   }
+  // Метка кончика оружия — откуда сыплются искры
+  const box = new THREE.Box3().setFromObject(w);
+  const tip = new THREE.Object3D();
+  tip.position.set((box.min.x + box.max.x) / 2, box.max.y * 0.92, (box.min.z + box.max.z) / 2);
+  w.add(tip);
+  w.userData.tip = tip;
   return w;
 }
 

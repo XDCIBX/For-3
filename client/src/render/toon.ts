@@ -18,6 +18,28 @@ export const OUTLINE_COLOR = new THREE.Color(0x24160f);
 
 const cache = new Map<string, THREE.Material>();
 
+/**
+ * Мягкий контровой свет по краю силуэта: фигуры и предметы «отрываются» от фона.
+ * Одна общая правка шейдера — число программ и отрисовок не растёт.
+ */
+export const RIM = { color: { value: new THREE.Color(0xfff2d8) }, strength: { value: 0.45 } };
+function withRim(m: THREE.MeshToonMaterial): THREE.MeshToonMaterial {
+  m.onBeforeCompile = (sh) => {
+    sh.uniforms.rimColor = RIM.color;
+    sh.uniforms.rimStrength = RIM.strength;
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nuniform vec3 rimColor;\nuniform float rimStrength;')
+      .replace(
+        '#include <opaque_fragment>',
+        `float rimF = 1.0 - clamp(dot(normalize(normal), normalize(vViewPosition)), 0.0, 1.0);
+        outgoingLight += rimColor * smoothstep(0.55, 0.75, rimF) * rimStrength * (0.55 + 0.45 * diffuseColor.rgb);
+        #include <opaque_fragment>`,
+      );
+  };
+  m.customProgramCacheKey = () => 'toon-rim';
+  return m;
+}
+
 export interface ToonOpts {
   emissive?: THREE.ColorRepresentation;
   emissiveIntensity?: number;
@@ -44,6 +66,7 @@ export function toon(color: THREE.ColorRepresentation, o: ToonOpts = {}): THREE.
       vertexColors: o.vertexColors ?? false,
       map: o.map ?? null,
     });
+    withRim(m);
     cache.set(key, m);
   }
   return m;

@@ -137,6 +137,7 @@ export class Engine {
   /** Пул моделей мобов по видам — без рывков при появлении новой волны. */
   private mobPool = new Map<string, MobView[]>();
   minions = new Map<number, MinionView>();
+  private tmpV = new THREE.Vector3();
   private fading: MinionView[] = [];
   projs = new Map<number, ProjView>();
   zones = new Map<number, ZoneView>();
@@ -806,6 +807,11 @@ export class Engine {
         demon: p.st.includes('m'),
         beast: p.st.includes('v'),
       });
+      // Искры с кончика редкого и магического оружия
+      if (v.model.weaponSparkle > 0 && root.visible && p.al && Math.random() < dt * 2.2 * v.model.weaponSparkle) {
+        const tp = v.model.weaponTip(this.tmpV);
+        if (tp) this.fx.glow({ x: tp.x + (Math.random() - 0.5) * 0.2, y: tp.y, z: tp.z + (Math.random() - 0.5) * 0.2, vy: 0.6, life: 0.6, size: 0.13, grow: -0.15, color: v.model.weaponSparkleColor });
+      }
       if (p.st.includes('m') && Math.random() < dt * 18) this.fx.glow({ x: root.position.x + (Math.random() - 0.5) * 0.8, y: 0.3 + Math.random() * 1.4, z: root.position.z + (Math.random() - 0.5) * 0.8, vy: 2, life: 0.5, size: 0.2, grow: -0.3, color: Math.random() < 0.7 ? 0x5dff8a : 0xb070ff });
       v.bar.update(dt);
       if (p.st.includes('h') && Math.random() < dt * 20) this.fx.glow({ x: root.position.x, y: 0.3 + Math.random(), z: root.position.z, vy: 1.5, life: 0.4, size: 0.15, color: 0x7aff9a });
