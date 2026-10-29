@@ -17,7 +17,7 @@ export interface Stats {
   cdr: number;
   regen: number;
   lifesteal: number;
-  /** Бонус к урону умений от экипировки. */
+  /** Сила умений: от неё считается урон умений, зон и помощников (обычная атака — от damage). */
   skillPower: number;
 }
 export type StatKey = keyof Stats;

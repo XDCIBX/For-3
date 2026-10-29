@@ -34,7 +34,7 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
     desc: 'Закован в сталь, рвётся в самую гущу врагов. Держит удар и защищает союзников.',
     color: '#e0533d',
     passive: { name: 'Стойкость', desc: 'Высокая броня и быстрое восстановление здоровья.' },
-    base: { maxHp: 310, damage: 22, armor: 18, speed: 5.2, attackSpeed: 1, crit: 0.05, cdr: 0, regen: 2.5, lifesteal: 0, skillPower: 0 },
+    base: { maxHp: 310, damage: 22, armor: 18, speed: 5.2, attackSpeed: 1, crit: 0.05, cdr: 0, regen: 2.5, lifesteal: 0, skillPower: 22 },
     difficulty: 1,
     skills: [
       { id: 'slash', name: 'Удар мечом', desc: 'Широкий взмах, задевающий всех врагов перед воином.', cd: 0.6, aim: 'dir', range: 2.8 },
@@ -50,7 +50,7 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
     desc: 'Хрупкий, но смертоносный. Сжигает толпы врагов и замораживает их на месте.',
     color: '#8a5cff',
     passive: { name: 'Магический щит', desc: 'Щит поглощает урон и восстанавливается, если маг не получает урон 4 сек.' },
-    base: { maxHp: 195, damage: 26, armor: 6, speed: 5.0, attackSpeed: 1, crit: 0.05, cdr: 0.05, regen: 1.2, lifesteal: 0, skillPower: 0 },
+    base: { maxHp: 195, damage: 26, armor: 6, speed: 5.0, attackSpeed: 1, crit: 0.05, cdr: 0.05, regen: 1.2, lifesteal: 0, skillPower: 26 },
     difficulty: 3,
     skills: [
       { id: 'bolt', name: 'Чародейская стрела', desc: 'Сгусток магии летит в цель.', cd: 0.75, aim: 'dir', range: 13 },
@@ -66,7 +66,7 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
     desc: 'Быстрый и ловкий. Расстреливает врагов издалека и ускользает от ударов.',
     color: '#3dbb5a',
     passive: { name: 'Зоркий глаз', desc: '+20% шанс критического удара и повышенная скорость бега.' },
-    base: { maxHp: 195, damage: 20, armor: 7, speed: 5.8, attackSpeed: 1, crit: 0.2, cdr: 0, regen: 1.5, lifesteal: 0, skillPower: 0 },
+    base: { maxHp: 195, damage: 20, armor: 7, speed: 5.8, attackSpeed: 1, crit: 0.2, cdr: 0, regen: 1.5, lifesteal: 0, skillPower: 20 },
     difficulty: 2,
     skills: [
       { id: 'shot', name: 'Выстрел', desc: 'Быстрая стрела на большую дистанцию.', cd: 0.5, aim: 'dir', range: 15 },
@@ -82,7 +82,7 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
     desc: 'Мастер парных клинков. Бьёт стремительно, ныряет в гущу врагов и пьёт их жизнь.',
     color: '#2fd07a',
     passive: { name: 'Жажда охоты', desc: 'Каждый удар — двумя клинками. Вампиризм 6%.' },
-    base: { maxHp: 230, damage: 14, armor: 10, speed: 5.6, attackSpeed: 1, crit: 0.1, cdr: 0, regen: 1.6, lifesteal: 0.06, skillPower: 0 },
+    base: { maxHp: 230, damage: 14, armor: 10, speed: 5.6, attackSpeed: 1, crit: 0.1, cdr: 0, regen: 1.6, lifesteal: 0.06, skillPower: 14 },
     difficulty: 2,
     skills: [
       { id: 'twin', name: 'Двойной удар', desc: 'Молниеносный удар двумя клинками перед собой.', cd: 0.42, aim: 'dir', range: 2.5 },
@@ -98,7 +98,7 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
     desc: 'Призывает духов-волков, каменного голема и тотем. Помощники сражаются сами и отвлекают врагов.',
     color: '#2ab8c8',
     passive: { name: 'Связь душ', desc: 'Помощники сильнеют вместе со снаряжением героя. Ближайший помощник забирает 35% урона по призывателю, а его гибель лечит на 10%.' },
-    base: { maxHp: 205, damage: 21, armor: 8, speed: 5.1, attackSpeed: 1, crit: 0.05, cdr: 0.05, regen: 1.4, lifesteal: 0, skillPower: 0 },
+    base: { maxHp: 205, damage: 21, armor: 8, speed: 5.1, attackSpeed: 1, crit: 0.05, cdr: 0.05, regen: 1.4, lifesteal: 0, skillPower: 21 },
     difficulty: 3,
     skills: [
       { id: 'spiritbolt', name: 'Духовная стрела', desc: 'Сгусток духовной энергии. Помощники атакуют цель.', cd: 0.75, aim: 'dir', range: 12 },
@@ -114,7 +114,7 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
     desc: 'Свирепый боец ближнего боя. Прыгает на добычу, воем наводит ужас и обращается в огромного зверя.',
     color: '#c27a3a',
     passive: { name: 'Зов крови', desc: 'Когда здоровья меньше 40%, урон выше на 15%, а регенерация втрое сильнее (в дуэлях — только урон).' },
-    base: { maxHp: 270, damage: 21, armor: 13, speed: 5.6, attackSpeed: 1, crit: 0.08, cdr: 0, regen: 2.0, lifesteal: 0.03, skillPower: 0 },
+    base: { maxHp: 270, damage: 21, armor: 13, speed: 5.6, attackSpeed: 1, crit: 0.08, cdr: 0, regen: 2.0, lifesteal: 0.03, skillPower: 21 },
     difficulty: 2,
     skills: [
       { id: 'rend', name: 'Удар когтями', desc: 'Размашистый удар когтями по всем врагам перед собой.', cd: 0.55, aim: 'dir', range: 2.6 },
@@ -130,7 +130,7 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
     desc: 'Крепкий гном-инженер с мушкетоном. Ставит турели, швыряет пороховые бочки и сотрясает землю.',
     color: '#d08a2a',
     passive: { name: 'Каменная кровь', desc: 'Получает на 12% меньше урона, но бегает медленнее.' },
-    base: { maxHp: 250, damage: 17, armor: 13, speed: 4.9, attackSpeed: 1, crit: 0.06, cdr: 0, regen: 1.8, lifesteal: 0, skillPower: 0 },
+    base: { maxHp: 250, damage: 17, armor: 13, speed: 4.9, attackSpeed: 1, crit: 0.06, cdr: 0, regen: 1.8, lifesteal: 0, skillPower: 17 },
     difficulty: 2,
     skills: [
       { id: 'blast', name: 'Залп дробью', desc: 'Мушкетон стреляет веером из трёх дробин. Вблизи попадают все.', cd: 0.65, aim: 'dir', range: 8 },
@@ -143,7 +143,7 @@ export const CLASSES: Record<HeroClass, ClassDef> = {
 
 export const STAT_LABELS: Record<keyof Stats, string> = {
   maxHp: 'Здоровье',
-  damage: 'Урон',
+  damage: 'Сила атаки',
   armor: 'Броня',
   speed: 'Скорость',
   attackSpeed: 'Скор. атаки',
@@ -154,7 +154,7 @@ export const STAT_LABELS: Record<keyof Stats, string> = {
   skillPower: 'Сила умений',
 };
 
-export const PERCENT_STATS: (keyof Stats)[] = ['attackSpeed', 'crit', 'cdr', 'lifesteal', 'skillPower'];
+export const PERCENT_STATS: (keyof Stats)[] = ['attackSpeed', 'crit', 'cdr', 'lifesteal'];
 
 export function formatStat(key: keyof Stats, v: number, signed = true): string {
   const sign = signed && v > 0 ? '+' : '';

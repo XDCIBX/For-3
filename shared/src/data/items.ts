@@ -19,8 +19,11 @@ export const RARITY: Record<Rarity, RarityDef> = {
   relic: { name: 'Реликвия', color: '#ff3b3b', mult: 5, priceMult: 11.5 },
 };
 
-/** Сила умений, которую даёт любой предмет в зависимости от редкости. */
-export const SKILL_POWER: Record<Rarity, number> = { common: 0.03, rare: 0.06, epic: 0.1, legendary: 0.15, relic: 0.21 };
+/**
+ * Сила умений, которую даёт любой предмет: базовое значение по слоту,
+ * растёт с редкостью и раундом так же, как сила атаки.
+ */
+export const SKILL_POWER: Record<Slot, number> = { weapon: 6, helmet: 4, armor: 5, boots: 3, amulet: 4, ring: 3 };
 
 export interface ItemTemplate {
   id: string;
@@ -42,48 +45,48 @@ export const SLOT_NAMES: Record<Slot, string> = {
 
 export const ITEM_TEMPLATES: ItemTemplate[] = [
   // --- Оружие воина ---
-  { id: 'sword', slot: 'weapon', cls: 'warrior', names: ['Тренировочный меч', 'Стальной меч', 'Рунный клинок', 'Клинок Рассвета', 'Меч Багровой Зари'], stats: { damage: 6, crit: 0.03 } },
-  { id: 'axe', slot: 'weapon', cls: 'warrior', names: ['Топор дровосека', 'Боевой топор', 'Секира Берсерка', 'Погибель Титанов', 'Секира Кровавой Луны'], stats: { damage: 8, lifesteal: 0.03 } },
-  { id: 'hammer', slot: 'weapon', cls: 'warrior', names: ['Деревянная кувалда', 'Железный молот', 'Громовой молот', 'Молот Небес', 'Молот Падшего Бога'], stats: { damage: 5, maxHp: 30 } },
+  { id: 'sword', slot: 'weapon', cls: 'warrior', names: ['Тренировочный меч', 'Стальной меч', 'Рунный клинок', 'Клинок Рассвета', 'Меч Багровой Зари'], stats: { damage: 11, crit: 0.03 } },
+  { id: 'axe', slot: 'weapon', cls: 'warrior', names: ['Топор дровосека', 'Боевой топор', 'Секира Берсерка', 'Погибель Титанов', 'Секира Кровавой Луны'], stats: { damage: 14, lifesteal: 0.03 } },
+  { id: 'hammer', slot: 'weapon', cls: 'warrior', names: ['Деревянная кувалда', 'Железный молот', 'Громовой молот', 'Молот Небес', 'Молот Падшего Бога'], stats: { damage: 9, maxHp: 30 } },
   // --- Оружие мага ---
-  { id: 'staff', slot: 'weapon', cls: 'mage', names: ['Кривой посох', 'Посох мудреца', 'Посох Бури', 'Посох Архимага', 'Посох Первородного Огня'], stats: { damage: 7, cdr: 0.04 } },
-  { id: 'wand', slot: 'weapon', cls: 'mage', names: ['Ивовая палочка', 'Жезл искр', 'Жезл Пламени', 'Скипетр Вечности', 'Жезл Алого Феникса'], stats: { damage: 5, attackSpeed: 0.08 } },
-  { id: 'orb', slot: 'weapon', cls: 'mage', names: ['Стеклянный шар', 'Хрустальная сфера', 'Око Бездны', 'Сердце Звезды', 'Сердце Багрового Солнца'], stats: { damage: 6, maxHp: 20, crit: 0.02 } },
+  { id: 'staff', slot: 'weapon', cls: 'mage', names: ['Кривой посох', 'Посох мудреца', 'Посох Бури', 'Посох Архимага', 'Посох Первородного Огня'], stats: { damage: 13, cdr: 0.04 } },
+  { id: 'wand', slot: 'weapon', cls: 'mage', names: ['Ивовая палочка', 'Жезл искр', 'Жезл Пламени', 'Скипетр Вечности', 'Жезл Алого Феникса'], stats: { damage: 9, attackSpeed: 0.08 } },
+  { id: 'orb', slot: 'weapon', cls: 'mage', names: ['Стеклянный шар', 'Хрустальная сфера', 'Око Бездны', 'Сердце Звезды', 'Сердце Багрового Солнца'], stats: { damage: 11, maxHp: 20, crit: 0.02 } },
   // --- Оружие лучника ---
-  { id: 'bow', slot: 'weapon', cls: 'archer', names: ['Охотничий лук', 'Длинный лук', 'Эльфийский лук', 'Лук Лунного Света', 'Лук Кровавой Охоты'], stats: { damage: 6, crit: 0.04 } },
-  { id: 'crossbow', slot: 'weapon', cls: 'archer', names: ['Самострел', 'Тяжёлый арбалет', 'Арбалет Ассасина', 'Глаз Бури', 'Арбалет Судного Дня'], stats: { damage: 8, armor: 1 } },
-  { id: 'recurve', slot: 'weapon', cls: 'archer', names: ['Короткий лук', 'Рогатый лук', 'Лук Ветров', 'Шёпот Леса', 'Лук Алого Заката'], stats: { damage: 5, attackSpeed: 0.1 } },
+  { id: 'bow', slot: 'weapon', cls: 'archer', names: ['Охотничий лук', 'Длинный лук', 'Эльфийский лук', 'Лук Лунного Света', 'Лук Кровавой Охоты'], stats: { damage: 11, crit: 0.04 } },
+  { id: 'crossbow', slot: 'weapon', cls: 'archer', names: ['Самострел', 'Тяжёлый арбалет', 'Арбалет Ассасина', 'Глаз Бури', 'Арбалет Судного Дня'], stats: { damage: 14, armor: 1 } },
+  { id: 'recurve', slot: 'weapon', cls: 'archer', names: ['Короткий лук', 'Рогатый лук', 'Лук Ветров', 'Шёпот Леса', 'Лук Алого Заката'], stats: { damage: 9, attackSpeed: 0.1 } },
   // --- Оружие охотника на демонов (парное) ---
-  { id: 'glaives', slot: 'weapon', cls: 'hunter', names: ['Учебные глефы', 'Стальные глефы', 'Глефы Скверны', 'Глефы Падшей Звезды', 'Глефы Иллидари'], stats: { damage: 5, attackSpeed: 0.06 } },
-  { id: 'daggers', slot: 'weapon', cls: 'hunter', names: ['Ржавые кинжалы', 'Парные стилеты', 'Клыки Ночи', 'Жала Бездны', 'Клыки Пожирателя'], stats: { damage: 5, crit: 0.04 } },
-  { id: 'warblades', slot: 'weapon', cls: 'hunter', names: ['Тесаки охотника', 'Боевые клинки', 'Клинки Крови', 'Пожиратели Душ', 'Клинки Пылающей Бездны'], stats: { damage: 6, lifesteal: 0.03 } },
+  { id: 'glaives', slot: 'weapon', cls: 'hunter', names: ['Учебные глефы', 'Стальные глефы', 'Глефы Скверны', 'Глефы Падшей Звезды', 'Глефы Иллидари'], stats: { damage: 9, attackSpeed: 0.06 } },
+  { id: 'daggers', slot: 'weapon', cls: 'hunter', names: ['Ржавые кинжалы', 'Парные стилеты', 'Клыки Ночи', 'Жала Бездны', 'Клыки Пожирателя'], stats: { damage: 9, crit: 0.04 } },
+  { id: 'warblades', slot: 'weapon', cls: 'hunter', names: ['Тесаки охотника', 'Боевые клинки', 'Клинки Крови', 'Пожиратели Душ', 'Клинки Пылающей Бездны'], stats: { damage: 11, lifesteal: 0.03 } },
   // --- Оружие призывателя ---
-  { id: 'tome', slot: 'weapon', cls: 'summoner', names: ['Потрёпанный гримуар', 'Книга духов', 'Гримуар Предков', 'Кодекс Вечности', 'Книга Мёртвых Королей'], stats: { damage: 6, cdr: 0.04 } },
-  { id: 'totemstaff', slot: 'weapon', cls: 'summoner', names: ['Резной посох', 'Посох шамана', 'Тотем Грома', 'Древо Жизни', 'Тотем Первых Предков'], stats: { damage: 5, maxHp: 30 } },
-  { id: 'bell', slot: 'weapon', cls: 'summoner', names: ['Медный колокольчик', 'Колокол зова', 'Колокол Предков', 'Глас Небес', 'Колокол Конца Времён'], stats: { damage: 5, attackSpeed: 0.08 } },
+  { id: 'tome', slot: 'weapon', cls: 'summoner', names: ['Потрёпанный гримуар', 'Книга духов', 'Гримуар Предков', 'Кодекс Вечности', 'Книга Мёртвых Королей'], stats: { damage: 11, cdr: 0.04 } },
+  { id: 'totemstaff', slot: 'weapon', cls: 'summoner', names: ['Резной посох', 'Посох шамана', 'Тотем Грома', 'Древо Жизни', 'Тотем Первых Предков'], stats: { damage: 9, maxHp: 30 } },
+  { id: 'bell', slot: 'weapon', cls: 'summoner', names: ['Медный колокольчик', 'Колокол зова', 'Колокол Предков', 'Глас Небес', 'Колокол Конца Времён'], stats: { damage: 9, attackSpeed: 0.08 } },
   // --- Голова ---
-  { id: 'claws', slot: 'weapon', cls: 'werewolf', names: ['Костяные когти', 'Стальные когти', 'Когти Полнолуния', 'Когти Вожака Стаи', 'Когти Кровавой Луны'], stats: { damage: 6, crit: 0.03 } },
-  { id: 'knuckles', slot: 'weapon', cls: 'werewolf', names: ['Клыкастые кастеты', 'Кастеты охотника', 'Пасть Зверя', 'Клыки Фенрира', 'Челюсти Пожирателя Лун'], stats: { damage: 5, lifesteal: 0.03 } },
-  { id: 'sickles', slot: 'weapon', cls: 'werewolf', names: ['Ржавые серпы', 'Лунные серпы', 'Серпы Затмения', 'Серпы Серебряной Луны', 'Серпы Алой Луны'], stats: { damage: 5, attackSpeed: 0.06 } },
+  { id: 'claws', slot: 'weapon', cls: 'werewolf', names: ['Костяные когти', 'Стальные когти', 'Когти Полнолуния', 'Когти Вожака Стаи', 'Когти Кровавой Луны'], stats: { damage: 11, crit: 0.03 } },
+  { id: 'knuckles', slot: 'weapon', cls: 'werewolf', names: ['Клыкастые кастеты', 'Кастеты охотника', 'Пасть Зверя', 'Клыки Фенрира', 'Челюсти Пожирателя Лун'], stats: { damage: 9, lifesteal: 0.03 } },
+  { id: 'sickles', slot: 'weapon', cls: 'werewolf', names: ['Ржавые серпы', 'Лунные серпы', 'Серпы Затмения', 'Серпы Серебряной Луны', 'Серпы Алой Луны'], stats: { damage: 9, attackSpeed: 0.06 } },
 
-  { id: 'blunderbuss', slot: 'weapon', cls: 'dwarf', names: ['Старый мушкетон', 'Мушкетон рудокопа', 'Громобой', 'Мушкетон Подгорного Короля', 'Пасть Вулкана'], stats: { damage: 6, crit: 0.03 } },
-  { id: 'handcannon', slot: 'weapon', cls: 'dwarf', names: ['Ручная пушка', 'Бронзовая пушка', 'Пушка Кузнеца', 'Драконья Пушка', 'Пушка Багрового Горна'], stats: { damage: 7, armor: 2 } },
-  { id: 'runerifle', slot: 'weapon', cls: 'dwarf', names: ['Шахтёрское ружьё', 'Рунное ружьё', 'Ружьё Глубин', 'Ружьё Древних Рун', 'Ружьё Огненных Рун'], stats: { damage: 5, attackSpeed: 0.06 } },
+  { id: 'blunderbuss', slot: 'weapon', cls: 'dwarf', names: ['Старый мушкетон', 'Мушкетон рудокопа', 'Громобой', 'Мушкетон Подгорного Короля', 'Пасть Вулкана'], stats: { damage: 11, crit: 0.03 } },
+  { id: 'handcannon', slot: 'weapon', cls: 'dwarf', names: ['Ручная пушка', 'Бронзовая пушка', 'Пушка Кузнеца', 'Драконья Пушка', 'Пушка Багрового Горна'], stats: { damage: 13, armor: 2 } },
+  { id: 'runerifle', slot: 'weapon', cls: 'dwarf', names: ['Шахтёрское ружьё', 'Рунное ружьё', 'Ружьё Глубин', 'Ружьё Древних Рун', 'Ружьё Огненных Рун'], stats: { damage: 9, attackSpeed: 0.06 } },
 
   { id: 'helm', slot: 'helmet', cls: null, names: ['Кожаная шапка', 'Железный шлем', 'Шлем Стража', 'Корона Королей', 'Венец Багрового Короля'], stats: { maxHp: 25, armor: 3 } },
   { id: 'hood', slot: 'helmet', cls: null, names: ['Тряпичный капюшон', 'Капюшон следопыта', 'Капюшон Тени', 'Венец Мудрости', 'Капюшон Алой Тени'], stats: { crit: 0.03, cdr: 0.03 } },
   // --- Доспех ---
   { id: 'plate', slot: 'armor', cls: null, names: ['Стёганка', 'Кольчуга', 'Латы Паладина', 'Доспех Дракона', 'Латы Огненного Титана'], stats: { maxHp: 40, armor: 6 } },
-  { id: 'robe', slot: 'armor', cls: null, names: ['Холщовая рубаха', 'Мантия ученика', 'Мантия Чародея', 'Одеяние Звездочёта', 'Мантия Кровавой Луны'], stats: { maxHp: 20, damage: 3, cdr: 0.03 } },
+  { id: 'robe', slot: 'armor', cls: null, names: ['Холщовая рубаха', 'Мантия ученика', 'Мантия Чародея', 'Одеяние Звездочёта', 'Мантия Кровавой Луны'], stats: { maxHp: 20, damage: 5, cdr: 0.03 } },
   { id: 'leather', slot: 'armor', cls: null, names: ['Кожанка', 'Куртка рейнджера', 'Доспех Ночи', 'Шкура Феникса', 'Шкура Багрового Дракона'], stats: { maxHp: 25, armor: 3, attackSpeed: 0.05 } },
   // --- Обувь ---
   { id: 'boots', slot: 'boots', cls: null, names: ['Лапти', 'Кожаные сапоги', 'Сапоги-скороходы', 'Крылатые сандалии', 'Поступь Пламени'], stats: { speed: 0.35, armor: 2 } },
   { id: 'greaves', slot: 'boots', cls: null, names: ['Деревянные башмаки', 'Железные поножи', 'Сабатоны Стража', 'Поступь Титана', 'Сабатоны Вулкана'], stats: { armor: 4, maxHp: 20, speed: 0.12 } },
   // --- Амулет ---
-  { id: 'amulet', slot: 'amulet', cls: null, names: ['Медный амулет', 'Серебряный кулон', 'Амулет Ярости', 'Слеза Богини', 'Око Древних'], stats: { damage: 4, regen: 0.6 } },
+  { id: 'amulet', slot: 'amulet', cls: null, names: ['Медный амулет', 'Серебряный кулон', 'Амулет Ярости', 'Слеза Богини', 'Око Древних'], stats: { damage: 7, regen: 0.6 } },
   { id: 'talisman', slot: 'amulet', cls: null, names: ['Клык волка', 'Оберег', 'Талисман Жизни', 'Сердце Феникса', 'Кровь Феникса'], stats: { maxHp: 30, regen: 1.0 } },
   // --- Кольцо ---
-  { id: 'ring', slot: 'ring', cls: null, names: ['Медное кольцо', 'Серебряное кольцо', 'Кольцо Силы', 'Кольцо Всевластия', 'Кольцо Багрового Владыки'], stats: { damage: 3, crit: 0.03 } },
+  { id: 'ring', slot: 'ring', cls: null, names: ['Медное кольцо', 'Серебряное кольцо', 'Кольцо Силы', 'Кольцо Всевластия', 'Кольцо Багрового Владыки'], stats: { damage: 5, crit: 0.03 } },
   { id: 'band', slot: 'ring', cls: null, names: ['Простое колечко', 'Кольцо вампира', 'Перстень Крови', 'Перстень Вечной Ночи', 'Перстень Вечной Крови'], stats: { lifesteal: 0.03, attackSpeed: 0.05 } },
 ];
 
@@ -134,7 +137,7 @@ export function makeItem(tpl: ItemTemplate, rarity: Rarity, round: number, rng?:
     }
     if (v > 0) stats[k] = v;
   }
-  stats.skillPower = SKILL_POWER[rarity];
+  stats.skillPower = Math.max(1, Math.round(SKILL_POWER[tpl.slot] * rd.mult * roundScale * (rng ? rng.range(0.9, 1.12) : 1)));
   const price = Math.round((28 * rd.priceMult * (1 + 0.22 * (round - 1))) / 5) * 5;
   return {
     id: `it${Date.now().toString(36)}${(itemCounter++).toString(36)}`,

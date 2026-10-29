@@ -134,6 +134,9 @@ const GOLD_DROP = 0.75 * 1.25 * 1.35;
 const TOTEM_R = 5.5;
 const TOTEM_PULSE = 0.14;
 const TOTEM_PULSE_DUEL = 0.1;
+/** Доля силы умений, с которой бьют помощники (волки, голем, тотем, турель): на волнах и в дуэлях. */
+const MINION_POWER = 0.9;
+const MINION_POWER_DUEL = 1.3;
 /** Выстрел турели гнома (доля урона гнома). */
 const TURRET_SHOT = 0.6;
 
@@ -232,6 +235,8 @@ export class Game {
   private pidCounter = 1;
   /** Удар наносит помощник (в ПвП их урон по героям снижен). */
   private minionStrike = false;
+  /** Идёт обычная атака (умение 0) — её урон от силы атаки, а не от силы умений. */
+  private basicAttack = false;
   private dirty = true;
 
   constructor(seed = (Math.random() * 2 ** 31) | 0) {
@@ -793,8 +798,8 @@ export class Game {
   }
 
   rollDamage(p: Player, mult: number, canCrit = true): { v: number; crit: boolean } {
-    // Сила умений от экипировки; помощники и так растут вместе со статами героя, им — половина
-    let v = p.stats.damage * mult * (1 + p.stats.skillPower * (this.minionStrike ? 0.5 : 1)) * this.rng.range(0.9, 1.1);
+    // Обычная атака считается от силы атаки, всё остальное (умения, зоны, рывки, помощники) — от силы умений
+    let v = (this.basicAttack ? p.stats.damage : p.stats.skillPower * (this.minionStrike ? (this.phase === 'duel' ? MINION_POWER_DUEL : MINION_POWER) : 1)) * mult * this.rng.range(0.9, 1.1);
     if (p.warcryT > 0) v *= this.phase === 'duel' ? 1.12 : 1.3;
     else if (p.rageT > 0) v *= 1.25;
     if (p.demonT > 0) v *= 1.1;
@@ -946,6 +951,15 @@ export class Game {
   // ------------------------------------------------------------------ умения
 
   castSkill(p: Player, s: number, dx: number, dz: number, dist: number) {
+    this.basicAttack = s === 0;
+    try {
+      this.doCast(p, s, dx, dz, dist);
+    } finally {
+      this.basicAttack = false;
+    }
+  }
+
+  private doCast(p: Player, s: number, dx: number, dz: number, dist: number) {
     if (s < 0 || s > 3) return;
     if (!isCombatPhase(this.phase) && !(this.phase === 'clear' || this.phase === 'intro')) return;
     if (!p.alive || p.spectator || p.stunT > 0 || p.frozenT > 0 || p.dash) return;
@@ -1216,11 +1230,13 @@ export class Game {
     const st = p.stats;
     // В дуэли помощники хрупче, чтобы бой шёл между героями
     const hpm = this.phase === 'duel' ? 0.75 : 1;
+    // Здоровье помощников растёт со здоровьем хозяина, но не выше 2,5 базового — иначе на реликвиях их не пробить
+    const mhp = Math.min(st.maxHp, CLASSES[p.cls].base.maxHp * 2.5);
     const spec = {
-      wolf: { hp: st.maxHp * 0.32 * hpm, armor: st.armor, speed: 6.2, radius: 0.45, life: 14 },
-      golem: { hp: st.maxHp * (this.phase === 'duel' ? 0.9 : 1.1) * hpm, armor: st.armor + 12, speed: 3.6, radius: 0.85, life: 16 },
+      wolf: { hp: mhp * 0.32 * hpm, armor: st.armor, speed: 6.2, radius: 0.45, life: 14 },
+      golem: { hp: mhp * (this.phase === 'duel' ? 0.9 : 1.1) * hpm, armor: st.armor + 12, speed: 3.6, radius: 0.85, life: 16 },
       totem: { hp: 9999, armor: 999, speed: 0, radius: 0.5, life: 8 },
-      turret: { hp: st.maxHp * 0.55 * hpm, armor: st.armor + 6, speed: 0, radius: 0.6, life: 12 },
+      turret: { hp: mhp * 0.55 * hpm, armor: st.armor + 6, speed: 0, radius: 0.6, life: 12 },
     }[kind];
     const pos = { x, z };
     resolveCollision(pos, spec.radius, this.obstacles, this.bound);
