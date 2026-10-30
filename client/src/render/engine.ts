@@ -849,19 +849,21 @@ export class Engine {
       }
       root.rotation.y = v.rot;
       v.bar.group.rotation.y = -v.rot;
-      v.whirlT = p.st.includes('w') ? Math.max(v.whirlT, 0.1) : 0;
+      // В таверне боевые состояния не показываем, даже если снимок запоздал
+      const fst = inTavern ? '' : p.st;
+      v.whirlT = fst.includes('w') ? Math.max(v.whirlT, 0.1) : 0;
       if (v.whirlT > 0 && Math.random() < dt * 14) this.effects.whirlTrail(root.position.x, root.position.z);
       v.model.update(dt, {
         speed,
         dead: !p.al,
-        stun: p.st.includes('s'),
-        frozen: p.st.includes('f'),
-        whirl: p.st.includes('w'),
-        dash: p.st.includes('d'),
-        invuln: p.st.includes('i'),
-        buff: p.st.includes('c') || p.st.includes('r'),
-        demon: p.st.includes('m'),
-        beast: p.st.includes('v'),
+        stun: fst.includes('s'),
+        frozen: fst.includes('f'),
+        whirl: fst.includes('w'),
+        dash: fst.includes('d'),
+        invuln: fst.includes('i'),
+        buff: fst.includes('c') || fst.includes('r'),
+        demon: fst.includes('m'),
+        beast: fst.includes('v'),
       });
       // Искры с кончика редкого и магического оружия
       if (v.model.weaponSparkle > 0 && root.visible && p.al && Math.random() < dt * 2.2 * v.model.weaponSparkle) {

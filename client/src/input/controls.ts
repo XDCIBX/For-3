@@ -65,13 +65,32 @@ export class Controls {
     zone.addEventListener('pointermove', (e) => this.joyMove(e));
     zone.addEventListener('pointerup', (e) => this.joyEnd(e));
     zone.addEventListener('pointercancel', (e) => this.joyEnd(e));
+    // iOS может «потерять» отпускание пальца (системный жест, скрытие кнопок) — тогда захват всё равно снимается
+    zone.addEventListener('lostpointercapture', (e) => this.joyEnd(e));
 
     this.btns.forEach((b, i) => {
       b.addEventListener('pointerdown', (e) => this.skillDown(e, i));
       b.addEventListener('pointermove', (e) => this.skillMove(e, i));
       b.addEventListener('pointerup', (e) => this.skillUp(e, i));
       b.addEventListener('pointercancel', () => this.skillCancel(i));
+      b.addEventListener('lostpointercapture', () => {
+        if (this.aimSlot === i || this.btns[i].classList.contains('pressed')) this.skillCancel(i);
+      });
     });
+    // Ни одного пальца на экране — значит, ничего не может быть зажато
+    // Проверяем с задержкой: pointerup обычной кнопки должен успеть сработать первым
+    let touches = 0;
+    const touchStart = (e: TouchEvent) => (touches = e.touches.length);
+    const touchEnd = (e: TouchEvent) => {
+      touches = e.touches.length;
+      if (touches === 0)
+        setTimeout(() => {
+          if (touches === 0 && (this.joyId !== null || this.holdMain || this.aimSlot >= 0)) this.release();
+        }, 250);
+    };
+    const hidden = () => {
+      if (document.hidden) this.release();
+    };
 
     const kd = (e: KeyboardEvent) => this.keyDown(e);
     const ku = (e: KeyboardEvent) => this.keys.delete(e.code);
@@ -81,13 +100,21 @@ export class Controls {
       this.mouse = { x: e.clientX, y: e.clientY, t: performance.now() };
       this.castToMouse(0);
     };
-    const blur = () => this.keys.clear();
+    const blur = () => this.release();
     window.addEventListener('keydown', kd);
     window.addEventListener('keyup', ku);
     window.addEventListener('mousemove', mm);
     window.addEventListener('mousedown', md);
     window.addEventListener('blur', blur);
+    window.addEventListener('touchstart', touchStart, { passive: true });
+    window.addEventListener('touchend', touchEnd, { passive: true });
+    window.addEventListener('touchcancel', touchEnd, { passive: true });
+    document.addEventListener('visibilitychange', hidden);
     this.disposers.push(() => {
+      window.removeEventListener('touchstart', touchStart);
+      window.removeEventListener('touchend', touchEnd);
+      window.removeEventListener('touchcancel', touchEnd);
+      document.removeEventListener('visibilitychange', hidden);
       window.removeEventListener('keydown', kd);
       window.removeEventListener('keyup', ku);
       window.removeEventListener('mousemove', mm);
@@ -109,6 +136,8 @@ export class Controls {
    * «залипает» (палец ушёл с экрана, пока кнопки были скрыты) и герой сам машет оружием.
    */
   release() {
+    this.joyId = null;
+    this.resetJoy();
     this.holdMain = false;
     if (this.aimSlot >= 0) this.skillCancel(this.aimSlot);
     for (const b of this.btns) b.classList.remove('pressed');
@@ -130,7 +159,8 @@ export class Controls {
   }
 
   private joyStart(e: PointerEvent) {
-    if (this.joyId !== null) return;
+    // Новое касание джойстика всегда главнее: если старое «зависло», забираем управление
+    if (this.joyId !== null && this.joyId !== e.pointerId) this.resetJoy();
     this.joyId = e.pointerId;
     (e.target as HTMLElement).setPointerCapture(e.pointerId);
     this.joyCenter = { x: e.clientX, y: e.clientY };

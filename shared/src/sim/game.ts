@@ -469,6 +469,14 @@ export class Game {
     p.lastHurt = 99;
   }
 
+  /** Снять временные состояния героя: вихрь, рывок, формы, оглушения, баффы. */
+  private clearStatus(p: Player) {
+    p.stunT = p.frozenT = p.slowT = p.invulnT = p.warcryT = p.rageT = p.hasteT = p.whirlT = p.demonT = p.beastT = 0;
+    p.slowAmt = 0;
+    p.dash = null;
+    p.input = { mx: 0, mz: 0 };
+  }
+
   private placeAtCamp() {
     const ps = this.active();
     ps.forEach((p, i) => {
@@ -539,6 +547,8 @@ export class Game {
       p.ready = false;
       p.alive = true;
       p.spectator = false;
+      // В таверне время героев стоит: снимаем всё, что «застыло» бы до следующей волны (вихрь, рывок, формы, оглушения)
+      this.clearStatus(p);
       p.stats = computeStats(p.cls, p.equip);
       p.hp = p.stats.maxHp;
       p.ai.tavernT = 2 + Math.random() * 5;
@@ -548,6 +558,7 @@ export class Game {
 
   private endGame(win: boolean) {
     this.result = { win, round: this.round };
+    for (const p of this.players.values()) this.clearStatus(p);
     this.mobs.clear();
     this.projs.clear();
     this.zones.clear();

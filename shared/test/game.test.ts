@@ -383,3 +383,21 @@ test('дракон: укус, конус дыхания, удар по круг�
   assert.equal(g.phase, 'gameover');
   assert.equal(g.result?.win, true);
 });
+
+test('вихрь и прочие состояния не переносятся в таверну', () => {
+  const g = new Game(31);
+  const p = g.addPlayer('Аня') as Player;
+  g.startGame();
+  run(g, 3.2);
+  p.whirlT = 3;
+  p.stunT = 2;
+  p.beastT = 5;
+  for (const m of [...g.mobs.values()]) g.mobs.delete(m.id);
+  g.spawnQueue = [];
+  run(g, 10, () => g.phase === 'tavern');
+  assert.equal(g.phase, 'tavern');
+  assert.equal(p.whirlT, 0);
+  assert.equal(p.stunT, 0);
+  assert.equal(p.beastT, 0);
+  assert.ok(!g.snapshot().P.find((q) => q.id === p.id)!.st.includes('w'));
+});
