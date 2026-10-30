@@ -1,7 +1,7 @@
 // Просмотрщик моделей для разработки: /dev/preview.html
 import * as THREE from 'three';
 import { HeroModel } from '../src/render/heroes';
-import { buildWeapon } from '../src/render/equipment';
+import { buildWeapon } from '../src/render/weapons';
 import { MobModel } from '../src/render/mobs';
 import { MinionModel } from '../src/render/minions';
 import { makeEnvironment } from '../src/render/env';
@@ -26,7 +26,8 @@ const ground = new THREE.Mesh(new THREE.CircleGeometry(8, 32).rotateX(-Math.PI /
 scene.add(ground);
 
 const q = new URLSearchParams(location.search);
-const rarity = (q.get('r') ?? 'common') as 'common';
+const rarities = (q.get('r') ?? 'common').split(',') as 'common'[];
+const rarity = rarities[0];
 const heroes: HeroModel[] = [];
 const list = (q.get('cls') ?? 'warrior,mage,archer').split(',') as ('warrior' | 'mage' | 'archer' | 'hunter' | 'summoner')[];
 list.forEach((c, i) => {
@@ -40,7 +41,7 @@ list.forEach((c, i) => {
     const tpls = [weapons[i] || null, q.get('helm'), q.get('armor'), q.get('boots'), q.get('amulet'), q.get('ring') ?? 'ring'];
     for (const t of tpls) {
       if (!t || t === 'none') continue;
-      const it = makeItem(TEMPLATE_BY_ID[t], rarity, 1);
+      const it = makeItem(TEMPLATE_BY_ID[t], rarities[i] ?? rarity, 1);
       eq[it.slot] = it;
     }
     h.setEquip(eq);

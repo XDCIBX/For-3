@@ -3,6 +3,7 @@ import type { ClientState } from '../net/state';
 import { sfx } from '../audio/sfx';
 import { CLASS_BG, el, esc, onTap } from './dom';
 import { COIN, MUG, classIcon, itemIcon } from './icons';
+import { itemIcon3d } from '../render/itemIcons';
 
 const EMPTY_ICON: Record<string, string> = { weapon: 'weapon', helmet: 'helm', armor: 'plate', boots: 'boots', amulet: 'amulet', ring: 'ring' };
 const DEFAULT_WEAPON: Record<string, string> = { warrior: 'sword', mage: 'staff', archer: 'bow', hunter: 'glaives', summoner: 'totemstaff', werewolf: 'claws', dwarf: 'blunderbuss' };
@@ -111,7 +112,7 @@ export class TavernUi {
       grid.innerHTML = SLOTS.map((s) => {
         const it = me.eq?.[s];
         return it
-          ? `<div class="eslot r-${it.rarity}" title="${esc(it.name)}">${itemIcon(it.tpl, it.rarity)}</div>`
+          ? `<div class="eslot r-${it.rarity}" title="${esc(it.name)}">${itemIcon3d(it.tpl, it.rarity, me.c, itemIcon(it.tpl, it.rarity))}</div>`
           : `<div class="eslot empty" title="${SLOT_NAMES[s]}">${itemIcon(EMPTY_ICON[s] === 'weapon' ? DEFAULT_WEAPON[me.c] : EMPTY_ICON[s], 'common')}</div>`;
       }).join('');
     }
@@ -223,7 +224,7 @@ export class TavernUi {
     card.innerHTML = `
       <div class="rar">${RARITY[it.rarity].name}</div>
       <div class="slot-tag">${SLOT_NAMES[it.slot]}</div>
-      <div class="ii">${itemIcon(it.tpl, it.rarity)}</div>
+      <div class="ii">${itemIcon3d(it.tpl, it.rarity, me.c, itemIcon(it.tpl, it.rarity))}</div>
       <div class="in">${esc(it.name)}</div>
       <div class="st">${lines}</div>
       ${wrong ? `<div class="who">Только: ${CLASSES[it.cls!].name}</div>` : cur ? `<div class="who" style="color:#5a4a3a">Старое продастся за ${refund}</div>` : ''}

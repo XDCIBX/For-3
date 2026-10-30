@@ -638,3 +638,90 @@ export function scaleTex() {
     }
   });
 }
+
+/** Шлифованный металл: продольные риски и лёгкие пятна — клинки и латы оживают на свету. */
+export function metalTex() {
+  return make('metal', 256, (g, s, r) => {
+    g.fillStyle = grey(0.88);
+    g.fillRect(0, 0, s, s);
+    blotches(g, s, r, 14, 0.78, 0.98, [0.1, 0.3]);
+    for (let i = 0; i < 420; i++) {
+      g.fillStyle = grey(r.range(0.7, 1), r.range(0.15, 0.45));
+      const x = r.range(0, s);
+      g.fillRect(x, r.range(0, s), r.range(0.6, 1.4), r.range(20, 90));
+    }
+  });
+}
+
+/** Стёганка: ромбы простёжки с утопленными швами. */
+export function quiltTex() {
+  return make('quilt', 256, (g, s, r) => {
+    g.fillStyle = grey(0.9);
+    g.fillRect(0, 0, s, s);
+    for (let i = 0; i < 1500; i++) {
+      g.fillStyle = grey(r.range(0.78, 1), 0.35);
+      g.fillRect(r.range(0, s), r.range(0, s), 1.5, 1.5);
+    }
+    const step = s / 6;
+    g.strokeStyle = grey(0.5, 0.9);
+    g.lineWidth = 3;
+    for (let k = -6; k <= 12; k++) {
+      g.beginPath();
+      g.moveTo(k * step, 0);
+      g.lineTo(k * step + s, s);
+      g.stroke();
+      g.beginPath();
+      g.moveTo(k * step, s);
+      g.lineTo(k * step + s, 0);
+      g.stroke();
+    }
+  });
+}
+
+/** Кольчуга: ряды сцепленных колец. */
+export function chainTex() {
+  return make('chain', 256, (g, s) => {
+    g.fillStyle = grey(0.35);
+    g.fillRect(0, 0, s, s);
+    const step = s / 16;
+    g.lineWidth = 2.2;
+    for (let row = -1; row <= 17; row++) {
+      for (let col = -1; col <= 17; col++) {
+        const x = col * step + (row % 2 ? step / 2 : 0);
+        const y = row * step * 0.8;
+        g.strokeStyle = grey(0.95);
+        g.beginPath();
+        g.ellipse(x, y, step * 0.42, step * 0.34, 0, 0, Math.PI * 2);
+        g.stroke();
+        g.strokeStyle = grey(0.6, 0.7);
+        g.beginPath();
+        g.ellipse(x, y + 1, step * 0.42, step * 0.34, 0, 0.2, Math.PI - 0.2);
+        g.stroke();
+      }
+    }
+  });
+}
+
+/** Выделанная кожа: зерно, потёртости и строчка по краю панелей. */
+export function leatherTex() {
+  return make('leather', 256, (g, s, r) => {
+    g.fillStyle = grey(0.86);
+    g.fillRect(0, 0, s, s);
+    blotches(g, s, r, 30, 0.7, 1, [0.04, 0.16]);
+    for (let i = 0; i < 2200; i++) {
+      g.fillStyle = grey(r.range(0.65, 0.95), 0.35);
+      g.fillRect(r.range(0, s), r.range(0, s), 1, 1);
+    }
+    // Строчка
+    g.strokeStyle = grey(0.55, 0.9);
+    g.lineWidth = 1.6;
+    g.setLineDash([5, 4]);
+    for (const y of [s * 0.12, s * 0.62]) {
+      g.beginPath();
+      g.moveTo(0, y);
+      g.lineTo(s, y);
+      g.stroke();
+    }
+    g.setLineDash([]);
+  });
+}

@@ -238,7 +238,7 @@ export class Engine {
       // Своё небо для отражений у каждой сцены
       const env =
         s.name === 'tavern'
-          ? makeEnvironment(this.renderer, '#2a1a10', '#8a5a2a', '#3a2414', 'rgba(255,190,110,0.9)', [0.5, 0.45])
+          ? makeEnvironment(this.renderer, '#7a5a3a', '#e0a868', '#4a3020', 'rgba(255,220,160,1)', [0.5, 0.45])
           : s.name === 'arena'
             ? makeEnvironment(this.renderer, '#3a4a7a', '#f0b080', '#5a4030', 'rgba(255,210,150,0.95)')
             : s.name === 'lair'

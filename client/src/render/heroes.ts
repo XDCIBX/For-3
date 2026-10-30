@@ -4,7 +4,8 @@ import { G, RARITY_HEX, blobShadow, glow, part, toon } from './toon';
 import { clothTex, texturize, woodTex } from './textures';
 import { bake, unbake } from './bake';
 import { earShape, footShape, gait, handShape, headShape, legHeight, limb, noseShape, torsoShape, type LegPose } from './anatomy';
-import { buildAmulet, buildArmor, buildBoots, buildHelmet, buildRing, buildWeapon, type Built, type Rig } from './equipment';
+import { buildAmulet, buildArmor, buildBoots, buildHelmet, buildRing, type Built, type Rig } from './equipment';
+import { buildWeapon } from './weapons';
 
 const SKIN = 0xdfa983;
 /**
@@ -754,16 +755,17 @@ export class HeroModel {
     this.weapon2?.removeFromParent();
     this.weapon2 = null;
     this.built = { parts: [], glow: [], spin: [] };
-    const rig: Rig = { torso: this.torsoG, head: this.head, armL: this.armL, armR: this.armR, legL: this.legL, legR: this.legR, foreL: this.elbowL, foreR: this.elbowR, shinL: this.kneeL, shinR: this.kneeR, footL: this.ankleL, footR: this.ankleR, shinLen: this.B.shin, foreLen: this.B.fore };
+    const rig: Rig = { torso: this.torsoG, head: this.head, armL: this.armL, armR: this.armR, legL: this.legL, legR: this.legR, foreL: this.elbowL, foreR: this.elbowR, shinL: this.kneeL, shinR: this.kneeR, footL: this.ankleL, footR: this.ankleR, shinLen: this.B.shin, foreLen: this.B.fore, torsoMesh: this.torso };
 
     // Доспех: своя модель для лат, мантии и кожаного доспеха
     const armor = eq?.armor ?? null;
     let torsoCol = this.baseTorsoColor;
     let sleeveCol = this.baseSleeveColor;
     let metal = this.cls === 'warrior';
-    if (armor) ({ torso: torsoCol, sleeve: sleeveCol, metal } = buildArmor(rig, armor.tpl, armor.rarity, this.cls, this.built));
+    let sleeveMap: THREE.Texture | undefined;
+    if (armor) ({ torso: torsoCol, sleeve: sleeveCol, metal, sleeveMap } = buildArmor(rig, armor.tpl, armor.rarity, this.cls, this.built));
     this.torso.material = toon(torsoCol, metal ? {} : { map: clothTex() });
-    for (const sl of this.sleeves) sl.material = toon(sleeveCol, metal ? {} : { map: clothTex() });
+    for (const sl of this.sleeves) sl.material = toon(sleeveCol, sleeveMap ? { map: sleeveMap, metal: metal ? 0.85 : 0 } : metal ? {} : { map: clothTex() });
     for (const m of this.trimMeshes) {
       if (this.cls === 'mage') m.material = toon(armor?.tpl === 'robe' ? torsoCol : this.baseTorsoColor, { map: clothTex() });
       else m.visible = !armor; // классовые наплечники воина заменяет доспех

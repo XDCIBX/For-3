@@ -1115,8 +1115,8 @@ input.field:focus {
   transform: scale(0.96);
 }
 .item .ii {
-  width: 54px;
-  height: 54px;
+  width: 64px;
+  height: 64px;
   margin: 0 auto;
   border-radius: 12px;
   background: radial-gradient(circle, color-mix(in srgb, var(--rc) 45%, #fff), color-mix(in srgb, var(--rc) 65%, #3a2856));
@@ -1470,7 +1470,7 @@ input.field:focus {
   .minimap { width: 84px; height: 84px; }
   .mate { min-width: 140px; }
   .items { gap: 6px; grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
-  .item .ii { width: 40px; height: 40px; }
+  .item .ii { width: 50px; height: 50px; }
   .item .in { font-size: 11px; }
   .item .st { font-size: 10px; }
   .shop-title { font-size: 18px; }
@@ -1581,3 +1581,22 @@ input.field:focus {
 .ping.mid { color: #ffd84a; }
 .ping.bad { color: #ff6a5a; }
 .ping.solo { color: #c9c0d8; }
+
+/* Иконки предметов, отрендеренные из 3D-моделей */
+.i3d {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.45));
+  pointer-events: none;
+}
+.i3d-wait {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.i3d-wait > svg {
+  width: 100%;
+  height: 100%;
+}
