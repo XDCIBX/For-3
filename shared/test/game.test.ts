@@ -346,7 +346,7 @@ test('дракон: укус, конус дыхания, удар по круг�
   const seen = new Set<string>();
   const zones = new Set<string>();
   // Огненные шары издалека
-  d.dcd = { breath: 99, lob: 0, sweep: 99, roar: 99 };
+  d.dcd = { breath: 99, lob: 0, sweep: 99, roar: 99, step: 0 };
   for (let i = 0; i < Math.round(3 / DT); i++) {
     g.update(DT);
     for (const z of g.zones.values()) zones.add(z.kind);
@@ -356,7 +356,7 @@ test('дракон: укус, конус дыхания, удар по круг�
   // Дыхание конусом и удар по кругу вблизи
   p.x = d.x;
   p.z = d.z + d.radius + 3;
-  d.dcd = { breath: 0, lob: 99, sweep: 99, roar: 99 };
+  d.dcd = { breath: 0, lob: 99, sweep: 99, roar: 99, step: 0 };
   d.skill = null;
   let breathHits = 0;
   for (let i = 0; i < Math.round(3 / DT); i++) {
@@ -367,7 +367,7 @@ test('дракон: укус, конус дыхания, удар по круг�
   assert.ok(zones.has('breath') && breathHits >= 4, 'дыхание жжёт несколько раз');
   p.x = d.x;
   p.z = d.z + d.radius + 2;
-  d.dcd = { breath: 99, lob: 99, sweep: 0, roar: 99 };
+  d.dcd = { breath: 99, lob: 99, sweep: 0, roar: 99, step: 0 };
   d.skill = null;
   d.windup = -1;
   let slam = false;
@@ -382,6 +382,29 @@ test('дракон: укус, конус дыхания, удар по круг�
   run(g, 10, () => g.phase === 'gameover');
   assert.equal(g.phase, 'gameover');
   assert.equal(g.result?.win, true);
+});
+
+test('раненый дракон зовёт больше подмоги и ревёт внеочередно', () => {
+  const summon = (hpFrac: number) => {
+    const g = new Game(11);
+    const p = g.addPlayer('Аня') as Player;
+    g.startRound = 25;
+    g.startGame();
+    run(g, 3.2);
+    p.stats.maxHp = p.hp = 1e7;
+    const d = [...g.mobs.values()].find((m) => m.kind === 'dragon')!;
+    d.spawnT = 0;
+    d.hp = d.maxHp * hpFrac;
+    d.dcd = { breath: 99, lob: 99, sweep: 99, roar: 99, step: 0 };
+    d.skill = null;
+    for (let i = 0; i < Math.round(1 / DT); i++) g.update(DT);
+    return [...g.mobs.values()].filter((m) => m.kind !== 'dragon').length;
+  };
+  assert.equal(summon(1), 0, 'целый дракон не ревёт раньше срока');
+  const mid = summon(0.6);
+  const low = summon(0.2);
+  assert.ok(mid >= 4, `на 60% здоровья — рёв с подмогой (${mid})`);
+  assert.ok(low > mid, `на 20% здоровья помощников больше (${low} > ${mid})`);
 });
 
 test('вихрь и прочие состояния не переносятся в таверну', () => {

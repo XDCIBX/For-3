@@ -337,8 +337,14 @@ class App {
       this.engine.tavernLeft = this.engine.tavernRight = 0;
     }
     if (this.controls) {
-      this.controls.release();
-      this.controls.el.style.display = ph === 'tavern' || ph === 'gameover' ? 'none' : '';
+      // Джойстик отпускаем, только когда управление прячется; при старте волны или дуэли
+      // палец, уже лежащий на джойстике, должен продолжать вести героя
+      const hide = ph === 'tavern' || ph === 'gameover';
+      if (hide) this.controls.release();
+      else this.controls.releaseSkills();
+      // Сервер обнуляет ввод при расстановке героев — сразу переотправляем текущий
+      this.sentInput.t = 0;
+      this.controls.el.style.display = hide ? 'none' : '';
     }
     hud.el.style.display = ph === 'tavern' ? 'none' : '';
     if (this.st.me && this.controls) this.controls.setClass(this.st.me.c);
@@ -485,7 +491,7 @@ class App {
           break;
         case 'pdie':
           if (e.pid === me) {
-            this.controls?.release();
+            this.controls?.releaseSkills();
             sfx.death();
             this.haptic(ImpactStyle.Heavy);
           }

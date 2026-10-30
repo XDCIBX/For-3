@@ -138,10 +138,15 @@ export class Controls {
   release() {
     this.joyId = null;
     this.resetJoy();
+    this.keys.clear();
+    this.releaseSkills();
+  }
+
+  /** Отпустить только кнопки умений и атаки; джойстик (если палец на нём) продолжает вести героя. */
+  releaseSkills() {
     this.holdMain = false;
     if (this.aimSlot >= 0) this.skillCancel(this.aimSlot);
     for (const b of this.btns) b.classList.remove('pressed');
-    this.keys.clear();
   }
 
   dispose() {

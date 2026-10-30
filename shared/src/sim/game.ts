@@ -106,7 +106,7 @@ export interface Mob {
   lastHit: string | null;
   /** Дракон: текущее умение и перезарядки умений. */
   skill: { k: 'breath' | 'lob' | 'sweep' | 'roar'; t: number; fired?: boolean } | null;
-  dcd: { breath: number; lob: number; sweep: number; roar: number };
+  dcd: { breath: number; lob: number; sweep: number; roar: number; step: number };
 }
 
 export interface Proj {
@@ -789,7 +789,7 @@ export class Game {
       hammer: 0,
       lastHit: null,
       skill: null,
-      dcd: { breath: 5, lob: 3, sweep: 4, roar: 18 },
+      dcd: { breath: 5, lob: 3, sweep: 4, roar: 18, step: 0 },
     };
     this.mobs.set(m.id, m);
     this.events.push({ e: 'fx', k: def.boss ? 'bossspawn' : 'spawn', x, z });
@@ -1041,8 +1041,12 @@ export class Game {
       p.faceT = 0.45;
     }
 
-    const atkSpd = p.stats.attackSpeed * (p.hasteT > 0 ? 1.6 : 1) * (p.demonT > 0 ? (this.phase === 'duel' ? 1.25 : 1.4) : 1) * (p.beastT > 0 ? 1.2 : 1);
+    const duel = this.phase === 'duel';
+    const atkSpd = p.stats.attackSpeed * (p.hasteT > 0 ? (duel ? 1.5 : 1.6) : 1) * (p.demonT > 0 ? (duel ? 1.25 : 1.4) : 1) * (p.beastT > 0 ? 1.2 : 1);
     p.cdMax[s] = s === 0 ? def.cd / atkSpd : def.cd * (1 - p.stats.cdr);
+    // Лучник в дуэли стреляет реже и слабее ускоряется кувырком: иначе он расстреливает
+    // соперника на бегу почти без пауз
+    if (duel && p.cls === 'archer' && s === 0) p.cdMax[s] *= 1.1;
     p.cds[s] = p.cdMax[s];
     this.events.push({ e: 'cast', pid: p.id, s, r: r2(p.rot), x: r2(tx), z: r2(tz) });
 
@@ -1202,7 +1206,6 @@ export class Game {
         break;
       }
       case 'werewolf:2': {
-        const duel = this.phase === 'duel';
         for (const t of this.targetsFor(p)) {
           // В дуэли вой только замедляет — без оцепенения
           if (Math.hypot(t.x - p.x, t.z - p.z) - t.rad < 6) this.hit(p, t, 0.8, { stun: duel ? 0 : 0.9, slow: 0.45, slowT: 2.5 });
@@ -1230,7 +1233,6 @@ export class Game {
         break;
       }
       case 'dwarf:3': {
-        const duel = this.phase === 'duel';
         for (const t of this.targetsFor(p)) if (Math.hypot(t.x - p.x, t.z - p.z) - t.rad < 5) this.hit(p, t, 2.0, { stun: duel ? 0.6 : 1.0 });
         this.events.push({ e: 'fx', k: 'quake', x: r2(p.x), z: r2(p.z), r: 5, pid: p.id });
         break;
@@ -2162,7 +2164,8 @@ export class Game {
    * Умения дракона. Одиночные — укус (обычная атака) и огненный шар в каждого героя;
    * по конусу — огненное дыхание; по радиусу — удар хвостом и крыльями; издалека —
    * огненные шары, которые падают по дуге и оставляют горящий след.
-   * Ниже половины здоровья — ярость: рёв с подмогой, чаще шары и дыхание.
+   * Ниже половины здоровья — ярость: чаще шары и дыхание; рёв с подмогой тем чаще и
+   * многолюднее, чем меньше у дракона здоровья.
    * Возвращает true, если дракон занят умением (и не ходит/не кусает).
    */
   private updateDragon(m: Mob, dt: number, tgt: Victim | null): boolean {
@@ -2172,6 +2175,14 @@ export class Game {
     c.sweep -= dt;
     c.roar -= dt;
     const rage = m.hp < m.maxHp * 0.5;
+    // Чем меньше у дракона здоровья, тем чаще и громче он зовёт подмогу:
+    // на 70% и 35% здоровья — внеочередной рёв
+    const lost = 1 - Math.max(0, m.hp) / m.maxHp;
+    const step = lost >= 0.65 ? 2 : lost >= 0.3 ? 1 : 0;
+    if (step > c.step) {
+      c.step = step;
+      c.roar = Math.min(c.roar, 0);
+    }
     const sk = m.skill;
     if (sk) {
       sk.t += dt;
@@ -2196,7 +2207,7 @@ export class Game {
       } else if (sk.k === 'roar') {
         if (sk.t >= 0.6 && !sk.fired) {
           sk.fired = true;
-          this.dragonCall(m);
+          this.dragonCall(m, lost);
         }
         if (sk.t >= DRAGON.roar.dur) m.skill = null;
       }
@@ -2210,7 +2221,7 @@ export class Game {
       this.events.push({ e: 'matk', id: m.id });
     };
     if (c.roar <= 0) {
-      c.roar = DRAGON.roar.cd * (rage ? 0.6 : 1);
+      c.roar = DRAGON.roar.cd * (1 - 0.55 * lost);
       start('roar');
       this.events.push({ e: 'fx', k: 'droar', x: r2(m.x), z: r2(m.z), id: m.id });
       this.msg(rage ? 'Дракон в ярости и зовёт подмогу!' : 'Дракон зовёт подмогу!', 'bad');
@@ -2262,13 +2273,20 @@ export class Game {
     }
   }
 
-  /** Рёв ярости: из пещер вылетают огненные сгустки и дракончики. */
-  private dragonCall(m: Mob) {
+  /**
+   * Рёв: из пещер вылетают огненные сгустки и дракончики. lost — доля потерянного
+   * здоровья: чем она больше, тем больше помощников (от 3 до 8), а после половины —
+   * ещё и плюющиеся дракончики.
+   */
+  private dragonCall(m: Mob, lost: number) {
     const alive = [...this.mobs.values()].filter((x) => x.kind !== 'dragon').length;
-    const n = Math.max(0, Math.min(5, 12 - alive));
+    const want = 3 + Math.round(lost * 5);
+    const cap = 8 + Math.round(lost * 8);
+    const n = Math.max(0, Math.min(want, cap - alive));
+    const kinds: MobKind[] = lost >= 0.5 ? ['ember', 'drake', 'spitter'] : ['ember', 'drake'];
     for (let i = 0; i < n; i++) {
       const a = (i / Math.max(1, n)) * Math.PI * 2;
-      const k: MobKind = i % 2 ? 'drake' : 'ember';
+      const k = kinds[i % kinds.length];
       this.spawnMob(k, m.x + Math.cos(a) * (m.radius + 2), m.z + Math.sin(a) * (m.radius + 2));
     }
   }

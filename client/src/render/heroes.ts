@@ -813,6 +813,7 @@ export class HeroModel {
       this.weapon.position.set(0, 0.02, -0.05);
     } else if (this.cls === 'archer') {
       this.handL.add(this.weapon);
+      // Арбалет держат за шейку ложи ровно, болтом вперёд
       this.weapon.rotation.set(tpl === 'crossbow' ? 0 : Math.PI / 2, 0, 0);
     } else if (tpl === 'staff' || tpl === 'totemstaff') {
       // Посох держит вертикально, как настоящий посох, чуть впереди руки
@@ -1141,7 +1142,18 @@ export class HeroModel {
           lean = 0.15 * e;
         }
       } else {
-        if (this.castS === 0 || this.castS === 1) {
+        if ((this.castS === 0 || this.castS === 1) && this.weaponTpl === 'crossbow') {
+          // Арбалет вскинут к плечу: ложа ровно, правая рука поддерживает цевьё, отдача в конце
+          const kick = k > 0.45 ? Math.sin(((k - 0.45) / 0.55) * Math.PI) : 0;
+          armLx = -0.95 + kick * 0.15;
+          elbL = 0.7 - kick * 0.1;
+          armRx = -1.25;
+          armRz = -0.3;
+          elbR = 0.35;
+          torsoYaw = -0.25;
+          headTilt = 0.12;
+          lean -= kick * 0.06;
+        } else if (this.castS === 0 || this.castS === 1) {
           // Лучная рука прямая, правая натягивает тетиву к щеке
           const draw = k < 0.7 ? k / 0.7 : 0;
           armLx = -1.55;
@@ -1227,6 +1239,8 @@ export class HeroModel {
     this.elbowR.rotation.x = -elbR;
     // Посох, лук, мушкетон остаются ровными, когда сгибается локоть
     this.handL.rotation.x = keepL ? elbL : 0;
+    // Арбалет остаётся ровным при любом взмахе плеча; на «Дожде стрел» — вверх
+    if (this.cls === 'archer' && this.weaponTpl === 'crossbow') this.handL.rotation.x = elbL - armLx - (k < 1 && this.castS === 3 ? 1.0 : 0);
     this.handR.rotation.x = keepR ? elbR : 0;
 
     // Таз и плечи вращаются навстречу друг другу, таз покачивается

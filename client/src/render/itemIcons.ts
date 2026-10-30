@@ -56,7 +56,11 @@ function build(tpl: string, rarity: Rarity, cls: HeroClass): { obj: THREE.Object
     const g = new THREE.Group();
     g.add(w);
     // Наискосок, остриём вверх-вправо, слегка в три четверти — видно фаски и объём
-    if (tpl === 'crossbow') w.rotation.set(-Math.PI / 2 + 0.35, 0.5, 0);
+    if (tpl === 'crossbow') {
+      // В профиль болтом вверх-вправо, сверху чуть видна дуга с тетивой
+      w.rotation.y = Math.PI / 2 - 0.45;
+      g.rotation.set(0.55, 0, 0.55);
+    }
     else if (tpl === 'bow' || tpl === 'recurve') {
       // Лук плоскостью к зрителю, чуть наклонён
       w.rotation.set(0, -Math.PI / 2 + 0.35, 0);
