@@ -798,9 +798,12 @@ export class HeroModel {
         [this.weapon2, this.handL, -1],
       ] as const) {
         hand.add(w);
-        w.rotation.set(this.cls === 'werewolf' ? Math.PI / 2 : Math.PI / 2 - 0.35, 0, 0);
+        const worn = tpl === 'claws' || tpl === 'knuckles';
+        // Когти и кастет надеты на кисть: остриём вдоль пальцев, наруч — на запястье
+        if (worn) w.rotation.set(0, 0, Math.PI);
+        else w.rotation.set(this.cls === 'werewolf' ? Math.PI / 2 : Math.PI / 2 - 0.35, 0, 0);
         w.scale.set(s, 1, 1);
-        w.position.set(0, 0, 0.02);
+        w.position.set(0, worn ? 0.02 : 0, worn ? 0 : 0.02);
       }
     } else if (this.cls === 'summoner' && tpl === 'tome') {
       this.handR.add(this.weapon);
@@ -903,6 +906,9 @@ export class HeroModel {
     /** Держит ли рука оружие, которое должно оставаться ровным при сгибе локтя. */
     let keepL = false;
     let keepR = false;
+    /** Поворот кисти (вдоль оси x): клинок ведётся запястьем, когти опускаются вниз. */
+    let wristL = 0;
+    let wristR = 0;
     const breathe = 1 + Math.sin(t * 2.2) * 0.018;
     let armLx = -swing * 0.9;
     let armRx = swing * 0.9;
@@ -935,11 +941,12 @@ export class HeroModel {
       elbL = elbR = 0.55 + runK * 0.5;
     } else if (this.cls === 'werewolf') {
       // Звериная стойка: сутулится, когти растопырены
-      armRx = -0.6 + swing * 0.6;
-      armLx = -0.6 - swing * 0.6;
-      armLz = -0.45;
-      armRz = 0.45;
-      elbL = elbR = 0.55;
+      armRx = -0.35 + swing * 0.5;
+      armLx = -0.35 - swing * 0.5;
+      armLz = -0.42;
+      armRz = 0.42;
+      elbL = elbR = 0.5;
+      wristL = wristR = 0.45;
       lean += 0.18 + this.beastK * 0.2;
       headTilt = -0.1 - this.beastK * 0.15;
       const run = Math.min(1, sp * 1.4);
@@ -981,10 +988,25 @@ export class HeroModel {
       const ease = 1 - Math.pow(1 - k, 3);
       if (this.cls === 'warrior') {
         if (this.castS === 0) {
-          armRx = -2.6 + ease * 2.4;
-          armRz = 0.4 - ease * 0.8;
-          elbR = 1.6 * (1 - ease) + 0.15;
-          torsoYaw = 0.6 - ease * 1.2;
+          // Косой рубящий удар: замах за правое плечо, рывок корпусом наискось
+          // через себя с доворотом кисти — клинок ведёт остриём вперёд, затем возврат
+          const [ax, az, eb, wr, yaw, ln, sh] = keyPose(k, [
+            [0, -0.15, 0.15, 0.35, 0, 0, 0, 0],
+            [0.3, -2.35, 0.8, 1.45, 0.35, 0.55, -0.06, 0.4],
+            [0.44, -1.75, 0.3, 0.55, 1.45, 0.05, 0.1, 1],
+            [0.6, -0.95, -0.55, 0.15, 1.95, -0.6, 0.2, 1],
+            [1, -0.15, 0.15, 0.35, 0, 0, 0, 0],
+          ]);
+          armRx = ax;
+          armRz = az;
+          elbR = eb;
+          wristR = wr;
+          torsoYaw = yaw;
+          lean += ln;
+          // Щит прижат к груди
+          armLx = -0.35 - 0.3 * sh;
+          elbL = 1.25 + 0.2 * sh;
+          bodyY -= 0.05 * Math.max(0, ln) * 4;
         } else if (this.castS === 1) {
           armLx = -1.5;
           lean = 0.5 * e;
@@ -1039,49 +1061,44 @@ export class HeroModel {
         }
       } else if (this.cls === 'werewolf') {
         if (this.castS === 0) {
-          // Удар когтями поочерёдно: замах из-за плеча, рывок наискось через корпус с выпадом, возврат
+          // Царапающий удар сбоку, поочерёдно лапами: лапа отведена в сторону на уровне
+          // плеча, рывок наискось поперёк корпуса когтями вперёд, доводка и возврат
           const sd = this.clawSide;
-          let ax: number;
-          let az: number;
-          let yaw: number;
-          let lunge = 0;
-          if (k < 0.3) {
-            const w = Math.sin((k / 0.3) * Math.PI * 0.5);
-            ax = -2.7 * w;
-            az = sd * (0.45 + 0.8 * w);
-            yaw = -sd * 0.5 * w;
-            lean -= 0.12 * w;
-          } else if (k < 0.62) {
-            const w = (k - 0.3) / 0.32;
-            const f = 1 - Math.pow(1 - w, 3);
-            ax = -2.7 + f * 3.2;
-            az = sd * (1.25 - f * 1.6);
-            yaw = -sd * 0.5 + f * sd * 1.1;
-            lunge = Math.sin(w * Math.PI);
-          } else {
-            const w = (k - 0.62) / 0.38;
-            ax = 0.5 - w * 1.1;
-            az = sd * (-0.35 + w * 0.8);
-            yaw = sd * 0.6 * (1 - w);
-          }
+          const [ax, az, eb, yaw, lunge, wr] = keyPose(k, [
+            [0, -0.35, 0.42, 0.5, 0, 0, 0.45],
+            [0.28, -0.3, 1.45, 1.1, 0.55, -0.2, 0],
+            [0.42, -1.2, 0.9, 0.5, 0.1, 0.6, -0.1],
+            [0.55, -1.45, 0.1, 0.25, -0.3, 1, -0.1],
+            [0.7, -1.15, -0.55, 0.35, -0.6, 0.6, 0.2],
+            [1, -0.35, 0.42, 0.5, 0, 0, 0.45],
+          ]);
+          // Вторая лапа плавно подтягивается к груди
+          const g = Math.min(1, e * 1.6);
+          const gx = -0.35 - 0.5 * g;
+          const gz = 0.42 - 0.12 * g;
+          const ge = 0.5 + 0.6 * g;
           if (sd > 0) {
             armRx = ax;
             armRz = az;
-            armLx = -1.0;
-            armLz = -0.5;
+            elbR = eb;
+            wristR = wr;
+            armLx = gx;
+            armLz = -gz;
+            elbL = ge;
           } else {
             armLx = ax;
-            armLz = az;
-            armRx = -1.0;
-            armRz = 0.5;
+            armLz = -az;
+            elbL = eb;
+            wristL = wr;
+            armRx = gx;
+            armRz = gz;
+            elbR = ge;
           }
-          const bend = k < 0.3 ? 1.3 * Math.sin((k / 0.3) * Math.PI * 0.5) : k < 0.62 ? 1.3 * (1 - (k - 0.3) / 0.32) + 0.1 : 0.1 + ((k - 0.62) / 0.38) * 0.45;
-          if (sd > 0) elbR = bend;
-          else elbL = bend;
-          torsoYaw = yaw;
-          lean += 0.3 * lunge;
-          bodyY += 0.12 * lunge;
-          headTilt = 0.15 * lunge;
+          torsoYaw = sd * yaw;
+          lean += 0.25 * Math.max(0, lunge);
+          bodyY += 0.06 * Math.max(0, lunge);
+          bodyRoll = -sd * 0.08 * lunge;
+          headTilt = 0.1 * Math.max(0, lunge);
         } else if (this.castS === 1) {
           // Присед перед прыжком
           bodyY -= 0.2 * e;
@@ -1238,10 +1255,10 @@ export class HeroModel {
     this.elbowL.rotation.x = -elbL;
     this.elbowR.rotation.x = -elbR;
     // Посох, лук, мушкетон остаются ровными, когда сгибается локоть
-    this.handL.rotation.x = keepL ? elbL : 0;
+    this.handL.rotation.x = (keepL ? elbL : 0) + wristL;
     // Арбалет остаётся ровным при любом взмахе плеча; на «Дожде стрел» — вверх
     if (this.cls === 'archer' && this.weaponTpl === 'crossbow') this.handL.rotation.x = elbL - armLx - (k < 1 && this.castS === 3 ? 1.0 : 0);
-    this.handR.rotation.x = keepR ? elbR : 0;
+    this.handR.rotation.x = (keepR ? elbR : 0) + wristR;
 
     // Таз и плечи вращаются навстречу друг другу, таз покачивается
     const ps = Math.sin(this.walkPhase);
@@ -1327,6 +1344,20 @@ export class HeroModel {
   dispose() {
     this.root.removeFromParent();
   }
+}
+
+/**
+ * Поза из ключевых кадров: frames — [доля удара, ...значения], между кадрами
+ * сглаженная интерполяция. Удары выглядят живыми: замах, резкий рывок, доводка.
+ */
+function keyPose(k: number, frames: number[][]): number[] {
+  let i = 0;
+  while (i < frames.length - 2 && k > frames[i + 1][0]) i++;
+  const a = frames[i];
+  const b = frames[i + 1];
+  const t = Math.min(1, Math.max(0, (k - a[0]) / (b[0] - a[0] || 1)));
+  const st = t * t * (3 - 2 * t);
+  return a.map((v, j) => v + (b[j] - v) * st).slice(1);
 }
 
 export const HERO_COLORS: Record<HeroClass, number> = { warrior: 0xe0533d, mage: 0x8a5cff, archer: 0x3dbb5a, hunter: 0x2fd07a, summoner: 0x2ab8c8, werewolf: 0xc27a3a, dwarf: 0xd08a2a };

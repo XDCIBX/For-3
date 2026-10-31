@@ -130,7 +130,19 @@ function loop(now: number) {
   renderer.render(scene, cam);
   requestAnimationFrame(loop);
 }
-requestAnimationFrame(loop);
+// ?freeze=1 — без живого цикла: window.__pose(умение, время) ставит кадр удара на заданный момент
+if (!q.has('freeze')) requestAnimationFrame(loop);
+const still = { speed: 0, dead: false, stun: false, frozen: false, whirl: false, dash: false, invuln: false, buff: false, demon: q.has('demon'), beast: q.has('beast') };
+for (let i = 0; i < 30; i++) heroes.forEach((h) => h.update(1 / 30, still));
+renderer.render(scene, cam);
+(window as unknown as { __pose: (s: number, t: number) => void }).__pose = (s, t) => {
+  heroes.forEach((h) => {
+    if (s >= 0) h.playCast(s);
+    for (let e = 0; e < t - 1e-6; e += 1 / 120) h.update(Math.min(1 / 120, t - e), still);
+    h.update(0, still);
+  });
+  renderer.render(scene, cam);
+};
 (window as unknown as { ready: boolean; heroes: HeroModel[]; THREE: typeof THREE }).ready = true;
 (window as unknown as { heroes: HeroModel[] }).heroes = heroes;
 (window as unknown as { THREE: typeof THREE }).THREE = THREE;
