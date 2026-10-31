@@ -11,7 +11,9 @@ export type GameMsg =
   | { t: 'botcls'; id: string; cls: HeroClass }
   | { t: 'in'; mx: number; mz: number }
   | { t: 'cast'; s: number; dx: number; dz: number; d: number }
-  | { t: 'buy'; id: string };
+  | { t: 'buy'; id: string }
+  /** Пауза: ставит и снимает только хост. */
+  | { t: 'pause'; v: boolean };
 
 /** Сообщения подключения. */
 export type ConnectMsg =
@@ -147,6 +149,8 @@ export interface Snapshot {
   /** Победитель/итог в конце игры. */
   result?: { win: boolean; round: number };
   full: boolean;
+  /** Игра на паузе у хоста: всё замерло. */
+  pz?: boolean;
 }
 
 export type S2C =

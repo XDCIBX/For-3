@@ -424,3 +424,42 @@ test('вихрь и прочие состояния не переносятся 
   assert.equal(p.beastT, 0);
   assert.ok(!g.snapshot().P.find((q) => q.id === p.id)!.st.includes('w'));
 });
+
+test('пауза хоста: всё замирает, ставит и снимает только хост, уход хоста снимает паузу', () => {
+  const g = new Game(41);
+  const host = g.addPlayer('Хост') as Player;
+  const guest = g.addPlayer('Гость') as Player;
+  g.handle(guest.id, { t: 'pick', cls: 'mage' });
+  g.addBot();
+  g.startGame();
+  run(g, 6, () => g.phase === 'battle' && g.mobs.size > 0);
+  run(g, 2);
+  assert.equal(g.phase, 'battle');
+  // Гость не может поставить паузу
+  g.handle(guest.id, { t: 'pause', v: true });
+  assert.equal(g.paused, false);
+  g.handle(host.id, { t: 'pause', v: true });
+  assert.equal(g.paused, true);
+  assert.equal(g.snapshot().pz, true);
+  const mobs = [...g.mobs.values()].map((m) => `${m.x},${m.z},${m.hp}`).join('|');
+  const timer = g.timer;
+  const heroes = [...g.players.values()].map((p) => `${p.x},${p.z},${p.cds.join()}`).join('|');
+  g.handle(guest.id, { t: 'in', mx: 1, mz: 0 });
+  g.handle(guest.id, { t: 'cast', s: 1, dx: 1, dz: 0, d: 5 });
+  run(g, 5);
+  assert.equal([...g.mobs.values()].map((m) => `${m.x},${m.z},${m.hp}`).join('|'), mobs, 'мобы стоят');
+  assert.equal([...g.players.values()].map((p) => `${p.x},${p.z},${p.cds.join()}`).join('|'), heroes, 'герои и перезарядки стоят');
+  assert.equal(g.timer, timer, 'таймер стоит');
+  assert.equal(g.projs.size + [...g.zones.values()].filter((z) => z.owner === guest.id).length, 0, 'умения на паузе не применяются');
+  // Гость не может снять паузу, хост — может
+  g.handle(guest.id, { t: 'pause', v: false });
+  assert.equal(g.paused, true);
+  g.handle(host.id, { t: 'pause', v: false });
+  run(g, 1);
+  assert.notEqual([...g.players.values()].map((p) => `${p.x},${p.z}`).join('|'), heroes, 'после паузы движение продолжается');
+  // Хост ставит паузу и отключается — пауза снимается, хостом становится гость
+  g.handle(host.id, { t: 'pause', v: true });
+  g.removePlayer(host.id);
+  assert.equal(g.paused, false);
+  assert.equal(guest.host, true);
+});

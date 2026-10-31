@@ -1426,6 +1426,38 @@ input.field:focus {
   -webkit-text-stroke: 2px var(--ink);
   paint-order: stroke fill;
 }
+.pause-ov {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(10, 6, 22, 0.55);
+  backdrop-filter: blur(2px);
+  -webkit-backdrop-filter: blur(2px);
+}
+.pause-ov .panel {
+  width: min(320px, 88vw);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  text-align: center;
+}
+.pause-ov h2 {
+  margin: 0;
+  color: var(--gold);
+  -webkit-text-stroke: 2px var(--ink);
+  paint-order: stroke fill;
+  letter-spacing: 1px;
+}
+.pause-note {
+  text-align: center;
+  font-weight: 700;
+  font-size: 14px;
+}
+.pause-note.dim {
+  opacity: 0.7;
+  font-size: 13px;
+}
 .rotate-hint {
   position: fixed;
   inset: 0;

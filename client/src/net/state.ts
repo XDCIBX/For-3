@@ -21,6 +21,8 @@ export class ClientState {
   result: { win: boolean; round: number } | null = null;
   snap: Snapshot | null = null;
   snapTime = 0;
+  /** Игра на паузе у хоста. */
+  paused = false;
 
   get me(): PlayerInfo | undefined {
     return this.players.get(this.myId);
@@ -34,6 +36,7 @@ export class ClientState {
     this.mobsLeft = s.ml;
     this.mobsTotal = s.mt;
     this.duel = s.duel;
+    this.paused = !!s.pz;
     if (s.result) this.result = s.result;
     if (s.shop) this.shop = s.shop;
     if (s.ph !== 'tavern') this.shop = [];
@@ -56,5 +59,6 @@ export class ClientState {
     this.result = null;
     this.shop = [];
     this.snap = null;
+    this.paused = false;
   }
 }

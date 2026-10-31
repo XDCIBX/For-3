@@ -234,6 +234,8 @@ export class Game {
   timer = 0;
   time = 0;
   tick = 0;
+  /** Пауза хоста: симуляция стоит, снимки продолжают уходить. */
+  paused = false;
   players = new Map<string, Player>();
   mobs = new Map<number, Mob>();
   projs = new Map<number, Proj>();
@@ -345,6 +347,11 @@ export class Game {
         p.host = false;
         const next = [...this.players.values()].find((q) => !q.bot && q.connected);
         if (next) next.host = true;
+        // Хост ушёл — игра не должна остаться замороженной навсегда
+        if (this.paused) {
+          this.paused = false;
+          this.msg('Пауза снята: хост отключился', 'info');
+        }
       }
     }
     this.dirty = true;
@@ -421,7 +428,17 @@ export class Game {
         p.input = { mx, mz };
         break;
       }
+      case 'pause': {
+        if (!p.host || this.phase === 'lobby' || this.phase === 'gameover') return;
+        const v = !!msg.v;
+        if (v === this.paused) return;
+        this.paused = v;
+        this.msg(v ? `${p.name} поставил игру на паузу` : `${p.name} снял паузу`, 'info');
+        this.dirty = true;
+        break;
+      }
       case 'cast':
+        if (this.paused) return;
         this.castSkill(p, Number(msg.s) | 0, Number(msg.dx) || 0, Number(msg.dz) || 0, Number(msg.d) || 0);
         break;
       case 'buy':
@@ -440,6 +457,7 @@ export class Game {
 
   startGame() {
     if (this.players.size === 0) return;
+    this.paused = false;
     this.round = Math.max(1, Math.min(MAX_ROUNDS, this.startRound));
     for (const p of this.players.values()) {
       p.gold = 0;
@@ -655,8 +673,10 @@ export class Game {
   }
 
   update(dt: number) {
-    this.time += dt;
     this.tick++;
+    // На паузе ничего не движется: таймеры, мобы, снаряды, боты и перезарядки стоят
+    if (this.paused) return;
+    this.time += dt;
     if (this.timer > 0) this.timer = Math.max(0, this.timer - dt);
 
     for (const p of this.players.values()) if (p.bot) updateBot(this, p, dt);
@@ -2380,6 +2400,7 @@ export class Game {
     };
     if (full && this.phase === 'tavern') snap.shop = this.shop;
     if (this.result) snap.result = this.result;
+    if (this.paused) snap.pz = true;
     this.events = [];
     return snap;
   }

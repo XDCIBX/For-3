@@ -34,7 +34,7 @@ import { Hud } from './ui/hud';
 import { LobbyScreen, menuScreen, settingsModal } from './ui/menu';
 import { TavernUi } from './ui/tavern';
 import { overScreen } from './ui/over';
-import { el } from './ui/dom';
+import { el, esc, onTap } from './ui/dom';
 import { sfx } from './audio/sfx';
 import { reportOnce } from './report';
 import { clearSession, loadSession, loadSettings, saveSession, saveSettings, type Settings } from './settings';
@@ -53,6 +53,9 @@ class App {
   private controls: Controls | null = null;
   private tavernUi: TavernUi | null = null;
   private overEl: HTMLElement | null = null;
+  private pauseEl: HTMLElement | null = null;
+  /** Последняя команда паузы: пока снимок её не догнал, показываем то, что нажали. */
+  private pauseWant = { v: false, t: -1e9 };
   private last = performance.now();
   private world: WorldData | null = null;
   // Предсказание движения своего героя
@@ -80,6 +83,18 @@ class App {
       this.updateMenuShift();
     });
     this.startPing();
+    // Esc или P — пауза (хост) / меню (остальные)
+    window.addEventListener('keydown', (e) => {
+      if (this.screen !== 'game' || e.repeat || (e.target as HTMLElement)?.tagName === 'INPUT') return;
+      if (e.code !== 'Escape' && e.code !== 'KeyP') return;
+      if (this.isPaused() && this.st.me?.host && !this.ui.querySelector('.modal')) this.requestPause(false);
+      else if (e.code === 'Escape' && this.ui.querySelector('.modal')) this.ui.querySelector('.modal')?.remove();
+      else this.pauseButton();
+    });
+    // Одиночная игра сама встаёт на паузу, когда приложение свернули
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden && this.conn?.local && this.screen === 'game' && !this.isPaused() && this.canPause()) this.requestPause(true);
+    });
     if (import.meta.env.DEV) (window as unknown as { __app: App }).__app = this;
     setTimeout(() => document.getElementById('boot')?.classList.add('hide'), 300);
     // Попытка вернуться в игру после перезагрузки страницы
@@ -91,7 +106,7 @@ class App {
     if (!Capacitor.isNativePlatform()) return;
     void StatusBar.hide().catch(() => {});
     void CapApp.addListener('backButton', () => {
-      if (this.screen === 'game') this.pauseMenu();
+      if (this.screen === 'game') this.pauseButton();
       else if (this.screen === 'lobby') this.leave();
     });
     void CapApp.addListener('appStateChange', ({ isActive }) => {
@@ -185,7 +200,7 @@ class App {
     this.engine.startGame(this.st.seed, this.st.myId);
     this.world = worldFor(this.st.seed, this.st.round);
     this.hud = new Hud(this.engine);
-    this.hud.onPause = () => this.pauseMenu();
+    this.hud.onPause = () => this.pauseButton();
     this.ui.appendChild(this.hud.el);
     const me = this.st.me;
     this.controls = new Controls(
@@ -204,8 +219,69 @@ class App {
   private pauseMenu() {
     if (this.ui.querySelector('.modal')) return;
     const m = settingsModal(this.settings, () => this.applySettings(), [{ label: '🚪 Выйти в меню', cls: 'red', onClick: () => this.leave(), confirm: 'Точно выйти? Нажмите ещё раз' }]);
-    (m.querySelector('h2') as HTMLElement).textContent = this.conn?.local ? 'Меню' : 'Меню (игра продолжается)';
+    const paused = this.isPaused();
+    const h2 = m.querySelector('h2') as HTMLElement;
+    h2.textContent = paused ? 'Меню · пауза' : this.conn?.local ? 'Меню' : 'Меню (игра продолжается)';
+    if (!paused && !this.st.me?.host && !this.conn?.local) h2.after(el(`<div class="pause-note">Поставить игру на паузу может только хост</div>`));
     this.ui.appendChild(m);
+  }
+
+  // ------------------------------------------------------------------ пауза
+
+  /** Можно ли сейчас поставить паузу (хост, идёт игра). */
+  private canPause(): boolean {
+    return !!this.st.me?.host && this.st.phase !== 'lobby' && this.st.phase !== 'gameover';
+  }
+
+  private isPaused(): boolean {
+    if (this.screen !== 'game') return false;
+    return performance.now() - this.pauseWant.t < 600 ? this.pauseWant.v : this.st.paused;
+  }
+
+  private requestPause(v: boolean) {
+    this.conn?.send({ t: 'pause', v });
+    this.pauseWant = { v, t: performance.now() };
+    if (v) this.controls?.release();
+    this.updatePauseOverlay();
+  }
+
+  /** Кнопка ❚❚: хост замораживает игру для всех, остальные открывают меню. */
+  private pauseButton() {
+    if (this.canPause() && !this.isPaused()) this.requestPause(true);
+    else this.pauseMenu();
+  }
+
+  /** Затемнение «Пауза» поверх игры у всех игроков; у хоста — кнопка «Продолжить». */
+  private updatePauseOverlay() {
+    const show = this.isPaused() && this.st.phase !== 'gameover';
+    if (!show) {
+      this.pauseEl?.remove();
+      this.pauseEl = null;
+      return;
+    }
+    const host = !!this.st.me?.host;
+    const key = host ? 'host' : 'guest';
+    if (this.pauseEl?.dataset.k === key && this.pauseEl.isConnected) return;
+    this.pauseEl?.remove();
+    const hostName = [...this.st.players.values()].find((p) => p.host)?.n ?? 'Хост';
+    const text = host ? (this.conn?.local ? 'Игра остановлена' : 'Игра остановлена для всех игроков') : `${esc(hostName)} поставил игру на паузу`;
+    this.pauseEl = el(`
+      <div class="screen pause-ov" data-k="${key}">
+        <div class="panel">
+          <h2>❚❚ Пауза</h2>
+          <div class="pause-note">${text}</div>
+          ${host ? '<button class="btn green" id="resume">▶ Продолжить</button>' : '<div class="pause-note dim">Ждём, когда хост продолжит игру</div>'}
+          <button class="btn ghost" id="pmenu">⚙ Меню</button>
+        </div>
+      </div>`);
+    const resume = this.pauseEl.querySelector<HTMLElement>('#resume');
+    if (resume) onTap(resume, () => this.requestPause(false));
+    onTap(this.pauseEl.querySelector<HTMLElement>('#pmenu')!, () => this.pauseMenu());
+    // Меню настроек — поверх затемнения
+    const modal = this.ui.querySelector('.modal');
+    if (modal) modal.before(this.pauseEl);
+    else this.ui.appendChild(this.pauseEl);
+    this.controls?.release();
   }
 
   // ------------------------------------------------------------------ сеть
@@ -534,6 +610,7 @@ class App {
     const me = this.st.me;
     if (!me || !me.al || this.cdLeft[s] > 0.02 || this.castGuard[s] > 0) return;
     if (!['battle', 'duel', 'intro', 'clear'].includes(this.st.phase)) return;
+    if (this.isPaused()) return;
     if (me.st.includes('s') || me.st.includes('f')) return;
     this.conn?.send({ t: 'cast', s, dx, dz, d });
     this.castGuard[s] = 0.12;
@@ -650,9 +727,13 @@ class App {
   }
 
   private frame(t: number) {
-    const dt = Math.min(0.05, (t - this.last) / 1000);
+    const realDt = Math.min(0.05, (t - this.last) / 1000);
     this.last = t;
+    // На паузе замирает всё: анимации, эффекты, предсказание движения, перезарядки
+    const paused = this.isPaused();
+    const dt = paused ? 0 : realDt;
     if (this.screen === 'game') {
+      this.updatePauseOverlay();
       this.controls?.update();
       this.predict(dt);
       this.sendInput();
@@ -662,7 +743,7 @@ class App {
       }
       const me = this.st.me;
       if (me && this.controls) this.controls.setCooldowns(this.cdLeft, me.cdm);
-      this.hud?.update(dt, this.st, this.cdLeft);
+      this.hud?.update(realDt, this.st, this.cdLeft);
       this.tavernUi?.update(this.st);
     }
     this.engine.frame(dt);
