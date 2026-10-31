@@ -11,8 +11,7 @@ export type GameMsg =
   | { t: 'botcls'; id: string; cls: HeroClass }
   | { t: 'in'; mx: number; mz: number }
   | { t: 'cast'; s: number; dx: number; dz: number; d: number }
-  | { t: 'buy'; id: string }
-  | { t: 'treset' };
+  | { t: 'buy'; id: string };
 
 /** Сообщения подключения. */
 export type ConnectMsg =

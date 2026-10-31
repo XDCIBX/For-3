@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { releaseBaked } from './bake';
 import { MOBS, type GameEvent, type HeroClass, type MinionSnap, type MobSnap, type Phase } from '@game/shared';
 import type { ClientState, PlayerInfo } from '../net/state';
 import { ArenaStage } from './arena';
@@ -225,7 +226,10 @@ export class Engine {
       this.islands.set(seed, s);
       if (this.islands.size > 2) {
         const first = [...this.islands.keys()].find((k) => k !== seed && k !== MENU_SEED && k !== this.seed);
-        if (first !== undefined) this.islands.delete(first);
+        if (first !== undefined) {
+          releaseBaked(this.islands.get(first)!.scene);
+          this.islands.delete(first);
+        }
       }
     }
     return s;
@@ -277,11 +281,17 @@ export class Engine {
   showMenu(list: { cls: HeroClass; name: string | null; me?: boolean }[], seed = MENU_SEED) {
     this.mode = 'menu';
     this.setStage(this.island(seed));
-    for (const h of this.heroes.values()) h.model.root.removeFromParent();
+    for (const h of this.heroes.values()) {
+      h.model.dispose();
+      disposeLabel(h.label);
+    }
     this.heroes.clear();
     const key = list.map((l) => `${l.cls}|${l.name}|${l.me}`).join(';');
     if (this.menuHeroes.map((m) => m.key).join(';') === key && this.menuHeroes[0]?.model.root.parent === this.stage.scene) return;
-    for (const m of this.menuHeroes) m.model.root.removeFromParent();
+    for (const m of this.menuHeroes) {
+      m.model.dispose();
+      disposeLabel(m.label);
+    }
     this.menuHeroes = list.map((l, i) => {
       const model = new HeroModel(l.cls);
       const off = i - (list.length - 1) / 2;
@@ -328,7 +338,11 @@ export class Engine {
     if (ph === 'duel_intro' || ph === 'duel' || ph === 'duel_end') return (this.arenaStage ??= new ArenaStage());
     if (round >= LAIR_ROUND) {
       // Логово строится один раз на игру
-      if (!this.lairStage || this.lairStage.world.seed !== this.seed) this.lairStage = new LairStage(generateLair(this.seed));
+      if (!this.lairStage || this.lairStage.world.seed !== this.seed) {
+        // Логово прошлой игры больше не понадобится
+        if (this.lairStage && this.stage !== this.lairStage) releaseBaked(this.lairStage.scene);
+        this.lairStage = new LairStage(generateLair(this.seed));
+      }
       return this.lairStage;
     }
     return this.island(this.seed);
@@ -374,7 +388,8 @@ export class Engine {
       const isMe = id === this.myId;
       const labelKey = `${p.n}|${isMe}|${inTavern}`;
       if (labelKey !== v.labelKey) {
-        v.label?.removeFromParent();
+        // Текстура подписи своя у каждой — освобождаем, иначе копятся каждую волну
+        disposeLabel(v.label);
         v.label = nameSprite(p.n, isMe ? '#ffe14a' : '#ffffff');
         v.label.position.y = 3.3;
         v.model.root.add(v.label);
@@ -395,7 +410,8 @@ export class Engine {
     }
     for (const [id, v] of this.heroes) {
       if (!st.players.has(id)) {
-        v.model.root.removeFromParent();
+        v.model.dispose();
+        disposeLabel(v.label);
         this.heroes.delete(id);
       }
     }
@@ -1067,4 +1083,12 @@ export class Engine {
     FOCUS.value.set(target.x, 1.2, target.z);
     FADE_R.value = 2.6;
   }
+}
+
+/** Убрать подпись над героем вместе с её текстурой. */
+function disposeLabel(label: THREE.Sprite | null | undefined) {
+  if (!label) return;
+  label.removeFromParent();
+  label.material.map?.dispose();
+  label.material.dispose();
 }

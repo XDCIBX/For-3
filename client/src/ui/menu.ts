@@ -98,7 +98,7 @@ export function menuScreen(settings: Settings, act: MenuActions, error = ''): HT
   return root;
 }
 
-export function settingsModal(settings: Settings, save: () => void, extra?: { label: string; cls: string; onClick: () => void }[]): HTMLElement {
+export function settingsModal(settings: Settings, save: () => void, extra?: { label: string; cls: string; onClick: () => void; confirm?: string }[]): HTMLElement {
   const m = el(`
     <div class="screen modal">
       <div class="panel">
@@ -116,7 +116,17 @@ export function settingsModal(settings: Settings, save: () => void, extra?: { la
   const extraBox = m.querySelector('#extra')!;
   for (const x of extra ?? []) {
     const b = el(`<button class="btn ${x.cls}">${esc(x.label)}</button>`);
+    // Опасное действие (выход из идущей игры) — только со второго нажатия
+    let armed = 0;
     b.addEventListener('click', () => {
+      if (x.confirm && performance.now() - armed > 3000) {
+        armed = performance.now();
+        b.textContent = x.confirm;
+        setTimeout(() => {
+          if (b.isConnected) b.textContent = x.label;
+        }, 3000);
+        return;
+      }
       m.remove();
       x.onClick();
     });

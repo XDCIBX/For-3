@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import type { Equip, HeroClass, Item, Rarity } from '@game/shared';
 import { G, RARITY_HEX, blobShadow, glow, part, toon } from './toon';
 import { clothTex, texturize, woodTex } from './textures';
-import { bake, unbake } from './bake';
+import { bake, releaseBaked, unbake } from './bake';
 import { earShape, footShape, gait, handShape, headShape, legHeight, limb, noseShape, torsoShape, type LegPose } from './anatomy';
 import { buildAmulet, buildArmor, buildBoots, buildHelmet, buildRing, type Built, type Rig } from './equipment';
 import { buildWeapon } from './weapons';
@@ -1342,6 +1342,7 @@ export class HeroModel {
   }
 
   dispose() {
+    releaseBaked(this.root);
     this.root.removeFromParent();
   }
 }

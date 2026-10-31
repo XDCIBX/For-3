@@ -36,6 +36,7 @@ import { TavernUi } from './ui/tavern';
 import { overScreen } from './ui/over';
 import { el } from './ui/dom';
 import { sfx } from './audio/sfx';
+import { reportOnce } from './report';
 import { clearSession, loadSession, loadSettings, saveSession, saveSettings, type Settings } from './settings';
 
 type Screen = 'menu' | 'lobby' | 'game';
@@ -202,7 +203,7 @@ class App {
 
   private pauseMenu() {
     if (this.ui.querySelector('.modal')) return;
-    const m = settingsModal(this.settings, () => this.applySettings(), [{ label: '🚪 Выйти в меню', cls: 'red', onClick: () => this.leave() }]);
+    const m = settingsModal(this.settings, () => this.applySettings(), [{ label: '🚪 Выйти в меню', cls: 'red', onClick: () => this.leave(), confirm: 'Точно выйти? Нажмите ещё раз' }]);
     (m.querySelector('h2') as HTMLElement).textContent = this.conn?.local ? 'Меню' : 'Меню (игра продолжается)';
     this.ui.appendChild(m);
   }
@@ -639,6 +640,16 @@ class App {
   }
 
   private loop(t: number) {
+    // Следующий кадр планируем сразу: случайная ошибка в кадре не должна заморозить игру
+    requestAnimationFrame((tt) => this.loop(tt));
+    try {
+      this.frame(t);
+    } catch (e) {
+      reportOnce('кадр', e);
+    }
+  }
+
+  private frame(t: number) {
     const dt = Math.min(0.05, (t - this.last) / 1000);
     this.last = t;
     if (this.screen === 'game') {
@@ -655,7 +666,6 @@ class App {
       this.tavernUi?.update(this.st);
     }
     this.engine.frame(dt);
-    requestAnimationFrame((tt) => this.loop(tt));
   }
 }
 

@@ -36,7 +36,7 @@ export const MOBS: Record<MobKind, MobDef> = {
   ember: { kind: 'ember', name: 'Огненный сгусток', hp: 70, dmg: 26, speed: 4.6, radius: 0.55, gold: 9, range: 0.5, atkCd: 9, windup: 0.5, explode: 2.3, flying: true, minRound: 21 },
   drake: { kind: 'drake', name: 'Дракончик', hp: 125, dmg: 14, speed: 4.3, radius: 0.7, gold: 14, range: 0.7, atkCd: 0.95, windup: 0.3, flying: true, minRound: 21 },
   spitter: { kind: 'spitter', name: 'Огнеплюй', hp: 100, dmg: 16, speed: 3.3, radius: 0.65, gold: 14, range: 9.5, atkCd: 2.5, windup: 0.6, ranged: true, projSpeed: 11, keepDist: 7, flying: true, minRound: 21 },
-  dragon: { kind: 'dragon', name: 'Красный дракон', hp: 5200, dmg: 58, speed: 2.7, radius: 2.6, gold: 600, range: 1.6, atkCd: 1.6, windup: 0.55, boss: true, minRound: 25 },
+  dragon: { kind: 'dragon', name: 'Красный дракон', hp: 4700, dmg: 58, speed: 2.7, radius: 2.6, gold: 600, range: 1.6, atkCd: 1.6, windup: 0.55, boss: true, minRound: 25 },
 };
 
 /** Общее усиление мобов — уравновешивает возросшую добычу золота. */
@@ -47,7 +47,8 @@ export function mobScale(round: number) {
   const lair = Math.max(0, round - (LAIR_ROUND - 1));
   return {
     hp: (1 + 0.32 * (round - 1) + 0.03 * (round - 1) ** 2) * MOB_POWER.hp * (1 + 0.13 * lair),
-    dmg: (1 + 0.22 * (round - 1) + 0.011 * (round - 1) ** 2) * MOB_POWER.dmg * (1 + 0.08 * lair),
+    // Волны логова чуть мягче по урону, чем дракон: на них обрывалась треть забегов
+    dmg: (1 + 0.22 * (round - 1) + 0.011 * (round - 1) ** 2) * MOB_POWER.dmg * (1 + (round >= DRAGON_ROUND ? 0.08 : 0.05) * lair),
     gold: 1 + 0.1 * (round - 1),
   };
 }

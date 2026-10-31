@@ -16,7 +16,8 @@ function make(key: string, size: number, draw: Draw, repeat = true): THREE.Canva
   if (t) return t;
   const c = document.createElement('canvas');
   c.width = c.height = size;
-  const g = c.getContext('2d')!;
+  // Холст потом читается для карты нормалей — подсказываем браузеру держать его в памяти
+  const g = c.getContext('2d', { willReadFrequently: true })!;
   draw(g, size, new Rng(key.length * 7919 + size));
   t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;

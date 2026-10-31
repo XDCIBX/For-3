@@ -10,6 +10,54 @@ import { addOutline, toon } from './toon';
  */
 
 const geoCache = new Map<string, THREE.BufferGeometry>();
+/**
+ * Сколько мешей пользуется склеенной геометрией. Без пользователей она освобождается
+ * (с задержкой до конца текущей задачи — при смене экипировки неизменные части
+ * сразу же берутся снова и не пересобираются). Без этого каждая покупка в лавке
+ * оставляла в видеопамяти новые склейки, и к 25-й волне их набирались тысячи.
+ */
+const refs = new Map<THREE.BufferGeometry, number>();
+const keyOf = new Map<THREE.BufferGeometry, string>();
+const pending = new Set<THREE.BufferGeometry>();
+let flushQueued = false;
+
+function acquire(g: THREE.BufferGeometry): THREE.BufferGeometry {
+  refs.set(g, (refs.get(g) ?? 0) + 1);
+  return g;
+}
+
+function release(g: THREE.BufferGeometry) {
+  const n = (refs.get(g) ?? 0) - 1;
+  refs.set(g, Math.max(0, n));
+  if (n > 0) return;
+  pending.add(g);
+  if (!flushQueued) {
+    flushQueued = true;
+    setTimeout(flush, 0);
+  }
+}
+
+function flush() {
+  flushQueued = false;
+  for (const g of pending) {
+    if ((refs.get(g) ?? 0) > 0) continue;
+    const k = keyOf.get(g);
+    if (k !== undefined && geoCache.get(k) === g) geoCache.delete(k);
+    refs.delete(g);
+    keyOf.delete(g);
+    g.dispose();
+  }
+  pending.clear();
+}
+
+/** Освободить склейки внутри объекта (модель героя снята, сцена больше не нужна). */
+export function releaseBaked(root: THREE.Object3D) {
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    // Контур делит геометрию со своим мешем — считаем её один раз
+    if (m.isMesh && m.userData.baked && m.name !== 'outline' && refs.has(m.geometry)) release(m.geometry);
+  });
+}
 const tmp = new THREE.Matrix4();
 const tmpColor = new THREE.Color();
 
@@ -70,7 +118,7 @@ function buildGeometry(parts: Part[], withUv: boolean): THREE.BufferGeometry {
     })
     .join('|') + (withUv ? 'uv' : '');
   let g = geoCache.get(key);
-  if (g) return g;
+  if (g) return acquire(g);
   const geos = parts.map((p) => {
     const src = p.mesh.geometry;
     const geo = new THREE.BufferGeometry();
@@ -99,7 +147,8 @@ function buildGeometry(parts: Part[], withUv: boolean): THREE.BufferGeometry {
   g = mergeGeometries(uniform) ?? new THREE.BufferGeometry();
   g.computeBoundingSphere();
   geoCache.set(key, g);
-  return g;
+  keyOf.set(g, key);
+  return acquire(g);
 }
 
 function bakeGroup(group: THREE.Object3D) {
@@ -152,7 +201,10 @@ export function unbake(root: THREE.Object3D) {
       o.userData.hiddenByBake = false;
     }
   });
-  for (const o of remove) o.removeFromParent();
+  for (const o of remove) {
+    releaseBaked(o);
+    o.removeFromParent();
+  }
 }
 
 /**

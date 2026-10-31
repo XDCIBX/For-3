@@ -1,4 +1,5 @@
 import { Room, type C2S, type S2C } from '@game/shared';
+import { reportOnce } from '../report';
 
 export interface Connection {
   readonly local: boolean;
@@ -112,7 +113,11 @@ export class LocalConnection implements Connection {
       this.last = now;
       while (this.acc >= 50) {
         this.acc -= 50;
-        this.room.step();
+        try {
+          this.room.step();
+        } catch (e) {
+          reportOnce('симуляция', e);
+        }
       }
     }, 16);
   }

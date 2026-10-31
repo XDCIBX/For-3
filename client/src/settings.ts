@@ -11,8 +11,14 @@ export interface Settings {
 
 const KEY = 'three-heroes-settings';
 
-/** Адрес сервера по умолчанию: если страница отдана игровым сервером — он же; иначе localhost. */
+/**
+ * Адрес сервера по умолчанию. Для релиза его зашивают при сборке:
+ * VITE_SERVER_URL=wss://game.example.com npm run build. Иначе: если страница отдана
+ * игровым сервером — он же; в приложении — адрес в локальной сети.
+ */
 export function defaultServer(): string {
+  const baked = import.meta.env.VITE_SERVER_URL as string | undefined;
+  if (baked) return baked;
   const { protocol, hostname, port } = window.location;
   const isNative = protocol === 'capacitor:' || protocol === 'ionic:' || ((hostname === 'localhost' || hostname === '127.0.0.1') && !port);
   if (isNative) return `ws://192.168.0.10:${DEFAULT_PORT}`;

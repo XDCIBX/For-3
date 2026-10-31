@@ -12,6 +12,19 @@ const STATIC_DIR = resolve(process.env.STATIC_DIR ?? join(here, '../../client/di
 const ROOM_IDLE_MS = 5 * 60_000;
 
 const rooms = new Map<string, Room>();
+/** Сколько раз комната падала с ошибкой: после нескольких подряд её закрываем, остальные живут. */
+const roomErrors = new Map<string, number>();
+
+function roomFailed(code: string, r: Room, e: unknown) {
+  const n = (roomErrors.get(code) ?? 0) + 1;
+  roomErrors.set(code, n);
+  console.error(`[${code}] ошибка в игре (${n}):`, e);
+  if (n >= 5) {
+    for (const c of r.clients.values()) c.send({ t: 'err', msg: 'Игра прервана из-за ошибки сервера' });
+    rooms.delete(code);
+    roomErrors.delete(code);
+  }
+}
 
 const MIME: Record<string, string> = {
   '.html': 'text/html; charset=utf-8',
@@ -80,7 +93,11 @@ wss.on('connection', (ws: WebSocket) => {
       return;
     }
     if (room && pid) {
-      room.handle(pid, msg);
+      try {
+        room.handle(pid, msg);
+      } catch (e) {
+        roomFailed(room.code, room, e);
+      }
       return;
     }
     if (msg.t === 'create') {
@@ -104,6 +121,9 @@ wss.on('connection', (ws: WebSocket) => {
     }
   });
 
+  // Без обработчика ошибка сокета (слишком длинное сообщение, битый кадр) роняет весь процесс
+  ws.on('error', (e) => console.warn('ошибка сокета:', e.message));
+
   ws.on('close', () => {
     if (room && pid) room.leave(pid, client);
   });
@@ -124,14 +144,24 @@ setInterval(() => {
         // Пустую комнату держим, чтобы игроки могли переподключиться
         if (r.game.phase === 'lobby' || now - r.emptySince > ROOM_IDLE_MS) {
           rooms.delete(code);
+          roomErrors.delete(code);
           console.log(`[${code}] комната закрыта`);
         }
         continue;
       }
-      r.step();
+      try {
+        r.step();
+        roomErrors.delete(code);
+      } catch (e) {
+        roomFailed(code, r, e);
+      }
     }
   }
 }, 16);
+
+wss.on('error', (e) => console.error('ошибка WebSocket-сервера:', e));
+// Последний рубеж: непредвиденная ошибка пишется в лог, а не гасит все комнаты
+process.on('uncaughtException', (e) => console.error('непойманная ошибка:', e));
 
 http.listen(PORT, () => {
   console.log(`Сервер «25 waves» запущен: http://0.0.0.0:${PORT}  (WebSocket на том же порту)`);
