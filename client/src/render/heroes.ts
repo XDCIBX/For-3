@@ -101,6 +101,8 @@ export class HeroModel {
   private headgear = new THREE.Group();
   private weapon = new THREE.Group();
   private weapon2: THREE.Group | null = null;
+  /** Натянутая тетива лука: две половины к руке и стрела на ней. */
+  private bowDraw: { str: THREE.Mesh; halves: THREE.Mesh[]; arrow: THREE.Group } | null = null;
   private demonG = new THREE.Group();
   private wings: THREE.Group[] = [];
   private spiritOrbs: THREE.Group | null = null;
@@ -789,6 +791,7 @@ export class HeroModel {
     const wIt = eq?.weapon ?? null;
     const tpl = wIt?.tpl ?? DEFAULT_WEAPON[this.cls];
     this.weaponTpl = tpl;
+    this.bowDraw = null;
     this.weapon = buildWeapon(tpl, wIt?.rarity ?? 'common', this.built);
     if (this.cls === 'hunter' || this.cls === 'werewolf') {
       // Парное оружие: по клинку (когтю) в каждой руке
@@ -816,6 +819,7 @@ export class HeroModel {
       this.weapon.position.set(0, 0.02, -0.05);
     } else if (this.cls === 'archer') {
       this.handL.add(this.weapon);
+      this.setupBowDraw();
       // Арбалет держат за шейку ложи ровно, болтом вперёд
       this.weapon.rotation.set(tpl === 'crossbow' ? 0 : Math.PI / 2, 0, 0);
     } else if (tpl === 'staff' || tpl === 'totemstaff') {
@@ -874,6 +878,59 @@ export class HeroModel {
 
   cheer() {
     this.cheerT = 0;
+  }
+
+  /** Половины тетивы и стрела для натяжения лука (видны только во время выстрела). */
+  private setupBowDraw() {
+    const str = this.weapon.getObjectByName('bowstring') as THREE.Mesh | undefined;
+    if (!str || !str.parent) return;
+    const mat = str.material as THREE.Material;
+    const halves = [0, 1].map(() => {
+      const m = new THREE.Mesh(G.cyl(0.005, 0.005, 1, 4), mat);
+      m.userData.noBake = true;
+      m.visible = false;
+      str.parent!.add(m);
+      return m;
+    });
+    // Стрела: древко, наконечник, оперение; ось — вдоль y
+    const arrow = new THREE.Group();
+    arrow.add(part(G.cyl(0.009, 0.009, 1, 5), 0xc9a36a, { outline: false }));
+    arrow.add(part(G.cone(0.02, 0.07, 4), 0xc6ccd4, { pos: [0, 0.53, 0], outline: false, metal: 0.8, rough: 0.3 }));
+    for (const a of [0, Math.PI / 2]) arrow.add(part(G.box(0.002, 0.11, 0.035), 0xe94b3c, { pos: [0, -0.42, 0], rot: [0, a, 0], outline: false }));
+    arrow.traverse((o) => (o.userData.noBake = true));
+    arrow.visible = false;
+    str.parent.add(arrow);
+    this.bowDraw = { str, halves, arrow };
+  }
+
+  /** Тетива к правой руке, стрела — от руки через рукоять лука. */
+  private updateBowDraw(drawn: boolean) {
+    const bd = this.bowDraw;
+    if (!bd) return;
+    bd.str.visible = !drawn;
+    bd.arrow.visible = drawn;
+    for (const h of bd.halves) h.visible = drawn;
+    if (!drawn) return;
+    const lg = bd.str.parent!;
+    this.root.updateMatrixWorld(true);
+    // Точка натяжения — рука, переведённая в систему лука
+    const hand = this.handR.getWorldPosition(_v1);
+    lg.worldToLocal(hand);
+    const [tx, H] = bd.str.userData.tips as [number, number];
+    const grip = _v2.set(0.12, 0, 0);
+    // Не даём тетиве уйти вбок от плоскости лука
+    hand.z *= 0.3;
+    if (hand.x > tx - 0.05) hand.x = tx - 0.05;
+    bd.halves.forEach((m, i) => segment(m, _v3.set(tx, i ? -H : H, 0), hand));
+    // Стрела лежит на полочке у рукояти и упирается хвостом в тетиву
+    const dir = _v4.copy(grip).sub(hand);
+    const len = dir.length() + 0.18;
+    dir.normalize();
+    bd.arrow.position.copy(hand).addScaledVector(dir, len / 2 - 0.02);
+    bd.arrow.quaternion.setFromUnitVectors(_up, dir);
+    bd.arrow.children[0].scale.y = len;
+    bd.arrow.children[1].position.y = len / 2 + 0.03;
+    for (const f of bd.arrow.children.slice(2)) f.position.y = -len / 2 + 0.07;
   }
 
   update(dt: number, st: HeroAnimInput) {
@@ -1171,14 +1228,18 @@ export class HeroModel {
           headTilt = 0.12;
           lean -= kick * 0.06;
         } else if (this.castS === 0 || this.castS === 1) {
-          // Лучная рука прямая, правая натягивает тетиву к щеке
-          const draw = k < 0.7 ? k / 0.7 : 0;
-          armLx = -1.55;
+          // Лучная рука вытянута к цели, лук стоит вертикально; правая рука на уровне
+          // плеча локтем назад натягивает тетиву к щеке, затем отпускает
+          const draw = k < 0.7 ? k / 0.7 : 1 - (k - 0.7) / 0.3;
+          armLx = -1.5;
+          armLz = -0.05;
           elbL = 0.05;
-          armRx = -1.5;
-          armRz = 0.35 + draw * 0.35;
-          elbR = 1.2 + draw * 1.0;
-          torsoYaw = -0.35;
+          // Плечо отведено в сторону на уровне плеча, предплечье горизонтально к щеке
+          armRx = 0.05 + draw * 0.45;
+          armRz = 1.3;
+          elbR = 2.0 + draw * 0.45;
+          torsoYaw = -0.45;
+          headTilt = 0.05;
         } else if (this.castS === 3) {
           armLx = -2.4;
           armRx = -2.2;
@@ -1256,8 +1317,8 @@ export class HeroModel {
     this.elbowR.rotation.x = -elbR;
     // Посох, лук, мушкетон остаются ровными, когда сгибается локоть
     this.handL.rotation.x = (keepL ? elbL : 0) + wristL;
-    // Арбалет остаётся ровным при любом взмахе плеча; на «Дожде стрел» — вверх
-    if (this.cls === 'archer' && this.weaponTpl === 'crossbow') this.handL.rotation.x = elbL - armLx - (k < 1 && this.castS === 3 ? 1.0 : 0);
+    // Лук стоит вертикально, а арбалет лежит ровно при любом взмахе плеча; на «Дожде стрел» — вверх
+    if (this.cls === 'archer') this.handL.rotation.x = elbL - armLx - (k < 1 && this.castS === 3 ? 1.0 : 0);
     this.handR.rotation.x = (keepR ? elbR : 0) + wristR;
 
     // Таз и плечи вращаются навстречу друг другу, таз покачивается
@@ -1323,6 +1384,9 @@ export class HeroModel {
       if (sp.userData.spinAxis === 'z') sp.rotation.z += dt * 2.5;
       else sp.rotation.y += dt * 1.8;
     }
+    // Лучник натягивает тетиву до выстрела, затем отпускает
+    const kk = this.castT / this.castDur;
+    this.updateBowDraw(!!this.bowDraw && kk < 0.7 && (this.castS === 0 || this.castS === 1) && !st.dead);
   }
 
   /** Позиция наконечника оружия/руки в мировых координатах — для эффектов. */
@@ -1345,6 +1409,21 @@ export class HeroModel {
     releaseBaked(this.root);
     this.root.removeFromParent();
   }
+}
+
+const _v1 = new THREE.Vector3();
+const _v2 = new THREE.Vector3();
+const _v3 = new THREE.Vector3();
+const _v4 = new THREE.Vector3();
+const _up = new THREE.Vector3(0, 1, 0);
+
+/** Вытянуть цилиндр высотой 1 (вдоль y) между точками a и b. */
+function segment(m: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3) {
+  const d = _v4.copy(b).sub(a);
+  const l = d.length();
+  m.position.copy(a).addScaledVector(d, 0.5);
+  m.scale.set(1, Math.max(0.001, l), 1);
+  m.quaternion.setFromUnitVectors(_up, d.multiplyScalar(1 / Math.max(1e-6, l)));
 }
 
 /**

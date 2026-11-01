@@ -265,6 +265,10 @@ export function buildWeapon(tpl: string, r: Rarity, out: Built): THREE.Group {
       const tipX = pts[0][0];
       const str = new THREE.Mesh(G.cyl(0.005, 0.005, H * 2 + 0.02, 4), rank >= 3 ? glow(rank >= 4 ? 0xff6a5a : 0xfff0a0, 1, false) : toon(0xf5f0e0));
       str.position.x = tipX;
+      // Тетиву натягивает рука лучника (heroes.ts): не склеиваем и помечаем концы
+      str.name = 'bowstring';
+      str.userData.noBake = true;
+      str.userData.tips = [tipX, H];
       lg.add(str);
       // Рукоять: кожа с обмоткой, полочка для стрелы, латунные кольца
       lg.add(part(G.cyl(0.042, 0.042, 0.22, 10), leather, { pos: [0.12, 0, 0], outline: false, rough: 0.85 }));
