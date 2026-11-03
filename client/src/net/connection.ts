@@ -1,5 +1,6 @@
 import { Room, type C2S, type S2C } from '@game/shared';
 import { reportOnce } from '../report';
+import { t } from '../i18n';
 
 export interface Connection {
   readonly local: boolean;
@@ -40,7 +41,7 @@ export class WsConnection implements Connection {
     };
     ws.onclose = () => {
       clearInterval(this.pingTimer);
-      if (!this.closedByUs) this.onClose('Соединение потеряно');
+      if (!this.closedByUs) this.onClose(t('net.lost'));
     };
     this.pingTimer = window.setInterval(() => this.send({ t: 'ping', c: performance.now() }), 2000);
     this.send({ t: 'ping', c: performance.now() });
@@ -52,13 +53,13 @@ export class WsConnection implements Connection {
       try {
         ws = new WebSocket(url);
       } catch {
-        reject(new Error('Неверный адрес сервера'));
+        reject(new Error(t('net.badAddress')));
         return;
       }
       const timer = setTimeout(() => {
         if (ws.readyState === WebSocket.OPEN) return;
         ws.close();
-        reject(new Error('Сервер не отвечает'));
+        reject(new Error(t('net.noAnswer')));
       }, timeoutMs);
       ws.onopen = () => {
         clearTimeout(timer);
@@ -66,7 +67,7 @@ export class WsConnection implements Connection {
       };
       ws.onerror = () => {
         clearTimeout(timer);
-        reject(new Error('Не удалось подключиться к серверу'));
+        reject(new Error(t('net.cantConnect')));
       };
     });
   }

@@ -1632,3 +1632,13 @@ input.field:focus {
   width: 100%;
   height: 100%;
 }
+
+/* Выбор языка в настройках */
+.lang-sel {
+  width: auto;
+  min-width: 140px;
+  padding: 6px 10px;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}

@@ -268,8 +268,8 @@ export class Game {
   // ------------------------------------------------------------------ лобби
 
   addPlayer(name: string, bot = false): Player | string {
-    if (this.phase !== 'lobby') return 'Игра уже началась';
-    if (this.players.size >= MAX_PLAYERS) return 'Комната заполнена';
+    if (this.phase !== 'lobby') return 'err.started';
+    if (this.players.size >= MAX_PLAYERS) return 'err.full';
     const taken = new Set([...this.players.values()].map((p) => p.cls));
     const cls = HERO_CLASSES.find((c) => !taken.has(c)) ?? 'warrior';
     const id = `p${this.pidCounter++}`;
@@ -342,7 +342,7 @@ export class Game {
     } else {
       p.connected = false;
       p.input = { mx: 0, mz: 0 };
-      this.msg(`${p.name} отключился`, 'bad');
+      this.msg('m.disconnected', { name: p.name }, 'bad');
       if (p.host) {
         p.host = false;
         const next = [...this.players.values()].find((q) => !q.bot && q.connected);
@@ -350,7 +350,7 @@ export class Game {
         // Хост ушёл — игра не должна остаться замороженной навсегда
         if (this.paused) {
           this.paused = false;
-          this.msg('Пауза снята: хост отключился', 'info');
+          this.msg('m.pauseHostLeft', null, 'info');
         }
       }
     }
@@ -362,7 +362,7 @@ export class Game {
     if (!p) return;
     p.connected = true;
     if (![...this.players.values()].some((q) => q.host && q.connected)) p.host = true;
-    this.msg(`${p.name} вернулся в игру`, 'good');
+    this.msg('m.returned', { name: p.name }, 'good');
     this.dirty = true;
   }
 
@@ -433,7 +433,7 @@ export class Game {
         const v = !!msg.v;
         if (v === this.paused) return;
         this.paused = v;
-        this.msg(v ? `${p.name} поставил игру на паузу` : `${p.name} снял паузу`, 'info');
+        this.msg(v ? 'm.paused' : 'm.unpaused', { name: p.name }, 'info');
         this.dirty = true;
         break;
       }
@@ -544,9 +544,9 @@ export class Game {
     const bonus = 15 + 5 * this.round;
     for (const p of this.active()) {
       p.gold += bonus;
-      this.events.push({ e: 'gold', pid: p.id, v: bonus, x: p.x, z: p.z, why: 'Награда за раунд' });
+      this.events.push({ e: 'gold', pid: p.id, v: bonus, x: p.x, z: p.z, why: 'why.round' });
     }
-    this.msg(this.isPvpRound() ? 'ПвП раунд завершён!' : 'Раунд пройден!', 'good');
+    this.msg(this.isPvpRound() ? 'm.pvpDone' : 'm.roundDone', null, 'good');
     this.setPhase('clear', CLEAR_TIME);
   }
 
@@ -582,7 +582,7 @@ export class Game {
     this.zones.clear();
     this.minions.clear();
     this.setPhase('gameover', -1);
-    this.msg(win ? 'Победа! Дракон повержен — все 25 волн пройдены!' : 'Все герои пали…', win ? 'good' : 'bad');
+    this.msg(win ? 'm.victory' : 'm.allDead', null, win ? 'good' : 'bad');
   }
 
   private setupDuels() {
@@ -609,7 +609,7 @@ export class Game {
     }
     const pa = this.players.get(a)!;
     const pb = this.players.get(b)!;
-    this.msg(`Дуэль: ${pa.name} против ${pb.name}`, 'info');
+    this.msg('m.duel', { a: pa.name, b: pb.name }, 'info');
     this.setPhase('duel_intro', INTRO_TIME);
   }
 
@@ -630,11 +630,11 @@ export class Game {
       l.gold -= lost;
       w.pvpWins++;
       l.pvpLosses++;
-      this.events.push({ e: 'gold', pid: w.id, v: win, x: w.x, z: w.z, why: 'Победа в дуэли' });
-      if (lost > 0) this.events.push({ e: 'gold', pid: l.id, v: -lost, x: l.x, z: l.z, why: 'Поражение в дуэли' });
-      this.msg(`${w.name} побеждает! +${win} золота`, 'gold');
+      this.events.push({ e: 'gold', pid: w.id, v: win, x: w.x, z: w.z, why: 'why.duelWin' });
+      if (lost > 0) this.events.push({ e: 'gold', pid: l.id, v: -lost, x: l.x, z: l.z, why: 'why.duelLose' });
+      this.msg('m.duelWin', { name: w.name, n: win }, 'gold');
     } else {
-      this.msg('Ничья!', 'info');
+      this.msg('m.draw', null, 'info');
     }
     this.events.push({ e: 'duel', a, b, winner: winnerId, win, lose: lost });
     this.projs.clear();
@@ -659,7 +659,7 @@ export class Game {
     this.shop.splice(idx, 1);
     p.stats = computeStats(p.cls, p.equip);
     p.hp = p.stats.maxHp;
-    this.events.push({ e: 'buy', pid: p.id, name: it.name, rarity: it.rarity });
+    this.events.push({ e: 'buy', pid: p.id, name: it.name, tpl: it.tpl, rarity: it.rarity });
     this.dirty = true;
   }
 
@@ -687,7 +687,7 @@ export class Game {
           if (this.isPvpRound()) {
             this.setupDuels();
             if (this.duels.length === 0) {
-              this.msg('Нет соперников для ПвП — отдыхайте!', 'info');
+              this.msg('m.noPvp', null, 'info');
               this.finishRound();
             } else this.startDuelIntro();
           } else this.startBattle();
@@ -814,16 +814,17 @@ export class Game {
     this.mobs.set(m.id, m);
     this.events.push({ e: 'fx', k: def.boss ? 'bossspawn' : 'spawn', x, z });
     if (kind === 'dragon') {
-      this.msg('Красный дракон проснулся!', 'bad');
+      this.msg('m.dragonAwake', null, 'bad');
       this.events.push({ e: 'fx', k: 'droar', x: r2(x), z: r2(z), id: m.id });
-    } else if (def.boss) this.msg(`Появился ${def.name}!`, 'bad');
+    } else if (def.boss) this.msg('m.bossAppears', { mob: kind }, 'bad');
     return m;
   }
 
   // ------------------------------------------------------------------ события
 
-  msg(text: string, kind: 'info' | 'good' | 'bad' | 'gold' = 'info') {
-    this.events.push({ e: 'msg', text, kind });
+  /** Сообщение всем: ключ перевода и параметры, текст собирает клиент на своём языке. */
+  msg(k: string, p: Record<string, string | number> | null = null, kind: 'info' | 'good' | 'bad' | 'gold' = 'info') {
+    this.events.push(p ? { e: 'msg', k, p, kind } : { e: 'msg', k, kind });
   }
 
   // ------------------------------------------------------------------ цели и урон
@@ -1010,7 +1011,7 @@ export class Game {
     }
     p.respawn = RESPAWN_TIME + this.round * 0.3;
     const k = killer ? this.players.get(killer) : null;
-    this.msg(k ? `${p.name} повержен игроком ${k.name}` : `${p.name} пал в бою!`, 'bad');
+    this.msg(k ? 'm.killedBy' : 'm.fell', k ? { name: p.name, killer: k.name } : { name: p.name }, 'bad');
   }
 
   // ------------------------------------------------------------------ умения
@@ -2244,7 +2245,7 @@ export class Game {
       c.roar = DRAGON.roar.cd * (1 - 0.55 * lost);
       start('roar');
       this.events.push({ e: 'fx', k: 'droar', x: r2(m.x), z: r2(m.z), id: m.id });
-      this.msg(rage ? 'Дракон в ярости и зовёт подмогу!' : 'Дракон зовёт подмогу!', 'bad');
+      this.msg(rage ? 'm.dragonRage' : 'm.dragonCall', null, 'bad');
       return true;
     }
     if (near && c.sweep <= 0) {

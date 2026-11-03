@@ -107,6 +107,7 @@ export interface ZoneSnap {
 export type GameEvent =
   | { e: 'dmg'; x: number; z: number; v: number; c: boolean; tp: 'm' | 'p' | 'n'; id: string | number }
   | { e: 'heal'; x: number; z: number; v: number }
+  /** why — ключ перевода причины (why.round, why.duelWin…). */
   | { e: 'gold'; pid: string; v: number; x: number; z: number; why?: string }
   | { e: 'cast'; pid: string; s: number; r: number; x?: number; z?: number }
   | { e: 'fx'; k: string; x: number; z: number; r?: number; rot?: number; pid?: string; /** Моб, к которому относится эффект. */ id?: number }
@@ -117,8 +118,9 @@ export type GameEvent =
   | { e: 'mdie'; id: number; k: MobKind; by: string | null; x: number; z: number }
   | { e: 'pdie'; pid: string }
   | { e: 'respawn'; pid: string }
-  | { e: 'msg'; text: string; kind?: 'info' | 'good' | 'bad' | 'gold' }
-  | { e: 'buy'; pid: string; name: string; rarity: string }
+  /** Сообщение: k — ключ перевода, p — параметры (имена игроков, mob — вид моба). */
+  | { e: 'msg'; k: string; p?: Record<string, string | number>; kind?: 'info' | 'good' | 'bad' | 'gold' }
+  | { e: 'buy'; pid: string; name: string; tpl: string; rarity: string }
   | { e: 'duel'; a: string; b: string; winner: string | null; win: number; lose: number }
   | { e: 'hit'; x: number; z: number; k: string };
 

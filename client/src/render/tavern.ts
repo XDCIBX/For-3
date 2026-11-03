@@ -4,9 +4,21 @@ import { repeated, rockTex, sandTex, stoneTex, texturize, woodTex } from './text
 import { bakeStatic } from './bake';
 import { Flame, canvasLabel, makeSun, type Stage } from './env';
 import type { Particles } from './particles';
+import { t } from '../i18n';
 
 /** Таверна «Пьяный Дракон» — диорама в разрезе. */
 export class TavernStage implements Stage {
+  /** Вывеска таверны: надпись перерисовывается при смене языка. */
+  private sign: THREE.Mesh | null = null;
+
+  setSignText() {
+    if (!this.sign) return;
+    const mat = this.sign.material as THREE.MeshBasicMaterial;
+    mat.map?.dispose();
+    mat.map = canvasLabel(t('tavern.sign'), { color: '#ffd54a', stroke: '#3a1a0a', w: 1024, h: 160 });
+    mat.needsUpdate = true;
+  }
+
   readonly name = 'tavern';
   readonly scene = new THREE.Scene();
   readonly sun: THREE.DirectionalLight;
@@ -96,8 +108,9 @@ export class TavernStage implements Stage {
     s.add(win);
 
     // Вывеска
-    const signTex = canvasLabel('Пьяный Дракон', { color: '#ffd54a', stroke: '#3a1a0a', w: 1024, h: 160 });
+    const signTex = canvasLabel(t('tavern.sign'), { color: '#ffd54a', stroke: '#3a1a0a', w: 1024, h: 160 });
     const sign = new THREE.Mesh(new THREE.PlaneGeometry(4.6, 0.75), new THREE.MeshBasicMaterial({ map: signTex, transparent: true }));
+    this.sign = sign;
     const board = part(G.box(5, 1.0, 0.12), 0x6a4024, { outline: 0.03 });
     board.position.z = -0.08;
     const signG = new THREE.Group();

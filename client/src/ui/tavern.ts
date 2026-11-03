@@ -1,4 +1,5 @@
-import { CLASSES, RARITY, SLOTS, SLOT_NAMES, STAT_LABELS, computeStats, formatStat, sellValue, type Item, type StatKey, type Stats } from '@game/shared';
+import { SLOTS, computeStats, sellValue, type Item, type StatKey, type Stats } from '@game/shared';
+import { className, formatStatL as formatStat, itemName, playerName, rarityName, slotName, statLabel, t } from '../i18n';
 import type { ClientState } from '../net/state';
 import { sfx } from '../audio/sfx';
 import { CLASS_BG, el, esc, onTap } from './dom';
@@ -34,7 +35,7 @@ export class TavernUi {
       <div class="screen tavern">
         <div class="shop">
           <div class="shop-head">
-            <div class="shop-title"><span class="mug">${MUG}</span> Лавка «Пьяного Дракона»</div>
+            <div class="shop-title"><span class="mug">${MUG}</span> ${t('tavern.shop')}</div>
             <div class="timer">45</div>
           </div>
           <div class="party"></div>
@@ -43,13 +44,13 @@ export class TavernUi {
         <div class="side">
           <div class="panel equip">
             <div class="row" style="justify-content:space-between;margin-bottom:6px">
-              <div class="label">Мой герой</div>
+              <div class="label">${t('tavern.myHero')}</div>
               <div class="gold-box" style="font-size:18px"><span class="coin">${COIN}</span><b>0</b></div>
             </div>
             <div class="equip-grid"></div>
             <div class="stats"></div>
           </div>
-          <button class="btn green" id="tready">✔ Готов к бою</button>
+          <button class="btn green" id="tready">${t('tavern.ready')}</button>
         </div>
       </div>`);
     onTap(this.el.querySelector<HTMLElement>('#tready')!, () => {
@@ -71,9 +72,9 @@ export class TavernUi {
     const me = st.me;
     if (!me) return;
     this.st = st;
-    const t = Math.ceil(st.timer);
-    const timer = this.setText('.timer', `⏳ ${t}`);
-    if (timer.classList.contains('low') !== t <= 10) timer.classList.toggle('low', t <= 10);
+    const sec = Math.ceil(st.timer);
+    const timer = this.setText('.timer', `⏳ ${sec}`);
+    if (timer.classList.contains('low') !== sec <= 10) timer.classList.toggle('low', sec <= 10);
     this.setText('.equip .gold-box b', String(me.g));
 
     // Товары
@@ -95,7 +96,7 @@ export class TavernUi {
         box.appendChild(card);
       }
     });
-    if (st.shop.length === 0 && !box.querySelector('.empty-shop')) box.appendChild(el(`<div class="empty-shop">Всё раскупили! 🍺</div>`));
+    if (st.shop.length === 0 && !box.querySelector('.empty-shop')) box.appendChild(el(`<div class="empty-shop">${t('tavern.soldOut')}</div>`));
     if (st.shop.length > 0) box.querySelector('.empty-shop')?.remove();
 
     const key = `${me.g}|${me.c}|${me.eq ? SLOTS.map((s) => me.eq![s]?.id ?? '-').join() : ''}`;
@@ -112,8 +113,8 @@ export class TavernUi {
       grid.innerHTML = SLOTS.map((s) => {
         const it = me.eq?.[s];
         return it
-          ? `<div class="eslot r-${it.rarity}" title="${esc(it.name)}">${itemIcon3d(it.tpl, it.rarity, me.c, itemIcon(it.tpl, it.rarity))}</div>`
-          : `<div class="eslot empty" title="${SLOT_NAMES[s]}">${itemIcon(EMPTY_ICON[s] === 'weapon' ? DEFAULT_WEAPON[me.c] : EMPTY_ICON[s], 'common')}</div>`;
+          ? `<div class="eslot r-${it.rarity}" title="${esc(itemName(it.tpl, it.rarity))}">${itemIcon3d(it.tpl, it.rarity, me.c, itemIcon(it.tpl, it.rarity))}</div>`
+          : `<div class="eslot empty" title="${slotName(s)}">${itemIcon(EMPTY_ICON[s] === 'weapon' ? DEFAULT_WEAPON[me.c] : EMPTY_ICON[s], 'common')}</div>`;
       }).join('');
     }
     if (this.gain && performance.now() - this.gain.t > 2400) {
@@ -137,13 +138,13 @@ export class TavernUi {
       this.el.querySelector('.party')!.innerHTML = players
         .map(
           (p) => `<div class="pl ${p.id === me.id ? 'me' : ''}"><div class="pi" style="background:${CLASS_BG[p.c]}">${classIcon(p.c)}</div>
-            <span class="pn">${esc(p.n)}</span>
+            <span class="pn">${esc(playerName(p.n))}</span>
             <span class="pg">${p.g}💰</span>
             <span class="tag ${p.rdy ? 'ready' : 'wait'}">${p.rdy ? '✔' : '…'}</span></div>`,
         )
         .join('');
     }
-    const rb = this.setText('#tready', me.rdy ? '✖ Ещё покупаю' : '✔ Готов к бою');
+    const rb = this.setText('#tready', me.rdy ? t('tavern.stillBuying') : t('tavern.ready'));
     const rc = `btn ${me.rdy ? 'ghost' : 'green'}`;
     if (rb.className !== rc) rb.className = rc;
   }
@@ -171,7 +172,7 @@ export class TavernUi {
         cls += d > 0 ? ' got-up' : ' got-down';
         extra = `<i>(${formatStat(k, d)})</i>`;
       }
-      return `<div class="${cls}"><span>${STAT_LABELS[k]}</span><b>${formatStat(k, cur[k], false)}${extra}</b></div>`;
+      return `<div class="${cls}"><span>${statLabel(k)}</span><b>${formatStat(k, cur[k], false)}${extra}</b></div>`;
     }).join('');
   }
 
@@ -218,16 +219,16 @@ export class TavernUi {
         const v = (it.stats[k] ?? 0) - (cur?.stats[k] ?? 0);
         if (Math.abs(v) < 0.001) return '';
         const has = it.stats[k] ?? 0;
-        return `<div class="${v < 0 ? 'worse' : ''}">${STAT_LABELS[k]} ${formatStat(k, has)}${cur ? ` <small>(${v > 0 ? '▲' : '▼'})</small>` : ''}</div>`;
+        return `<div class="${v < 0 ? 'worse' : ''}">${statLabel(k)} ${formatStat(k, has)}${cur ? ` <small>(${v > 0 ? '▲' : '▼'})</small>` : ''}</div>`;
       })
       .join('');
     card.innerHTML = `
-      <div class="rar">${RARITY[it.rarity].name}</div>
-      <div class="slot-tag">${SLOT_NAMES[it.slot]}</div>
+      <div class="rar">${rarityName(it.rarity)}</div>
+      <div class="slot-tag">${slotName(it.slot)}</div>
       <div class="ii">${itemIcon3d(it.tpl, it.rarity, me.c, itemIcon(it.tpl, it.rarity))}</div>
-      <div class="in">${esc(it.name)}</div>
+      <div class="in">${esc(itemName(it.tpl, it.rarity))}</div>
       <div class="st">${lines}</div>
-      ${wrong ? `<div class="who">Только: ${CLASSES[it.cls!].name}</div>` : cur ? `<div class="who" style="color:#5a4a3a">Старое продастся за ${refund}</div>` : ''}
+      ${wrong ? `<div class="who">${t('tavern.only', { cls: className(it.cls!) })}</div>` : cur ? `<div class="who" style="color:#5a4a3a">${t('tavern.sellOld', { n: refund })}</div>` : ''}
       <div class="price"><span class="coin">${COIN}</span>${it.price}</div>`;
   }
 }

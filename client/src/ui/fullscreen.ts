@@ -1,4 +1,5 @@
 import { Capacitor } from '@capacitor/core';
+import { t } from '../i18n';
 
 /** Полноэкранный режим браузера (в нативном приложении игра и так на весь экран). */
 
@@ -67,8 +68,8 @@ function refresh() {
   for (const b of buttons) {
     b.dataset.on = on ? '1' : '';
     const label = b.querySelector('.fs-label');
-    if (label) label.textContent = on ? 'Свернуть' : 'На весь экран';
-    b.title = on ? 'Выйти из полноэкранного режима' : 'На весь экран';
+    if (label) label.textContent = on ? t('fs.exit') : t('fs.enter');
+    b.title = on ? t('fs.exitTitle') : t('fs.enter');
   }
 }
 document.addEventListener('fullscreenchange', refresh);
@@ -87,16 +88,16 @@ export function fullscreenButton(className: string, compact = false, onHint?: (t
   const b = document.createElement('button');
   b.className = `${className} fs-btn`;
   b.type = 'button';
-  b.innerHTML = `<span class="fs-on">${ICON_ON}</span><span class="fs-off">${ICON_OFF}</span>${compact ? '' : '<span class="fs-label">На весь экран</span>'}`;
+  b.innerHTML = `<span class="fs-on">${ICON_ON}</span><span class="fs-off">${ICON_OFF}</span>${compact ? '' : `<span class="fs-label">${t('fs.enter')}</span>`}`;
   b.addEventListener('click', async () => {
     if (!supported) {
-      onHint?.('На iPhone: «Поделиться» → «На экран „Домой“», и игра откроется на весь экран');
+      onHint?.(t('fs.iosHint'));
       return;
     }
     const ok = await toggleFullscreen();
     refresh();
     setTimeout(refresh, 300);
-    if (!ok) onHint?.('Браузер не разрешил полноэкранный режим');
+    if (!ok) onHint?.(t('fs.denied'));
   });
   // Старые кнопки (с прошлых экранов) больше не обновляем
   for (const x of buttons) if (!x.isConnected) buttons.delete(x);

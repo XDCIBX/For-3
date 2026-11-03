@@ -20,7 +20,7 @@ function roomFailed(code: string, r: Room, e: unknown) {
   roomErrors.set(code, n);
   console.error(`[${code}] ошибка в игре (${n}):`, e);
   if (n >= 5) {
-    for (const c of r.clients.values()) c.send({ t: 'err', msg: 'Игра прервана из-за ошибки сервера' });
+    for (const c of r.clients.values()) c.send({ t: 'err', msg: 'err.serverCrash' });
     rooms.delete(code);
     roomErrors.delete(code);
   }
@@ -112,7 +112,7 @@ wss.on('connection', (ws: WebSocket) => {
     } else if (msg.t === 'join' || msg.t === 'rejoin') {
       const code = String(msg.code ?? '').toUpperCase().trim();
       const r = rooms.get(code);
-      if (!r) return fail('Комната не найдена');
+      if (!r) return fail('err.roomNotFound');
       const p = msg.t === 'join' ? r.join(String(msg.name ?? ''), client) : r.rejoin(String(msg.token ?? ''), client);
       if (typeof p === 'string') return fail(p);
       room = r;

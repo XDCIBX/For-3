@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { releaseBaked } from './bake';
+import { getLang, playerName } from '../i18n';
 import { MOBS, type GameEvent, type HeroClass, type MinionSnap, type MobSnap, type Phase } from '@game/shared';
 import type { ClientState, PlayerInfo } from '../net/state';
 import { ArenaStage } from './arena';
@@ -132,6 +133,8 @@ export class Engine {
   stage!: Stage;
   private islands = new Map<number, IslandStage>();
   private tavernStage: TavernStage | null = null;
+  /** Язык, на котором подписаны герои у костра. */
+  private menuLang = '';
   private lairStage: LairStage | null = null;
   private arenaStage: ArenaStage | null = null;
   heroes = new Map<string, HeroView>();
@@ -286,8 +289,9 @@ export class Engine {
       disposeLabel(h.label);
     }
     this.heroes.clear();
-    const key = list.map((l) => `${l.cls}|${l.name}|${l.me}`).join(';');
-    if (this.menuHeroes.map((m) => m.key).join(';') === key && this.menuHeroes[0]?.model.root.parent === this.stage.scene) return;
+    const key = list.map((l) => `${l.cls}|${l.name}|${l.me}`).join(';') + `|${getLang()}`;
+    if (this.menuHeroes.map((m) => m.key).join(';') + `|${this.menuLang}` === key && this.menuHeroes[0]?.model.root.parent === this.stage.scene) return;
+    this.menuLang = getLang();
     for (const m of this.menuHeroes) {
       m.model.dispose();
       disposeLabel(m.label);
@@ -310,7 +314,7 @@ export class Engine {
       model.root.rotation.y = Math.atan2(-model.root.position.x * 0.5, 10 - model.root.position.z);
       let label: THREE.Sprite | null = null;
       if (l.name) {
-        label = nameSprite(l.name, l.me ? '#ffe14a' : '#ffffff');
+        label = nameSprite(playerName(l.name), l.me ? '#ffe14a' : '#ffffff');
         label.position.y = 2.6;
         model.root.add(label);
       }
@@ -331,6 +335,11 @@ export class Engine {
     this.myId = myId;
     this.mode = 'game';
     this.clearMenu();
+  }
+
+  /** Смена языка: вывеска таверны; подписи героев перерисуются сами (ключ включает язык). */
+  relocalize() {
+    this.tavernStage?.setSignText();
   }
 
   stageForPhase(ph: Phase, round = 1): Stage {
@@ -386,11 +395,11 @@ export class Engine {
       v.trot = p.r;
       v.t0 = now;
       const isMe = id === this.myId;
-      const labelKey = `${p.n}|${isMe}|${inTavern}`;
+      const labelKey = `${p.n}|${isMe}|${inTavern}|${getLang()}`;
       if (labelKey !== v.labelKey) {
         // Текстура подписи своя у каждой — освобождаем, иначе копятся каждую волну
         disposeLabel(v.label);
-        v.label = nameSprite(p.n, isMe ? '#ffe14a' : '#ffffff');
+        v.label = nameSprite(playerName(p.n), isMe ? '#ffe14a' : '#ffffff');
         v.label.position.y = 3.3;
         v.model.root.add(v.label);
         v.labelKey = labelKey;

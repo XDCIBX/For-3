@@ -30,7 +30,7 @@ export class Room {
 
   rejoin(token: string, client: RoomClient): Player | string {
     const p = [...this.game.players.values()].find((q) => q.token === token && !q.bot);
-    if (!p) return 'Сессия не найдена';
+    if (!p) return 'err.session';
     this.game.reconnect(p.id);
     this.attach(p, client);
     return p;

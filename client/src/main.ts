@@ -18,6 +18,7 @@ import {
   type GameEvent,
   type HeroClass,
   type Phase,
+  type Rarity,
   type S2C,
   type Snapshot,
   type WorldData,
@@ -37,6 +38,7 @@ import { overScreen } from './ui/over';
 import { el, esc, onTap } from './ui/dom';
 import { sfx } from './audio/sfx';
 import { reportOnce } from './report';
+import { getLang, itemName, playerName, setLang, t, tServer } from './i18n';
 import { clearSession, loadSession, loadSettings, saveSession, saveSettings, type Settings } from './settings';
 
 type Screen = 'menu' | 'lobby' | 'game';
@@ -68,6 +70,7 @@ class App {
   private reconnecting = false;
 
   constructor() {
+    setLang(this.settings.lang);
     this.engine = new Engine(document.getElementById('game') as HTMLCanvasElement);
     this.engine.setQuality(this.settings.quality);
     sfx.setEnabled(this.settings.sound);
@@ -75,7 +78,7 @@ class App {
     document.addEventListener('pointerdown', () => sfx.unlock(), { once: false, capture: true });
     this.showMenu();
     this.native();
-    const rh = el(`<div class="rotate-hint enabled"><div class="phone"></div>Поверните устройство горизонтально</div>`);
+    const rh = el(`<div class="rotate-hint enabled"><div class="phone"></div>${t('app.rotate')}</div>`);
     document.body.appendChild(rh);
     requestAnimationFrame((t) => this.loop(t));
     window.addEventListener('resize', () => {
@@ -173,6 +176,42 @@ class App {
     sfx.setEnabled(this.settings.sound);
     sfx.setMusic(this.settings.music);
     if (this.engine.quality !== this.settings.quality) this.engine.setQuality(this.settings.quality);
+    if (this.settings.lang !== getLang()) this.relocalize();
+  }
+
+  /** Сменить язык на лету: текущий экран перерисовывается, игра не прерывается. */
+  private relocalize() {
+    setLang(this.settings.lang);
+    this.engine.relocalize();
+    document.querySelector('.rotate-hint')?.replaceChildren(el(`<div class="phone"></div>`), document.createTextNode(t('app.rotate')));
+    if (this.screen === 'menu') this.showMenu();
+    else if (this.screen === 'lobby') {
+      this.showLobby();
+      this.lobby?.update(this.st);
+    } else if (this.screen === 'game' && this.hud) {
+      const old = this.hud.el;
+      this.hud = new Hud(this.engine);
+      this.hud.onPause = () => this.pauseButton();
+      old.replaceWith(this.hud.el);
+      this.hud.el.style.display = this.st.phase === 'tavern' ? 'none' : '';
+      this.controls?.relocalize();
+      if (this.tavernUi) {
+        const oldTav = this.tavernUi.el;
+        this.tavernUi = new TavernUi(
+          (id) => this.conn?.send({ t: 'buy', id }),
+          (v) => this.conn?.send({ t: 'ready', v }),
+        );
+        oldTav.replaceWith(this.tavernUi.el);
+        this.updateTavernShift();
+      }
+      this.pauseEl?.remove();
+      this.pauseEl = null;
+      if (this.overEl) {
+        const fresh = overScreen(this.st, () => this.leave());
+        this.overEl.replaceWith(fresh);
+        this.overEl = fresh;
+      }
+    }
   }
 
   private showLobby() {
@@ -218,11 +257,11 @@ class App {
 
   private pauseMenu() {
     if (this.ui.querySelector('.modal')) return;
-    const m = settingsModal(this.settings, () => this.applySettings(), [{ label: '🚪 Выйти в меню', cls: 'red', onClick: () => this.leave(), confirm: 'Точно выйти? Нажмите ещё раз' }]);
+    const m = settingsModal(this.settings, () => this.applySettings(), [{ label: t('pause.exit'), cls: 'red', onClick: () => this.leave(), confirm: t('pause.exitConfirm') }]);
     const paused = this.isPaused();
     const h2 = m.querySelector('h2') as HTMLElement;
-    h2.textContent = paused ? 'Меню · пауза' : this.conn?.local ? 'Меню' : 'Меню (игра продолжается)';
-    if (!paused && !this.st.me?.host && !this.conn?.local) h2.after(el(`<div class="pause-note">Поставить игру на паузу может только хост</div>`));
+    h2.textContent = paused ? t('pause.menuTitlePaused') : this.conn?.local ? t('pause.menuTitle') : t('pause.menuTitleRunning');
+    if (!paused && !this.st.me?.host && !this.conn?.local) h2.after(el(`<div class="pause-note">${t('pause.onlyHost')}</div>`));
     this.ui.appendChild(m);
   }
 
@@ -263,15 +302,15 @@ class App {
     const key = host ? 'host' : 'guest';
     if (this.pauseEl?.dataset.k === key && this.pauseEl.isConnected) return;
     this.pauseEl?.remove();
-    const hostName = [...this.st.players.values()].find((p) => p.host)?.n ?? 'Хост';
-    const text = host ? (this.conn?.local ? 'Игра остановлена' : 'Игра остановлена для всех игроков') : `${esc(hostName)} поставил игру на паузу`;
+    const hostName = playerName([...this.st.players.values()].find((p) => p.host)?.n ?? t('pause.host'));
+    const text = host ? (this.conn?.local ? t('pause.stopped') : t('pause.stoppedAll')) : t('pause.byHost', { name: esc(hostName) });
     this.pauseEl = el(`
       <div class="screen pause-ov" data-k="${key}">
         <div class="panel">
-          <h2>❚❚ Пауза</h2>
+          <h2>${t('pause.title')}</h2>
           <div class="pause-note">${text}</div>
-          ${host ? '<button class="btn green" id="resume">▶ Продолжить</button>' : '<div class="pause-note dim">Ждём, когда хост продолжит игру</div>'}
-          <button class="btn ghost" id="pmenu">⚙ Меню</button>
+          ${host ? `<button class="btn green" id="resume">${t('pause.resume')}</button>` : `<div class="pause-note dim">${t('pause.wait')}</div>`}
+          <button class="btn ghost" id="pmenu">${t('pause.menu')}</button>
         </div>
       </div>`);
     const resume = this.pauseEl.querySelector<HTMLElement>('#resume');
@@ -288,13 +327,13 @@ class App {
 
   private async connect(msg: { t: 'create'; name: string } | { t: 'join'; code: string; name: string }) {
     const err = this.ui.querySelector('#err');
-    if (err) err.textContent = 'Подключение…';
+    if (err) err.textContent = t('net.connecting');
     try {
       const c = await WsConnection.open(this.settings.server);
       this.attach(c);
       c.send(msg);
     } catch (e) {
-      if (err) err.textContent = `${(e as Error).message}. Проверьте адрес сервера в настройках.`;
+      if (err) err.textContent = t('net.checkServer', { err: (e as Error).message });
     }
   }
 
@@ -309,14 +348,14 @@ class App {
         this.reconnecting = false;
         return;
       } catch {
-        this.hud?.toast('Переподключение…', 'bad');
+        this.hud?.toast(t('net.reconnecting'), 'bad');
         await new Promise((r) => setTimeout(r, 2000));
       }
     }
     this.reconnecting = false;
     if (!silent) {
       clearSession();
-      this.showMenu('Не удалось переподключиться к серверу');
+      this.showMenu(t('net.reconnectFail'));
     }
   }
 
@@ -367,13 +406,13 @@ class App {
       case 'err':
         if (this.screen === 'menu') {
           const err = this.ui.querySelector('#err');
-          if (err) err.textContent = m.msg;
+          if (err) err.textContent = tServer(m.msg);
           this.conn?.close();
           this.conn = null;
-        } else if (m.msg === 'Сессия не найдена') {
+        } else if (m.msg === 'err.session') {
           clearSession();
           this.leave();
-        } else this.hud?.toast(m.msg, 'bad');
+        } else this.hud?.toast(tServer(m.msg), 'bad');
         break;
       case 's':
         this.onSnapshot(m);
@@ -430,11 +469,11 @@ class App {
         const pvp = isPvpRound(st.round);
         const dragon = st.round === DRAGON_ROUND;
         const lair = st.round >= LAIR_ROUND;
-        if (dragon) hud.showBanner('ФИНАЛ: ДРАКОН!', 'Красный дракон проснулся в своём логове', '#ff4a2a');
+        if (dragon) hud.showBanner(t('banner.dragon'), t('banner.dragonSub'), '#ff4a2a');
         else
           hud.showBanner(
-            pvp ? 'ПвП ВОЛНА!' : `ВОЛНА ${st.round}`,
-            pvp ? 'Дуэли каждого с каждым' : lair ? 'Логово дракона: его стражи наступают' : isTrollRound(st.round) ? 'Берегитесь — босс!' : 'Защитите остров!',
+            pvp ? t('banner.pvp') : t('banner.wave', { n: st.round }),
+            pvp ? t('banner.pvpSub') : lair ? t('banner.lairSub') : isTrollRound(st.round) ? t('banner.bossSub') : t('banner.islandSub'),
             pvp ? '#ff7a5a' : lair ? '#ff8a4a' : 'var(--gold)',
           );
         sfx.fanfare();
@@ -442,7 +481,7 @@ class App {
         break;
       }
       case 'clear':
-        hud.showBanner(isPvpRound(st.round) ? 'ДУЭЛИ ОКОНЧЕНЫ' : 'ВОЛНА ПРОЙДЕНА!', `+${15 + 5 * st.round} золота каждому`, '#8aff7a');
+        hud.showBanner(isPvpRound(st.round) ? t('banner.duelsOver') : t('banner.waveClear'), t('banner.goldEach', { n: 15 + 5 * st.round }), '#8aff7a');
         sfx.victory();
         break;
       case 'tavern':
@@ -459,7 +498,7 @@ class App {
         const d = st.duel;
         const a = d ? st.players.get(d.a) : null;
         const b = d ? st.players.get(d.b) : null;
-        hud.showBanner('ДУЭЛЬ!', a && b ? `${a.n} против ${b.n}` : '', '#ff7a5a');
+        hud.showBanner(t('banner.duel'), a && b ? t('banner.vs', { a: playerName(a.n), b: playerName(b.n) }) : '', '#ff7a5a');
         sfx.fanfare();
         sfx.music('battle');
         break;
@@ -511,17 +550,17 @@ class App {
           if (e.pid === me) {
             const p = this.engine.heroPos(me);
             hud.float(`${e.v > 0 ? '+' : ''}${e.v} 💰`, 'gold', p ? p.x : e.x, 2.8, p ? p.z : e.z, 1.2);
-            if (e.why) hud.toast(`${e.why}: ${e.v > 0 ? '+' : ''}${e.v} золота`, e.v > 0 ? 'gold' : 'bad');
+            if (e.why) hud.toast(t('toast.gold', { why: tServer(e.why), v: `${e.v > 0 ? '+' : ''}${e.v}` }), e.v > 0 ? 'gold' : 'bad');
             setTimeout(() => sfx.coin(), e.why ? 0 : 450);
           }
           break;
         case 'msg':
-          hud.toast(e.text, e.kind);
+          hud.toast(tServer(e.k, e.p), e.kind);
           break;
         case 'buy': {
           const p = this.st.players.get(e.pid);
           if (e.pid === me) sfx.buy();
-          else this.tavernToast(`${p?.n ?? '?'} купил «${e.name}»`);
+          else this.tavernToast(t('toast.bought', { name: playerName(p?.n ?? '?'), item: e.tpl ? itemName(e.tpl, e.rarity as Rarity) : e.name }));
           break;
         }
         case 'cast': {
@@ -559,7 +598,8 @@ class App {
             this.haptic(ImpactStyle.Heavy);
           } else if (e.k === 'bossspawn') {
             sfx.slam();
-            hud.showBanner('БОСС!', 'Тролль-вождь вышел на охоту', '#ff5a3a');
+            // Дракона встречает свой баннер на заставке волны
+            if (this.st.round < LAIR_ROUND) hud.showBanner(t('banner.boss'), t('banner.bossTroll'), '#ff5a3a');
           }
           break;
         case 'mdie':
@@ -578,10 +618,10 @@ class App {
           break;
         case 'duel': {
           const w = e.winner ? this.st.players.get(e.winner) : null;
-          if (!w) hud.showBanner('НИЧЬЯ!', '', '#fff');
-          else if (e.winner === me) hud.showBanner('ПОБЕДА!', `+${e.win} золота`, '#8aff7a');
-          else if (e.a === me || e.b === me) hud.showBanner('ПОРАЖЕНИЕ', e.lose ? `−${e.lose} золота` : '', '#ff7a6a');
-          else hud.showBanner(`${w.n} побеждает!`, '', 'var(--gold)');
+          if (!w) hud.showBanner(t('banner.draw'), '', '#fff');
+          else if (e.winner === me) hud.showBanner(t('banner.win'), t('banner.goldPlus', { n: e.win }), '#8aff7a');
+          else if (e.a === me || e.b === me) hud.showBanner(t('banner.lose'), e.lose ? t('banner.goldMinus', { n: e.lose }) : '', '#ff7a6a');
+          else hud.showBanner(t('banner.winner', { name: playerName(w.n) }), '', 'var(--gold)');
           break;
         }
       }
@@ -708,9 +748,9 @@ class App {
     const tick = () => {
       const c = this.conn;
       if (!c) return set('', 'ping', false);
-      if (c.local) return set('соло', 'ping solo', true);
+      if (c.local) return set(t('ping.solo'), 'ping solo', true);
       const ms = Math.round(c.rtt * 1000);
-      set(`${ms} мс`, `ping ${ms < 90 ? '' : ms < 180 ? 'mid' : 'bad'}`, true);
+      set(t('ping.ms', { n: ms }), `ping ${ms < 90 ? '' : ms < 180 ? 'mid' : 'bad'}`, true);
     };
     tick();
     setInterval(tick, 500);

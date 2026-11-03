@@ -1,4 +1,5 @@
 import { DEFAULT_PORT } from '@game/shared';
+import { systemLang, tIn, type Lang } from './i18n';
 
 export interface Settings {
   name: string;
@@ -7,6 +8,8 @@ export interface Settings {
   music: boolean;
   quality: 'high' | 'low';
   haptics: boolean;
+  /** Язык интерфейса; по умолчанию — язык системы. */
+  lang: Lang;
 }
 
 const KEY = 'three-heroes-settings';
@@ -30,7 +33,8 @@ export function defaultServer(): string {
 
 export function loadSettings(): Settings {
   const lowEnd = (navigator.hardwareConcurrency ?? 8) <= 4;
-  const def: Settings = { name: 'Герой', server: defaultServer(), sound: true, music: true, quality: lowEnd ? 'low' : 'high', haptics: true };
+  const lang = systemLang();
+  const def: Settings = { name: tIn(lang, 'defaultName'), server: defaultServer(), sound: true, music: true, quality: lowEnd ? 'low' : 'high', haptics: true, lang };
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) return { ...def, ...JSON.parse(raw) };

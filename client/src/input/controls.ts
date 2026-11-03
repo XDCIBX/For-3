@@ -1,6 +1,7 @@
 import { CLASSES, type HeroClass, type SkillDef } from '@game/shared';
 import { skillIcon } from '../ui/icons';
 import type { AimState } from '../render/engine';
+import { t } from '../i18n';
 
 export interface ControlHost {
   cast(slot: number, dx: number, dz: number, dist: number): void;
@@ -48,7 +49,7 @@ export class Controls {
       <div class="joy"><div class="knob"></div></div>
       <div class="cancel-zone">✕</div>
       <div class="skills">
-        <div class="sk main" data-s="0"><div class="si"></div><div class="cd"></div><div class="cdt"></div><div class="key">ПРОБЕЛ</div></div>
+        <div class="sk main" data-s="0"><div class="si"></div><div class="cd"></div><div class="cdt"></div><div class="key">${t('controls.space')}</div></div>
         <div class="sk s1" data-s="1"><div class="si"></div><div class="cd"></div><div class="cdt"></div><div class="key">1</div></div>
         <div class="sk s2" data-s="2"><div class="si"></div><div class="cd"></div><div class="cdt"></div><div class="key">2</div></div>
         <div class="sk s3" data-s="3"><div class="si"></div><div class="cd"></div><div class="cdt"></div><div class="key">3</div></div>
@@ -147,6 +148,12 @@ export class Controls {
     this.holdMain = false;
     if (this.aimSlot >= 0) this.skillCancel(this.aimSlot);
     for (const b of this.btns) b.classList.remove('pressed');
+  }
+
+  /** Подписи на кнопках на текущем языке. */
+  relocalize() {
+    const k = this.el.querySelector('.sk.main .key');
+    if (k) k.textContent = t('controls.space');
   }
 
   dispose() {

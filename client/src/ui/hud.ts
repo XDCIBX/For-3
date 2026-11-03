@@ -2,6 +2,7 @@ import { CLASSES, DRAGON_ROUND, MAX_ROUNDS, isPvpRound, roundsToPvp, worldFor, t
 import type { ClientState } from '../net/state';
 import type { Engine } from '../render/engine';
 import { CLASS_BG, el, esc } from './dom';
+import { playerName, t } from '../i18n';
 import { COIN, SWORDS, classIcon } from './icons';
 import { fullscreenButton } from './fullscreen';
 
@@ -83,7 +84,7 @@ export class Hud {
         <div class="banner"></div>
         <div class="respawn" style="display:none"></div>
         <div class="duel-vs" style="display:none"></div>
-        <div class="panel spectate" style="display:none">👀 Вы зритель — смотрите дуэль</div>
+        <div class="panel spectate" style="display:none">${t('hud.spectate')}</div>
       </div>`);
     this.flBox = this.el.querySelector('.floaters')!;
     this.toastBox = this.el.querySelector('.toasts')!;
@@ -176,17 +177,25 @@ export class Hud {
     const rs = this.q('.rs')!;
     const mobbar = this.q('.mobbar')!;
     const pvp = isPvpRound(st.round);
-    this.set('rt', `Волна ${st.round}/${MAX_ROUNDS}${pvp ? ' · ПвП' : st.round === DRAGON_ROUND ? ' · Дракон' : ''}`, (v) => (rt.textContent = v));
+    this.set('rt', t('hud.wave', { n: st.round, max: MAX_ROUNDS }) + (pvp ? t('hud.pvp') : st.round === DRAGON_ROUND ? t('hud.dragon') : ''), (v) => (rt.textContent = v));
     // DOM трогаем только при изменениях: перерисовка каждый кадр тормозит телефон и мигает кнопками
     if (st.phase === 'battle') {
-      this.set('rs', `Врагов осталось: ${st.mobsLeft}`, (v) => (rs.textContent = v));
+      this.set('rs', t('hud.enemiesLeft', { n: st.mobsLeft }), (v) => (rs.textContent = v));
       this.set('mbd', '', (v) => (mobbar.style.display = v));
       this.set('mbw', `${(st.mobsTotal ? (st.mobsLeft / st.mobsTotal) * 100 : 0).toFixed(1)}%`, (v) => ((mobbar.firstElementChild as HTMLElement).style.width = v));
     } else {
       this.set('mbd', 'none', (v) => (mobbar.style.display = v));
       const nextPvp = roundsToPvp(st.round + 1) + 1;
       const txt =
-        st.phase === 'intro' ? 'Приготовьтесь!' : st.phase.startsWith('duel') ? `Дуэль ${(st.duel?.idx ?? 0) + 1} из ${st.duel?.total ?? 0}${st.phase === 'duel' ? ` · ${Math.ceil(st.timer)} с` : ''}` : st.phase === 'clear' ? 'Победа!' : pvp || st.round >= DRAGON_ROUND - 1 ? '' : `До ПвП: ${nextPvp} р.`;
+        st.phase === 'intro'
+          ? t('hud.getReady')
+          : st.phase.startsWith('duel')
+            ? t('hud.duelOf', { i: (st.duel?.idx ?? 0) + 1, n: st.duel?.total ?? 0 }) + (st.phase === 'duel' ? ` · ${t('hud.sec', { n: Math.ceil(st.timer) })}` : '')
+            : st.phase === 'clear'
+              ? t('hud.cleared')
+              : pvp || st.round >= DRAGON_ROUND - 1
+                ? ''
+                : t('hud.toPvp', { n: nextPvp });
       this.set('rs', txt, (v) => (rs.textContent = v));
     }
 
@@ -199,7 +208,7 @@ export class Hud {
       matesBox.innerHTML = mates
         .map(
           (p) => `<div class="mate" data-id="${p.id}"><div class="mi" style="background:${CLASS_BG[p.c]}">${classIcon(p.c)}</div>
-          <div style="flex:1"><div class="mn"><span>${esc(p.n)}</span><span class="g"></span></div><div class="mb"><i></i></div></div></div>`,
+          <div style="flex:1"><div class="mn"><span>${esc(playerName(p.n))}</span><span class="g"></span></div><div class="mb"><i></i></div></div></div>`,
         )
         .join('');
     }
@@ -216,7 +225,7 @@ export class Hud {
     const resp = this.el.querySelector<HTMLElement>('.respawn')!;
     if (!me.al && st.phase === 'battle') {
       this.set('respd', '', (v) => (resp.style.display = v));
-      this.set('resp', String(Math.ceil(me.rs)), (v) => (resp.innerHTML = `💀 Вы пали!<br><span style="font-size:20px">Возрождение через ${v}…</span>`));
+      this.set('resp', String(Math.ceil(me.rs)), (v) => (resp.innerHTML = `${t('hud.dead')}<br><span style="font-size:20px">${t('hud.respawn', { n: v })}</span>`));
     } else this.set('respd', 'none', (v) => (resp.style.display = v));
 
     // Дуэль
@@ -230,7 +239,7 @@ export class Hud {
         const key = `${a.id}${b.id}`;
         if (vs.dataset.k !== key) {
           vs.dataset.k = key;
-          vs.innerHTML = `<span class="stroke" style="color:${CLASSES[a.c].color}">${esc(a.n)}</span><span class="vs">${SWORDS}</span><span class="stroke" style="color:${CLASSES[b.c].color}">${esc(b.n)}</span>`;
+          vs.innerHTML = `<span class="stroke" style="color:${CLASSES[a.c].color}">${esc(playerName(a.n))}</span><span class="vs">${SWORDS}</span><span class="stroke" style="color:${CLASSES[b.c].color}">${esc(playerName(b.n))}</span>`;
         }
         this.set('vs', 'flex', (v) => (vs.style.display = v));
       }
