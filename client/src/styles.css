@@ -1642,3 +1642,6 @@ input.field:focus {
   font-weight: 700;
   cursor: pointer;
 }
+
+/* Съёмка скриншотов (dev, ?shots=1) */
+body.shots .ping { display: none !important; }

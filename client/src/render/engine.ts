@@ -410,11 +410,11 @@ export class Engine {
       const hidden = (!p.con && !p.bot) || p.st.includes('x');
       // В таверне крупным планом показываем только своего героя
       v.model.root.visible = !hidden && (!inTavern || isMe);
-      if (v.label) v.label.visible = !inTavern;
-      v.bar.group.visible = !inTavern && p.al;
+      if (v.label) v.label.visible = !inTavern && !this.cleanShot;
+      v.bar.group.visible = !inTavern && p.al && !this.cleanShot;
       if (isMe) {
         if (this.selfRing.parent !== v.model.root) v.model.root.add(this.selfRing);
-        this.selfRing.visible = !inTavern;
+        this.selfRing.visible = !inTavern && !this.cleanShot;
       }
     }
     for (const [id, v] of this.heroes) {
@@ -448,7 +448,7 @@ export class Engine {
       v.lastHp = m.hp;
       v.info = m;
       v.bar.set(m.hp / m.mhp);
-      v.bar.group.visible = m.hp < m.mhp || !!MOBS[m.k].boss;
+      v.bar.group.visible = (m.hp < m.mhp || !!MOBS[m.k].boss) && !this.cleanShot;
     }
     for (const [id, v] of this.mobs) {
       if (!seen.has(id)) {
@@ -822,7 +822,11 @@ export class Engine {
   resScale = 1;
   private perf = { last: 0, ema: 16, t: 0 };
 
+  /** Не менять разрешение под FPS (съёмка скриншотов). */
+  lockRes = false;
+
   private adaptResolution(now: number) {
+    if (this.lockRes) return;
     const p = this.perf;
     const real = p.last ? now - p.last : 16;
     p.last = now;
@@ -1011,7 +1015,26 @@ export class Engine {
     }
   }
 
+  /** Постановочный кадр (dev): без подписей, полосок здоровья и колец под ногами. */
+  cleanShot = false;
+
+  /** Неподвижная камера для постановочных кадров (dev, ?shots=1). */
+  camOverride: { pos: [number, number, number]; look: [number, number, number]; fov?: number } | null = null;
+
   private updateCamera(dt: number) {
+    if (this.camOverride) {
+      const o = this.camOverride;
+      this.camera.clearViewOffset();
+      if (o.fov && this.camera.fov !== o.fov) {
+        this.camera.fov = o.fov;
+        this.camera.updateProjectionMatrix();
+      }
+      this.camera.position.set(...o.pos);
+      this.camera.lookAt(...o.look);
+      FOCUS.value.set(o.look[0], 1.2, o.look[2]);
+      FADE_R.value = 0;
+      return;
+    }
     const cam = this.camera;
     const aspect = cam.aspect;
     const zoom = Math.min(1.9, Math.max(1, Math.pow(1.75 / aspect, 0.7)));

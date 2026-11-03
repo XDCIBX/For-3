@@ -38,6 +38,7 @@ import { overScreen } from './ui/over';
 import { el, esc, onTap } from './ui/dom';
 import { sfx } from './audio/sfx';
 import { reportOnce } from './report';
+import * as Shared from '@game/shared';
 import { getLang, itemName, playerName, setLang, t, tServer } from './i18n';
 import { clearSession, loadSession, loadSettings, saveSession, saveSettings, type Settings } from './settings';
 
@@ -97,7 +98,15 @@ class App {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden && this.conn?.local && this.screen === 'game' && !this.isPaused() && this.canPause()) this.requestPause(true);
     });
-    if (import.meta.env.DEV) (window as unknown as { __app: App }).__app = this;
+    if (import.meta.env.DEV) {
+      (window as unknown as { __app: App; __shared: typeof Shared }).__app = this;
+      (window as unknown as { __shared: typeof Shared }).__shared = Shared;
+      // ?shots=1 — съёмка: постоянное разрешение, без служебных значков
+      if (new URLSearchParams(location.search).has('shots')) {
+        this.engine.lockRes = true;
+        document.body.classList.add('shots');
+      }
+    }
     setTimeout(() => document.getElementById('boot')?.classList.add('hide'), 300);
     // Попытка вернуться в игру после перезагрузки страницы
     const sess = loadSession();
@@ -773,7 +782,8 @@ class App {
   }
 
   private frame(t: number) {
-    const realDt = Math.min(0.05, (t - this.last) / 1000);
+    // При съёмке на медленном рендере кадр длинный — эффекты должны успевать за симуляцией
+    const realDt = Math.min(this.engine.lockRes ? 0.5 : 0.05, (t - this.last) / 1000);
     this.last = t;
     // На паузе замирает всё: анимации, эффекты, предсказание движения, перезарядки
     const paused = this.isPaused();
