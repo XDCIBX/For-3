@@ -9,7 +9,25 @@ export interface ControlHost {
   ready(slot: number): boolean;
   myPos(): { x: number; z: number } | null;
   screenToGround(x: number, y: number): { x: number; z: number } | null;
+  /** Кнопка Start на геймпаде: пауза / меню. */
+  pause?(): void;
 }
+
+/** Мёртвая зона стиков геймпада. */
+const PAD_DEAD = 0.22;
+const padAxis = (v: number | undefined) => (v === undefined || Math.abs(v) < PAD_DEAD ? 0 : (v - Math.sign(v) * PAD_DEAD) / (1 - PAD_DEAD));
+/**
+ * Раскладка геймпада (стандартная, как у Xbox): A/RT — атака (удержание — серия),
+ * X/LB — умение 1, Y/RB — умение 2, B/LT — умение 3, Start — пауза.
+ */
+const PAD_SKILLS: [number, number][] = [
+  [2, 1],
+  [4, 1],
+  [3, 2],
+  [5, 2],
+  [1, 3],
+  [6, 3],
+];
 
 const AIM_COLORS = [0xffffff, 0xffd04a, 0x7ae0ff, 0xff7a5a];
 const DRAG_DEAD = 14;
@@ -38,6 +56,10 @@ export class Controls {
   private lastP = ['', '', '', ''];
   private cls: HeroClass | null = null;
   private disposers: (() => void)[] = [];
+  /** Кнопки геймпада, нажатые в прошлом кадре (для срабатывания по нажатию). */
+  private padPrev: boolean[] = [];
+  /** Направление правого стика: прицел умений с геймпада. */
+  private padAim: { x: number; z: number; m: number } | null = null;
   enabled = true;
 
   constructor(host: ControlHost, cls: HeroClass) {
@@ -297,6 +319,11 @@ export class Controls {
     let x = this.joyVec.x;
     let z = this.joyVec.y;
     const k = this.keys;
+    const pad = this.pollPad();
+    if (pad) {
+      x += pad.x;
+      z += pad.z;
+    }
     if (k.has('KeyW') || k.has('ArrowUp')) z -= 1;
     if (k.has('KeyS') || k.has('ArrowDown')) z += 1;
     if (k.has('KeyA') || k.has('ArrowLeft')) x -= 1;
@@ -309,6 +336,41 @@ export class Controls {
     this.move = this.enabled ? { x, z } : { x: 0, z: 0 };
     if (this.enabled && this.holdMain && this.host.ready(0)) this.host.cast(0, 0, 0, 0);
     if (this.enabled && (k.has('Space') || k.has('KeyJ')) && this.host.ready(0)) this.castToMouse(0);
+    if (this.enabled && pad?.attack && this.host.ready(0)) this.castPad(0);
+  }
+
+  /** Опрос геймпада: движение, прицел, нажатия умений и паузы. */
+  private pollPad(): { x: number; z: number; attack: boolean } | null {
+    const pads = navigator.getGamepads?.() ?? [];
+    const gp = [...pads].find((g) => g && g.connected && g.mapping === 'standard') ?? [...pads].find((g) => g && g.connected);
+    if (!gp) return null;
+    const btn = (i: number) => !!gp.buttons[i] && (gp.buttons[i].pressed || gp.buttons[i].value > 0.5);
+    const pressed = (i: number) => btn(i) && !this.padPrev[i];
+    let x = padAxis(gp.axes[0]);
+    let z = padAxis(gp.axes[1]);
+    // Крестовина — тоже движение
+    if (btn(12)) z -= 1;
+    if (btn(13)) z += 1;
+    if (btn(14)) x -= 1;
+    if (btn(15)) x += 1;
+    const rx = padAxis(gp.axes[2]);
+    const rz = padAxis(gp.axes[3]);
+    const rm = Math.hypot(rx, rz);
+    this.padAim = rm > 0.3 ? { x: rx / rm, z: rz / rm, m: Math.min(1, rm) } : null;
+    if (this.enabled) {
+      for (const [b, slot] of PAD_SKILLS) if (pressed(b) && this.host.ready(slot)) this.castPad(slot);
+    }
+    if (pressed(9)) this.host.pause?.();
+    this.padPrev = gp.buttons.map((_, i) => btn(i));
+    return { x, z, attack: btn(0) || btn(7) };
+  }
+
+  /** Умение с геймпада: по правому стику, иначе — автоприцел. */
+  private castPad(i: number) {
+    const def = this.defs[i];
+    const a = this.padAim;
+    if (a && def.aim !== 'self') this.host.cast(i, a.x, a.z, def.aim === 'point' ? Math.max(1.5, def.range * a.m) : def.range);
+    else this.host.cast(i, 0, 0, 0);
   }
 
   setCooldowns(cd: number[], cdm: number[]) {

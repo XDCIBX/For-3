@@ -1,0 +1,52 @@
+{
+  "name": "twenty-five-waves",
+  "productName": "25 Waves",
+  "private": true,
+  "version": "1.0.0",
+  "description": "25 Waves — co-op 2.5D action: three heroes, 25 waves of monsters and the Red Dragon",
+  "author": "25 Waves",
+  "main": "main.cjs",
+  "scripts": {
+    "web": "node scripts/copy-web.mjs",
+    "start": "npm run web && electron .",
+    "pack": "npm run web && electron-builder --dir",
+    "dist:linux": "npm run web && electron-builder --linux --dir",
+    "dist:win": "npm run web && electron-builder --win --dir",
+    "dist:mac": "npm run web && electron-builder --mac --dir"
+  },
+  "devDependencies": {
+    "electron": "44.7.2",
+    "electron-builder": "26.17.0"
+  },
+  "build": {
+    "appId": "com.for3.twentyfivewaves",
+    "productName": "25 Waves",
+    "copyright": "© 2026 25 Waves",
+    "directories": {
+      "output": "release",
+      "buildResources": "build"
+    },
+    "files": [
+      "main.cjs",
+      "app/**/*",
+      "build/icon.png"
+    ],
+    "asar": true,
+    "win": {
+      "target": [{ "target": "dir", "arch": ["x64"] }],
+      "icon": "build/icon.ico",
+      "executableName": "25Waves"
+    },
+    "linux": {
+      "target": [{ "target": "dir", "arch": ["x64"] }],
+      "icon": "build/icon.png",
+      "executableName": "25waves",
+      "category": "Game"
+    },
+    "mac": {
+      "target": [{ "target": "dir", "arch": ["universal"] }],
+      "icon": "build/icon.png",
+      "category": "public.app-category.action-games"
+    }
+  }
+}

@@ -1,0 +1,55 @@
+name: Сборка для Steam (Windows / macOS / Linux)
+
+# Запуск вручную (вкладка Actions → «Run workflow») или по тегу версии v*.
+# Готовые папки для загрузки в Steam (SteamPipe) — в артефактах сборки.
+on:
+  workflow_dispatch:
+  push:
+    tags: ['v*']
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: win
+            out: desktop/release/win-unpacked
+          - os: macos-latest
+            target: mac
+            out: desktop/release/mac-universal
+          - os: ubuntu-latest
+            target: linux
+            out: desktop/release/linux-unpacked
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            desktop/package-lock.json
+      - run: npm ci
+      - run: npm ci
+        working-directory: desktop
+      - name: Сборка
+        working-directory: desktop
+        env:
+          # Адрес публичного игрового сервера (wss://…) — секрет репозитория SERVER_URL
+          VITE_SERVER_URL: ${{ secrets.SERVER_URL }}
+          # Подпись и нотаризация macOS (необязательно): сертификат Developer ID и Apple ID
+          CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          CSC_IDENTITY_AUTO_DISCOVERY: ${{ secrets.MAC_CERT_P12_BASE64 != '' }}
+        run: npm run dist:${{ matrix.target }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: 25-waves-${{ matrix.target }}
+          path: ${{ matrix.out }}
+          if-no-files-found: error

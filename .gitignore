@@ -11,3 +11,8 @@ client/ios/DerivedData/
 .vscode/
 .idea/
 dist-demo/
+
+# Десктоп (Electron)
+desktop/node_modules/
+desktop/app/
+desktop/release/

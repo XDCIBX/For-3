@@ -23,7 +23,8 @@ export function defaultServer(): string {
   const baked = import.meta.env.VITE_SERVER_URL as string | undefined;
   if (baked) return baked;
   const { protocol, hostname, port } = window.location;
-  const isNative = protocol === 'capacitor:' || protocol === 'ionic:' || ((hostname === 'localhost' || hostname === '127.0.0.1') && !port);
+  // app: — десктопная сборка (Electron, Steam)
+  const isNative = protocol === 'capacitor:' || protocol === 'ionic:' || protocol === 'app:' || ((hostname === 'localhost' || hostname === '127.0.0.1') && !port);
   if (isNative) return `ws://192.168.0.10:${DEFAULT_PORT}`;
   const ws = protocol === 'https:' ? 'wss:' : 'ws:';
   // Dev-сервер Vite (5173) → игровой сервер на стандартном порту

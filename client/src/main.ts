@@ -90,9 +90,8 @@ class App {
     window.addEventListener('keydown', (e) => {
       if (this.screen !== 'game' || e.repeat || (e.target as HTMLElement)?.tagName === 'INPUT') return;
       if (e.code !== 'Escape' && e.code !== 'KeyP') return;
-      if (this.isPaused() && this.st.me?.host && !this.ui.querySelector('.modal')) this.requestPause(false);
-      else if (e.code === 'Escape' && this.ui.querySelector('.modal')) this.ui.querySelector('.modal')?.remove();
-      else this.pauseButton();
+      if (e.code === 'Escape' && this.ui.querySelector('.modal')) this.ui.querySelector('.modal')?.remove();
+      else this.togglePause();
     });
     // Одиночная игра сама встаёт на паузу, когда приложение свернули
     document.addEventListener('visibilitychange', () => {
@@ -249,6 +248,7 @@ class App {
         ready: (s) => this.cdLeft[s] <= 0.02 && this.castGuard[s] <= 0,
         myPos: () => this.engine.heroPos(this.st.myId),
         screenToGround: (x, y) => this.engine.screenToGround(x, y),
+        pause: () => this.togglePause(),
       },
       me?.c ?? 'warrior',
     );
@@ -282,6 +282,12 @@ class App {
     this.pauseWant = { v, t: performance.now() };
     if (v) this.controls?.release();
     this.updatePauseOverlay();
+  }
+
+  /** Esc/P/Start: хост ставит и снимает паузу, остальные открывают меню. */
+  private togglePause() {
+    if (this.isPaused() && this.st.me?.host && !this.ui.querySelector('.modal')) this.requestPause(false);
+    else this.pauseButton();
   }
 
   /** Кнопка ❚❚: хост замораживает игру для всех, остальные открывают меню. */
