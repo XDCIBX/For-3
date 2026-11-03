@@ -22,7 +22,10 @@ export const el: UiDict = {
   'set.server': 'Διεύθυνση διακομιστή',
   'set.sound': 'Ηχητικά εφέ',
   'set.music': 'Μουσική',
-  'set.quality': 'Υψηλή ποιότητα γραφικών',
+  'set.quality': 'Γραφικά',
+  'set.qLow': 'Χαμηλά',
+  'set.qHigh': 'Υψηλά',
+  'set.qUltra': 'Ultra (PC)',
   'set.vibration': 'Δόνηση',
   'set.done': 'Τέλος',
 

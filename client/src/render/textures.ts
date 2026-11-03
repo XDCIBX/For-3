@@ -10,6 +10,20 @@ import { Rng } from '@game/shared';
 type Draw = (g: CanvasRenderingContext2D, s: number, r: Rng) => void;
 
 const cache = new Map<string, THREE.CanvasTexture>();
+/** Анизотропная фильтрация: чёткость земли и стен под острым углом (ультра — максимум видеокарты). */
+let aniso = 4;
+export function setTextureAnisotropy(n: number) {
+  if (n === aniso) return;
+  aniso = n;
+  for (const t of cache.values()) {
+    t.anisotropy = n;
+    t.needsUpdate = true;
+  }
+  for (const t of repCache.values()) {
+    t.anisotropy = n;
+    t.needsUpdate = true;
+  }
+}
 
 function make(key: string, size: number, draw: Draw, repeat = true): THREE.CanvasTexture {
   let t = cache.get(key);
@@ -21,7 +35,7 @@ function make(key: string, size: number, draw: Draw, repeat = true): THREE.Canva
   draw(g, size, new Rng(key.length * 7919 + size));
   t = new THREE.CanvasTexture(c);
   t.colorSpace = THREE.SRGBColorSpace;
-  t.anisotropy = 4;
+  t.anisotropy = aniso;
   t.name = key;
   if (repeat) t.wrapS = t.wrapT = THREE.RepeatWrapping;
   cache.set(key, t);

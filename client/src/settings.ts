@@ -6,7 +6,8 @@ export interface Settings {
   server: string;
   sound: boolean;
   music: boolean;
-  quality: 'high' | 'low';
+  /** Графика: низкая (слабые телефоны), высокая, ультра (ПК: живые тени, свечение). */
+  quality: 'low' | 'high' | 'ultra';
   haptics: boolean;
   /** Язык интерфейса; по умолчанию — язык системы. */
   lang: Lang;
@@ -33,9 +34,12 @@ export function defaultServer(): string {
 }
 
 export function loadSettings(): Settings {
-  const lowEnd = (navigator.hardwareConcurrency ?? 8) <= 4;
+  // ПК (в том числе десктопная сборка для Steam) — ультра; слабый телефон — низкая
+  const cores = navigator.hardwareConcurrency ?? 8;
+  const touch = window.matchMedia?.('(pointer: coarse)').matches || /Android|iPhone|iPad/i.test(navigator.userAgent);
+  const quality: Settings['quality'] = window.location.protocol === 'app:' || (!touch && cores >= 4) ? 'ultra' : touch && cores <= 4 ? 'low' : 'high';
   const lang = systemLang();
-  const def: Settings = { name: tIn(lang, 'defaultName'), server: defaultServer(), sound: true, music: true, quality: lowEnd ? 'low' : 'high', haptics: true, lang };
+  const def: Settings = { name: tIn(lang, 'defaultName'), server: defaultServer(), sound: true, music: true, quality, haptics: true, lang };
   try {
     const raw = localStorage.getItem(KEY);
     if (raw) return { ...def, ...JSON.parse(raw) };

@@ -344,6 +344,7 @@ export function blobShadow(size = 1.2): THREE.Mesh {
     cached('blobplane', () => new THREE.PlaneGeometry(1, 1).rotateX(-Math.PI / 2)),
     new THREE.MeshBasicMaterial({ map: blobTex, transparent: true, depthWrite: false }),
   );
+  m.name = 'blob';
   m.scale.setScalar(size);
   m.position.y = 0.03;
   m.renderOrder = 1;

@@ -1836,14 +1836,25 @@ export class Game {
           b.z += (dz / d) * push * wb;
         }
       }
+      // Герои не толкают боссов и не тащат мобов за собой рывком: босс — непреодолимая
+      // туша (рывок в него обрывается у его края), сквозь обычных мобов рывок проходит,
+      // а шагом герой лишь мягко раздвигает мелочь
+      const boss = !!MOBS[a.kind].boss;
       for (const p of this.players.values()) {
         if (!p.alive || p.spectator) continue;
         const dx = a.x - p.x;
         const dz = a.z - p.z;
         const min = a.radius + PLAYER_RADIUS * 0.9;
         const d2 = dx * dx + dz * dz;
-        if (d2 < min * min) {
-          const d = Math.sqrt(d2) || 0.01;
+        if (d2 >= min * min) continue;
+        const d = Math.sqrt(d2) || 0.01;
+        if (boss) {
+          p.dash = null;
+          const pos = { x: a.x - (dx / d) * min, z: a.z - (dz / d) * min };
+          resolveCollision(pos, PLAYER_RADIUS, obs, bound);
+          p.x = pos.x;
+          p.z = pos.z;
+        } else if (!p.dash) {
           a.x = p.x + (dx / d) * min;
           a.z = p.z + (dz / d) * min;
         }

@@ -1,5 +1,10 @@
 import * as THREE from 'three';
 import { releaseBaked } from './bake';
+import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
+import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
+import { setTextureAnisotropy } from './textures';
 import { getLang, playerName } from '../i18n';
 import { MOBS, type GameEvent, type HeroClass, type MinionSnap, type MobSnap, type Phase } from '@game/shared';
 import type { ClientState, PlayerInfo } from '../net/state';
@@ -125,6 +130,8 @@ export interface AimState {
 const MENU_SEED = 20251;
 
 /** Рендер-движок: сцены, сущности, камера, интерполяция. */
+export type Quality = 'low' | 'high' | 'ultra';
+
 export class Engine {
   readonly renderer: THREE.WebGLRenderer;
   readonly camera: THREE.PerspectiveCamera;
@@ -170,7 +177,14 @@ export class Engine {
   menuShift = 0;
   private phase: Phase = 'lobby';
   private seed = 0;
-  quality: 'high' | 'low' = 'high';
+  quality: Quality = 'high';
+  /** Ультра (ПК): живые тени героев и мобов, свечение огня и магии, сглаживание постобработки. */
+  private composer: EffectComposer | null = null;
+  private renderPass: RenderPass | null = null;
+  private bloom: UnrealBloomPass | null = null;
+  /** Исходные параметры солнца сцены: в ультра его тени ездят за камерой. */
+  private sunHome = new WeakMap<THREE.DirectionalLight, { pos: THREE.Vector3; target: THREE.Vector3; extent: number; size: number; intensity: number }>();
+  private casterT = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     this.renderer = new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -198,9 +212,16 @@ export class Engine {
     window.addEventListener('resize', () => this.resize());
   }
 
-  setQuality(q: 'high' | 'low') {
+  setQuality(q: Quality) {
+    const prev = this.quality;
     this.quality = q;
-    this.renderer.shadowMap.enabled = q === 'high';
+    this.renderer.shadowMap.enabled = q !== 'low';
+    // Ультра: тени — мягкие с большим ядром; «высокое» — статичная карта как раньше
+    this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    setTextureAnisotropy(q === 'ultra' ? this.renderer.capabilities.getMaxAnisotropy() : 4);
+    if (prev === 'ultra' && q !== 'ultra') this.restoreSun(this.stage.sun);
+    this.casterT = 0;
+    this.applyCasters(q === 'ultra');
     this.resize();
     this.stage.shadowsDirty = true;
     // Материалам нужно перекомпилироваться после смены теней
@@ -213,10 +234,14 @@ export class Engine {
   resize() {
     const w = window.innerWidth;
     const h = window.innerHeight;
-    const base = this.quality === 'high' ? Math.min(window.devicePixelRatio, 2) : Math.min(window.devicePixelRatio, 1.25);
+    const base = this.quality === 'low' ? Math.min(window.devicePixelRatio, 1.25) : Math.min(window.devicePixelRatio, 2);
     const dpr = Math.max(0.6, base * this.resScale);
     this.renderer.setPixelRatio(dpr);
     this.renderer.setSize(w, h, false);
+    if (this.composer) {
+      this.composer.setPixelRatio(dpr);
+      this.composer.setSize(w, h);
+    }
     this.camera.aspect = w / h;
     this.camera.updateProjectionMatrix();
     this.fx.setScale((h * dpr) / (2 * Math.tan((this.camera.fov * Math.PI) / 360)));
@@ -976,11 +1001,121 @@ export class Engine {
     this.updateAim();
     this.updateCamera(dt);
 
+    if (this.quality === 'ultra') {
+      this.followSun(this.stage.sun);
+      this.casterT -= dt;
+      if (this.casterT <= 0) {
+        // Новые модели (мобы, смена снаряжения) тоже отбрасывают тени
+        this.casterT = 0.5;
+        this.applyCasters(true);
+      }
+      this.renderer.shadowMap.needsUpdate = true;
+      this.stage.shadowsDirty = false;
+      this.renderUltra();
+      return;
+    }
     if (this.stage.shadowsDirty && this.renderer.shadowMap.enabled) {
       this.renderer.shadowMap.needsUpdate = true;
       this.stage.shadowsDirty = false;
     }
     this.renderer.render(this.stage.scene, this.camera);
+  }
+
+  /** Свечение ярких мест (огонь, лава, магия) и сглаживание MSAA в постобработке. */
+  private renderUltra() {
+    if (!this.composer) {
+      const size = this.renderer.getDrawingBufferSize(new THREE.Vector2());
+      const rt = new THREE.WebGLRenderTarget(size.x, size.y, { type: THREE.HalfFloatType, samples: 4 });
+      this.composer = new EffectComposer(this.renderer, rt);
+      this.renderPass = new RenderPass(this.stage.scene, this.camera);
+      // Порог выше 1: светятся только по-настоящему яркие места, а не небо и трава
+      this.bloom = new UnrealBloomPass(new THREE.Vector2(size.x, size.y), 0.32, 0.38, 1.6);
+      this.composer.addPass(this.renderPass);
+      this.composer.addPass(this.bloom);
+      this.composer.addPass(new OutputPass());
+      this.resize();
+    }
+    this.renderPass!.scene = this.stage.scene;
+    this.renderPass!.camera = this.camera;
+    this.composer.render();
+  }
+
+  /**
+   * Тени в ультра: камера теней солнца едет за точкой, куда смотрит камера, и охватывает
+   * только видимую область — карта получается чёткой, а герои и мобы отбрасывают тени.
+   */
+  private followSun(sun: THREE.DirectionalLight | null) {
+    if (!sun) return;
+    let home = this.sunHome.get(sun);
+    if (!home) {
+      const cam = sun.shadow.camera;
+      home = { pos: sun.position.clone(), target: sun.target.position.clone(), extent: cam.right, size: sun.shadow.mapSize.x, intensity: sun.intensity };
+      this.sunHome.set(sun, home);
+    }
+    // Контраст света и тени: рассеянный свет неба слабее, солнце чуть ярче — тени читаются
+    sun.intensity = home.intensity * 1.15;
+    this.stage.scene.environmentIntensity = 0.62;
+    const extent = this.mode === 'menu' ? Math.min(home.extent, 18) : Math.min(home.extent, 24);
+    const size = 4096;
+    const cam = sun.shadow.camera;
+    if (cam.right !== extent || sun.shadow.mapSize.x !== size) {
+      cam.left = cam.bottom = -extent;
+      cam.right = cam.top = extent;
+      cam.updateProjectionMatrix();
+      sun.shadow.mapSize.set(size, size);
+      sun.shadow.map?.dispose();
+      sun.shadow.map = null;
+      sun.shadow.normalBias = 0.02;
+    }
+    const at = this.camLook;
+    const dir = home.pos.clone().sub(home.target);
+    // Шаг сетки теневой карты: без него тени «дрожат» при движении камеры
+    const texel = (extent * 2) / size;
+    const tx = Math.round(at.x / texel) * texel;
+    const tz = Math.round(at.z / texel) * texel;
+    sun.target.position.set(tx, 0, tz);
+    sun.position.set(tx + dir.x, dir.y, tz + dir.z);
+    sun.target.updateMatrixWorld();
+    sun.updateMatrixWorld();
+  }
+
+  private restoreSun(sun: THREE.DirectionalLight | null) {
+    const home = sun && this.sunHome.get(sun);
+    if (!sun || !home) return;
+    const cam = sun.shadow.camera;
+    cam.left = cam.bottom = -home.extent;
+    cam.right = cam.top = home.extent;
+    cam.updateProjectionMatrix();
+    sun.shadow.mapSize.set(home.size, home.size);
+    sun.shadow.map?.dispose();
+    sun.shadow.map = null;
+    sun.shadow.normalBias = 0.03;
+    sun.intensity = home.intensity;
+    this.stage.scene.environmentIntensity = 1;
+    sun.position.copy(home.pos);
+    sun.target.position.copy(home.target);
+    sun.target.updateMatrixWorld();
+    sun.updateMatrixWorld();
+  }
+
+  /** Герои, мобы и помощники отбрасывают настоящие тени; круглая тень под ногами — лишь лёгкий контакт. */
+  private applyCasters(on: boolean) {
+    const mark = (root: THREE.Object3D) =>
+      root.traverse((o) => {
+        const m = o as THREE.Mesh;
+        if (!m.isMesh) return;
+        if (m.name === 'blob') {
+          (m.material as THREE.MeshBasicMaterial).opacity = on ? 0.45 : 1;
+          return;
+        }
+        const mat = m.material as THREE.Material;
+        if (m.name === 'outline' || !mat || mat.transparent || (mat as THREE.MeshBasicMaterial).isMeshBasicMaterial) return;
+        m.castShadow = on;
+      });
+    for (const v of this.heroes.values()) mark(v.model.root);
+    for (const v of this.mobs.values()) mark(v.model.root);
+    for (const m of this.menuHeroes) mark(m.model.root);
+    for (const v of this.minions.values()) mark(v.model.root);
   }
 
   private updateAim() {

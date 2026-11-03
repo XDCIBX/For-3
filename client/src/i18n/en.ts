@@ -22,7 +22,10 @@ export const en: UiDict = {
   'set.server': 'Server address',
   'set.sound': 'Sound effects',
   'set.music': 'Music',
-  'set.quality': 'High graphics quality',
+  'set.quality': 'Graphics',
+  'set.qLow': 'Low',
+  'set.qHigh': 'High',
+  'set.qUltra': 'Ultra (PC)',
   'set.vibration': 'Vibration',
   'set.done': 'Done',
 

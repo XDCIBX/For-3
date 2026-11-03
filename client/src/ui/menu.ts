@@ -109,7 +109,7 @@ export function settingsModal(settings: Settings, save: () => void, extra?: { la
         <input class="field" id="srv" value="${esc(settings.server)}" placeholder="ws://192.168.0.10:2567" />
         <label class="toggle">${t('set.sound')} <input type="checkbox" id="snd" ${settings.sound ? 'checked' : ''}></label>
         <label class="toggle">${t('set.music')} <input type="checkbox" id="mus" ${settings.music ? 'checked' : ''}></label>
-        <label class="toggle">${t('set.quality')} <input type="checkbox" id="q" ${settings.quality === 'high' ? 'checked' : ''}></label>
+        <label class="toggle">${t('set.quality')} <select class="field lang-sel" id="q">${(['low', 'high', 'ultra'] as const).map((v) => `<option value="${v}" ${settings.quality === v ? 'selected' : ''}>${t(v === 'low' ? 'set.qLow' : v === 'high' ? 'set.qHigh' : 'set.qUltra')}</option>`).join('')}</select></label>
         <label class="toggle">${t('set.vibration')} <input type="checkbox" id="vib" ${settings.haptics ? 'checked' : ''}></label>
         <div id="extra" style="display:flex;flex-direction:column;gap:8px"></div>
         <button class="btn gold" id="ok">${t('set.done')}</button>
@@ -139,7 +139,7 @@ export function settingsModal(settings: Settings, save: () => void, extra?: { la
     settings.server = q('#srv').value.trim();
     settings.sound = q('#snd').checked;
     settings.music = q('#mus').checked;
-    settings.quality = q('#q').checked ? 'high' : 'low';
+    settings.quality = (m.querySelector<HTMLSelectElement>('#q')!.value as Settings['quality']) ?? 'high';
     settings.haptics = q('#vib').checked;
     settings.lang = (m.querySelector<HTMLSelectElement>('#lang')!.value as Lang) ?? settings.lang;
     save();

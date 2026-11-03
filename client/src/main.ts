@@ -8,6 +8,7 @@ import {
   ARENA_RADIUS,
   CLASSES,
   PLAYER_RADIUS,
+  MOBS,
   worldFor,
   isPvpRound,
   isTrollRound,
@@ -725,6 +726,9 @@ class App {
     const wk = this.st.round >= LAIR_ROUND ? 'lair' : 'island';
     if (this.world && (this.world.kind ?? 'island') !== wk) this.world = worldFor(this.st.seed, this.st.round);
     resolveCollision(pos, PLAYER_RADIUS, arena ? ARENA_OBSTACLES : this.world?.obstacles ?? [], arena ? ARENA_RADIUS : this.world?.radius ?? 33);
+    // Боссы — сплошные: сервер не даёт их сдвинуть, предсказание тоже упирается в них
+    const bosses = (this.st.snap?.M ?? []).filter((m) => MOBS[m.k]?.boss);
+    if (bosses.length) resolveCollision(pos, PLAYER_RADIUS, bosses.map((m) => ({ x: m.x, z: m.z, r: MOBS[m.k].radius - PLAYER_RADIUS * 0.1, kind: 'rock' as const, variant: 0, scale: 1, rot: 0 })), arena ? ARENA_RADIUS : this.world?.radius ?? 33);
     p.x = pos.x;
     p.z = pos.z;
     const ml = Math.hypot(mv.x, mv.z);

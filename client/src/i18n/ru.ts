@@ -26,7 +26,10 @@ export const ru = {
   'set.server': 'Адрес сервера',
   'set.sound': 'Звуки',
   'set.music': 'Музыка',
-  'set.quality': 'Высокое качество графики',
+  'set.quality': 'Графика',
+  'set.qLow': 'Низкая',
+  'set.qHigh': 'Высокая',
+  'set.qUltra': 'Ультра (ПК)',
   'set.vibration': 'Вибрация',
   'set.done': 'Готово',
 

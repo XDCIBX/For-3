@@ -463,3 +463,44 @@ test('пауза хоста: всё замирает, ставит и снима
   assert.equal(g.paused, false);
   assert.equal(guest.host, true);
 });
+
+test('герои не толкают боссов и не тащат мобов рывком', () => {
+  const g = new Game(17);
+  const p = g.addPlayer('Аня') as Player;
+  g.startRound = 25;
+  g.startGame();
+  run(g, 3.2);
+  const d = [...g.mobs.values()].find((m) => m.kind === 'dragon')!;
+  p.stats.maxHp = p.hp = 1e7;
+  d.spawnT = 0;
+  // Дракон не двигается сам — проверяем только, что его не сдвигает герой
+  d.speed = 0;
+  d.dcd = { breath: 99, lob: 99, sweep: 99, roar: 99, step: 9 };
+  p.x = d.x;
+  p.z = d.z + d.radius + 4;
+  const before = { x: d.x, z: d.z };
+  // Рывок щитом прямо в дракона
+  p.cls = 'warrior';
+  p.cds = [0, 0, 0, 0];
+  g.castSkill(p, 1, 0, -1, 7);
+  run(g, 1);
+  assert.ok(Math.hypot(d.x - before.x, d.z - before.z) < 0.05, 'рывок не сдвинул дракона');
+  assert.ok(Math.hypot(p.x - d.x, p.z - d.z) >= d.radius + 0.3, 'герой остановился у края дракона');
+  assert.equal(p.dash, null, 'рывок оборвался о дракона');
+  // Шагом в дракона — тоже упирается
+  p.input = { mx: 0, mz: -1 };
+  run(g, 2);
+  assert.ok(Math.hypot(d.x - before.x, d.z - before.z) < 0.05, 'шагом дракона не сдвинуть');
+  p.input = { mx: 0, mz: 0 };
+  // Рывок сквозь гоблина не тащит его за собой
+  const gob = g.spawnMob('goblin', p.x + 8, p.z);
+  gob.spawnT = 0;
+  gob.speed = 0;
+  p.x = gob.x - 4;
+  p.z = gob.z;
+  const gx = gob.x;
+  p.cds = [0, 0, 0, 0];
+  g.castSkill(p, 1, 1, 0, 7);
+  for (let i = 0; i < 6; i++) g.update(DT);
+  assert.ok(Math.abs(gob.x - gx) < 1, `гоблина не протащило рывком (${(gob.x - gx).toFixed(2)})`);
+});
