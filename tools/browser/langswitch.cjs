@@ -1,0 +1,28 @@
+const { chromium } = require('playwright');
+(async () => {
+  const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+  const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, locale: 'ru-RU' });
+  const p = await ctx.newPage();
+  p.setDefaultTimeout(90000);
+  const errs = [];
+  p.on('pageerror', (e) => errs.push('PAGEERROR ' + e.message));
+  await p.goto('http://localhost:5173/', { waitUntil: 'domcontentloaded', timeout: 120000 });
+  await p.waitForSelector('#solo', { timeout: 120000 });
+  console.log('язык по системе (ru-RU):', await p.textContent('#solo'));
+  await p.click('#solo'); await p.waitForTimeout(1000);
+  await p.click('#ready'); await p.waitForTimeout(300); await p.click('#start');
+  await p.waitForTimeout(5000);
+  console.log('бой:', await p.textContent('.round-box'));
+  await p.click('#pause'); await p.waitForTimeout(500);
+  await p.click('#pmenu'); await p.waitForTimeout(300);
+  await p.selectOption('.modal #lang', 'fr');
+  await p.click('.modal #ok'); await p.waitForTimeout(600);
+  console.log('после смены на fr:', await p.textContent('.round-box'), '|', await p.textContent('.pause-ov'));
+  await p.click('#resume'); await p.waitForTimeout(1500);
+  await p.screenshot({ path: 'langswitch_fr.png' });
+  await p.reload({ waitUntil: 'domcontentloaded' });
+  await p.waitForSelector('#solo', { timeout: 120000 });
+  console.log('после перезапуска язык сохранён:', await p.textContent('#solo'));
+  console.log('ошибки:', errs.length ? errs : 'нет');
+  await browser.close();
+})();
