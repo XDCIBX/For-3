@@ -1,4 +1,4 @@
-// Ключевой арт без интерфейса: node keyart.cjs <имя> <WxH> <камера: x,y,z> <взгляд: x,y,z> [fov]
+// Ключевой арт без интерфейса: [Q=ultra] [T=мс] node keyart.cjs <имя> <WxH> <камера: x,y,z> <взгляд: x,y,z> [fov]
 // Координаты камеры — относительно гнезда дракона (герои стоят на +z от дракона)
 const { chromium } = require('playwright');
 const [name, size, camS, lookS, fovS] = process.argv.slice(2);
@@ -6,15 +6,18 @@ const [W, H] = size.split('x').map(Number);
 const cam = camS.split(',').map(Number);
 const look = lookS.split(',').map(Number);
 const fov = Number(fovS ?? 42);
+// Q=ultra — качество графики (по умолчанию high); TMO — тайм-аут кадра в мс (ультра на программной графике — долго)
+const QUAL = process.env.Q ?? 'high';
+const TMO = Number(process.env.TMO) || 240000;
 (async () => {
   const browser = await chromium.launch({ args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
   const ctx = await browser.newContext({ viewport: { width: W, height: H }, deviceScaleFactor: 1, locale: 'en' });
-  await ctx.addInitScript(() => localStorage.setItem('three-heroes-settings', JSON.stringify({ name: 'Lyra', lang: 'en', quality: 'high', sound: false, music: false })));
+  await ctx.addInitScript((q) => localStorage.setItem('three-heroes-settings', JSON.stringify({ name: 'Lyra', lang: 'en', quality: q, sound: false, music: false })), QUAL);
   const p = await ctx.newPage();
-  p.setDefaultTimeout(240000);
+  p.setDefaultTimeout(TMO);
   p.on('pageerror', (e) => console.log('PAGEERROR', e.message));
-  await p.goto('http://localhost:5173/?shots=1&round=25', { waitUntil: 'domcontentloaded', timeout: 240000 });
-  await p.waitForSelector('#solo', { timeout: 240000 });
+  await p.goto('http://localhost:5173/?shots=1&round=25', { waitUntil: 'domcontentloaded', timeout: TMO });
+  await p.waitForSelector('#solo', { timeout: TMO });
   await p.click('#solo');
   await p.waitForTimeout(1500);
   await p.evaluate(() => {
@@ -106,7 +109,7 @@ const fov = Number(fovS ?? 42);
   await p.waitForTimeout(Number(process.env.T ?? 1500));
   await p.evaluate(() => (window.__app.conn.room.game.paused = true));
   await p.waitForTimeout(2500);
-  await p.screenshot({ path: `${name}.png`, timeout: 240000 });
+  await p.screenshot({ path: `${name}.png`, timeout: TMO });
   console.log('снято', name);
   await browser.close();
 })();

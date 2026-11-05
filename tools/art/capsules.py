@@ -46,7 +46,9 @@ make('vertical_capsule_748x896.png', tall, (748, 896), 0.5, 0.2, 0.62, 0.5, 0.17
 # Библиотека
 make('library_capsule_600x900.png', tall, (600, 900), 0.5, 0.2, 0.7, 0.5, 0.16)
 make('library_header_920x430.png', wide, (920, 430), 0.5, 0.5, 0.30, 0.2, 0.3)
-make('library_hero_3840x1240.png', wide, (3840, 1240), 0.5, 0.55, 0, 0, 0, logo_on=False)
+# Hero — без текста и логотипа; снят сразу в 3840×1240 (ka_hero.png), иначе — из широкого кадра
+_hero = Image.open('ka_hero.png').convert('RGB') if __import__('os').path.exists('ka_hero.png') else wide
+make('library_hero_3840x1240.png', _hero, (3840, 1240), 0.5, 0.55, 0, 0, 0, logo_on=False)
 # Фон страницы магазина: размытый и приглушённый кадр
 bg = crop_to(wide, 1438 / 810).resize((1438, 810), Image.LANCZOS).filter(ImageFilter.GaussianBlur(6))
 bg = Image.blend(bg, Image.new('RGB', bg.size, (20, 10, 14)), 0.45); bg.save(OUT + 'page_background_1438x810.png', optimize=True); print('page_background', bg.size)
@@ -55,3 +57,18 @@ lg = logo.copy(); lg.thumbnail((1280, 720), Image.LANCZOS); canvas = Image.new('
 canvas.alpha_composite(lg, ((1280 - lg.width) // 2, (720 - lg.height) // 2)); canvas.save(OUT + 'library_logo_1280x720.png', optimize=True); print('library_logo', canvas.size)
 # Иконка сообщества
 ic = Image.open(__import__('os').path.join(__import__('os').path.dirname(__import__('os').path.abspath(__file__)), '../../client/assets/icon-only.png')).convert('RGB').resize((184, 184), Image.LANCZOS); ic.save(OUT + 'community_icon_184x184.jpg', quality=92); print('icon', ic.size)
+
+# Проверка: размеры и форматы по требованиям Steamworks (магазин и библиотека)
+REQ = {
+    'header_capsule_920x430.png': (920, 430), 'small_capsule_462x174.png': (462, 174),
+    'main_capsule_1232x706.png': (1232, 706), 'vertical_capsule_748x896.png': (748, 896),
+    'page_background_1438x810.png': (1438, 810), 'library_capsule_600x900.png': (600, 900),
+    'library_header_920x430.png': (920, 430), 'library_hero_3840x1240.png': (3840, 1240),
+    'library_logo_1280x720.png': (1280, 720), 'community_icon_184x184.jpg': (184, 184),
+}
+for f, size in REQ.items():
+    im = Image.open(OUT + f)
+    assert im.size == size, f'{f}: {im.size} != {size}'
+    if f.startswith('library_logo'):
+        assert im.mode == 'RGBA' and im.getextrema()[3][0] == 0, f'{f}: нужен прозрачный фон'
+print('проверка размеров: OK')
