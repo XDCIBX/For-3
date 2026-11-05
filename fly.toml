@@ -1,33 +1,35 @@
-# Fly.io (из корня репозитория): fly launch --copy-config --no-deploy, затем fly deploy --ha=false
-# ВАЖНО: ровно одна машина. Комнаты живут в памяти сервера; на двух машинах игроки с одним кодом
-# могли бы попасть на разные машины и не найти комнату.
-app = "CHANGE-ME-25waves"
-primary_region = "fra"
+# fly.toml app configuration file generated for 25waves on 2026-11-05T12:08:53Z
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
+app = '25waves'
+primary_region = 'ams'
+
+[build]
 [env]
-  TRUST_PROXY = "1"
-  PORT = "2567"
+  PORT = '2567'
+  TRUST_PROXY = '1'
 
 [http_service]
-  internal_port = 2567
+  internal_port = 8080
   force_https = true
-  # Не усыплять: иначе первый игрок ждёт запуска, а комнаты для переподключения пропадают
-  auto_stop_machines = "off"
+  auto_stop_machines = 'off'
   auto_start_machines = true
   min_machines_running = 1
 
   [http_service.concurrency]
-    type = "connections"
-    soft_limit = 600
+    type = 'connections'
     hard_limit = 900
+    soft_limit = 600
 
   [[http_service.checks]]
-    method = "GET"
-    path = "/health"
-    interval = "15s"
-    timeout = "3s"
-    grace_period = "10s"
+    interval = '15s'
+    timeout = '3s'
+    grace_period = '10s'
+    method = 'GET'
+    path = '/health'
 
 [[vm]]
-  size = "shared-cpu-1x"
-  memory = "512mb"
+  size = 'shared-cpu-1x'
+  memory = '512mb'
