@@ -3,6 +3,8 @@ const { chromium } = require('playwright');
 const scene = process.argv[2];
 const [W, H] = (process.argv[3] ?? '1920x1080').split('x').map(Number);
 const LANG = process.env.LANG_UI ?? 'en';
+// Тайм-аут кадра: «ультра» на программной графике снимается долго — TMO=600000
+const TMO = Number(process.env.TMO) || 180000;
 const ROUND = { island: 9, troll: 4, tavern: 18, duel: 5, lair: 22, dragon: 25, dragon2: 25, lobby: 1, menu: 1 }[scene];
 const CLS = {
   island: ['mage', 'warrior', 'archer'],
@@ -24,14 +26,14 @@ const NAMES = ['Lyra', 'Bram', 'Kestrel'];
     localStorage.setItem('three-heroes-settings', JSON.stringify({ name, lang, quality: QUAL, sound: false, music: false, haptics: false }));
   }, [LANG, NAMES[0], process.env.Q ?? 'high']);
   const p = await ctx.newPage();
-  p.setDefaultTimeout(180000);
+  p.setDefaultTimeout(TMO);
   const errs = [];
   p.on('pageerror', (e) => errs.push('PAGEERROR ' + e.message));
-  await p.goto(`http://localhost:5173/?shots=1&round=${ROUND}`, { waitUntil: 'domcontentloaded', timeout: 180000 });
-  await p.waitForSelector('#solo', { timeout: 180000 });
+  await p.goto(`http://localhost:5173/?shots=1&round=${ROUND}`, { waitUntil: 'domcontentloaded', timeout: TMO });
+  await p.waitForSelector('#solo', { timeout: TMO });
   const wait = (ms) => p.waitForTimeout(ms);
   const shot = async (name) => {
-    await p.screenshot({ path: `steam_${name}_${W}x${H}${LANG === 'en' ? '' : '_' + LANG}.png`, timeout: 180000 });
+    await p.screenshot({ path: `steam_${name}_${W}x${H}${LANG === 'en' ? '' : '_' + LANG}.png`, timeout: TMO });
     console.log('снято', name);
   };
   if (scene === 'menu') {
