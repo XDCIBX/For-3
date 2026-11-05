@@ -1,4 +1,4 @@
-// Ключевой арт без интерфейса: [Q=ultra] [T=мс] node keyart.cjs <имя> <WxH> <камера: x,y,z> <взгляд: x,y,z> [fov]
+// Ключевой арт без интерфейса: [Q=ultra] [T=мс] [NEAR=м] node keyart.cjs <имя> <WxH> <камера: x,y,z> <взгляд: x,y,z> [fov]
 // Координаты камеры — относительно гнезда дракона (герои стоят на +z от дракона)
 const { chromium } = require('playwright');
 const [name, size, camS, lookS, fovS] = process.argv.slice(2);
@@ -106,6 +106,24 @@ const TMO = Number(process.env.TMO) || 240000;
     d.dcd.breath = 0;
   }, [cam, look, fov]);
   console.log('камера', await p.evaluate(() => JSON.stringify(window.__app.engine.camOverride)), 'фаза', await p.evaluate(() => window.__app.conn.room.game.phase));
+  // NEAR=метры: гасим светящиеся частицы ближе этого расстояния к камере — в «ультра» свечение (bloom)
+  // превращает их в крупные размытые пятна по краям кадра
+  const NEAR = Number(process.env.NEAR ?? 0);
+  if (NEAR > 0)
+    await p.evaluate((near) => {
+      const e = window.__app.engine;
+      const cull = () => {
+        const c = e.camera.position;
+        for (const pool of [e.fx.add, e.fx.norm]) {
+          for (let i = 0; i < pool.life.length; i++) {
+            if (pool.life[i] <= 0) continue;
+            const dx = pool.pos[i * 3] - c.x, dy = pool.pos[i * 3 + 1] - c.y, dz = pool.pos[i * 3 + 2] - c.z;
+            if (dx * dx + dy * dy + dz * dz < near * near) pool.life[i] = 0.0001;
+          }
+        }
+      };
+      window.__cull = setInterval(cull, 16);
+    }, NEAR);
   await p.waitForTimeout(Number(process.env.T ?? 1500));
   await p.evaluate(() => (window.__app.conn.room.game.paused = true));
   await p.waitForTimeout(2500);
