@@ -145,6 +145,7 @@ export const de: UiDict = {
   'err.session': 'Sitzung nicht gefunden',
   'err.roomNotFound': 'Raum nicht gefunden',
   'err.serverCrash': 'Das Spiel wurde wegen eines Serverfehlers abgebrochen',
+  'err.serverFull': 'Der Server ist voll, bitte versuche es später erneut',
 
   'tavern.shop': 'Laden „Zum Betrunkenen Drachen“',
   'tavern.sign': 'Zum Betrunkenen Drachen',

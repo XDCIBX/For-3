@@ -145,6 +145,7 @@ export const fr: UiDict = {
   'err.session': 'Session introuvable',
   'err.roomNotFound': 'Salon introuvable',
   'err.serverCrash': 'La partie a été interrompue par une erreur du serveur',
+  'err.serverFull': 'Le serveur est plein, réessayez plus tard',
 
   'tavern.shop': 'Boutique du Dragon Ivre',
   'tavern.sign': 'Le Dragon Ivre',

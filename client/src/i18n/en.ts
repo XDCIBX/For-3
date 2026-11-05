@@ -145,6 +145,7 @@ export const en: UiDict = {
   'err.session': 'Session not found',
   'err.roomNotFound': 'Room not found',
   'err.serverCrash': 'The game was stopped by a server error',
+  'err.serverFull': 'The server is full, please try again later',
 
   'tavern.shop': 'The Drunken Dragon shop',
   'tavern.sign': 'The Drunken Dragon',

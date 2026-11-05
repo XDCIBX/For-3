@@ -145,6 +145,7 @@ export const it: UiDict = {
   'err.session': 'Sessione non trovata',
   'err.roomNotFound': 'Stanza non trovata',
   'err.serverCrash': 'La partita è stata interrotta da un errore del server',
+  'err.serverFull': 'Il server è pieno, riprova più tardi',
 
   'tavern.shop': 'Bottega del Drago Ubriaco',
   'tavern.sign': 'Il Drago Ubriaco',
