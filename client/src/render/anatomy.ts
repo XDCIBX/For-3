@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
+import { DETAIL, seg } from './detail';
 
 /**
  * Анатомические формы и походка для героев и мобов: сужающиеся конечности с
@@ -10,6 +11,7 @@ import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js
 
 const cache = new Map<string, THREE.BufferGeometry>();
 function cached(key: string, make: () => THREE.BufferGeometry): THREE.BufferGeometry {
+  key = `${DETAIL.level}|${key}`;
   let g = cache.get(key);
   if (!g) cache.set(key, (g = make()));
   return g;
@@ -19,8 +21,9 @@ function cached(key: string, make: () => THREE.BufferGeometry): THREE.BufferGeom
  * Сегмент конечности от сустава (y = 0) вниз до y = -len: скруглённые концы,
  * сужение и «мышца» в верхней трети. bulge — насколько выражен рельеф.
  */
-export function limb(rTop: number, rBot: number, len: number, bulge = 0.12, seg = 10): THREE.BufferGeometry {
-  return cached(`limb${rTop}|${rBot}|${len}|${bulge}|${seg}`, () => {
+export function limb(rTop: number, rBot: number, len: number, bulge = 0.12, n = 10): THREE.BufferGeometry {
+  const sg = seg(n);
+  return cached(`limb${rTop}|${rBot}|${len}|${bulge}|${sg}`, () => {
     const pts: THREE.Vector2[] = [];
     // Верхний купол
     for (let i = 0; i <= 4; i++) {
@@ -40,7 +43,7 @@ export function limb(rTop: number, rBot: number, len: number, bulge = 0.12, seg 
       pts.push(new THREE.Vector2(Math.cos(a) * rBot, -len - Math.sin(a) * rBot * 0.7));
     }
     pts[pts.length - 1].x = 0;
-    const g = new THREE.LatheGeometry(pts, seg);
+    const g = new THREE.LatheGeometry(pts, sg);
     g.computeVertexNormals();
     return g;
   });
@@ -65,7 +68,7 @@ export function torsoShape(w = 1, d = 1, stout = 0): THREE.BufferGeometry {
     ];
     const g = new THREE.LatheGeometry(
       prof.map(([r, y]) => new THREE.Vector2(r, y)),
-      20,
+      seg(20),
     );
     const p = g.attributes.position;
     for (let i = 0; i < p.count; i++) {
@@ -95,7 +98,7 @@ export function torsoShape(w = 1, d = 1, stout = 0): THREE.BufferGeometry {
  */
 export function headShape(kind: 'human' | 'brute' | 'skull' = 'human'): THREE.BufferGeometry {
   return cached(`head${kind}`, () => {
-    const g = new THREE.SphereGeometry(0.4, 24, 18);
+    const g = new THREE.SphereGeometry(0.4, seg(24), seg(18));
     const p = g.attributes.position;
     const brute = kind === 'brute';
     for (let i = 0; i < p.count; i++) {
@@ -134,7 +137,7 @@ export function headShape(kind: 'human' | 'brute' | 'skull' = 'human'): THREE.Bu
 /** Ухо: плоская раковина, крепится сбоку головы. */
 export function earShape(): THREE.BufferGeometry {
   return cached('ear', () => {
-    const g = new THREE.SphereGeometry(0.075, 10, 8);
+    const g = new THREE.SphereGeometry(0.075, seg(10), seg(8));
     g.scale(0.45, 1, 0.75);
     return g;
   });

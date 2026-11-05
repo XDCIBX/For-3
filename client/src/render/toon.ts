@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { normalFor } from './textures';
+import { hideTex, normalFor } from './textures';
+import { DETAIL, seg } from './detail';
 
 /** Ступенчатая карта освещения — мультяшный «cel-shading». */
 function makeGradient(): THREE.DataTexture {
@@ -65,7 +66,11 @@ export function surfaceOf(hex: number, o: ToonOpts = {}): Surface {
   return { metal: 0, rough: o.rough ?? texRough ?? 0.72 };
 }
 
+/** Цвета кожи мобов: на «высоком» и «ультра» они получают текстуру шкуры с рельефом. */
+const HIDE_HEX = new Set([0x7a8f4a, 0x5f7438, 0x7d8a86, 0x8e9a92, 0x6a7f40, 0x6f7c78, 0x52662e]);
+
 export function toon(color: THREE.ColorRepresentation, o: ToonOpts = {}): THREE.MeshStandardMaterial {
+  if (!o.map && !o.vertexColors && DETAIL.level >= 2 && typeof color === 'number' && HIDE_HEX.has(color)) o = { ...o, map: hideTex() };
   const key = `${new THREE.Color(color).getHexString()}|${o.emissive ?? ''}|${o.emissiveIntensity ?? ''}|${o.transparent ?? ''}|${o.opacity ?? ''}|${o.side ?? ''}|${o.vertexColors ?? ''}|${o.map?.uuid ?? ''}|${o.metal ?? ''}|${o.rough ?? ''}|${o.pbrAttr ?? ''}`;
   let m = cache.get(key) as THREE.MeshStandardMaterial | undefined;
   if (!m) {
@@ -291,6 +296,7 @@ export function part(
 // Общие геометрии
 const geoCache = new Map<string, THREE.BufferGeometry>();
 function cached<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
+  key = `${DETAIL.level}|${key}`;
   let g = geoCache.get(key);
   if (!g) {
     g = make();
@@ -299,15 +305,15 @@ function cached<T extends THREE.BufferGeometry>(key: string, make: () => T): T {
   return g as T;
 }
 export const G = {
-  sphere: (r = 1, w = 16, h = 12) => cached(`s${r}|${w}|${h}`, () => new THREE.SphereGeometry(r, w, h)),
+  sphere: (r = 1, w = 16, h = 12) => cached(`s${r}|${w}|${h}`, () => new THREE.SphereGeometry(r, seg(w), seg(h))),
   box: (x: number, y: number, z: number) => cached(`b${x}|${y}|${z}`, () => new THREE.BoxGeometry(x, y, z)),
-  cyl: (rt: number, rb: number, h: number, seg = 12) => cached(`c${rt}|${rb}|${h}|${seg}`, () => new THREE.CylinderGeometry(rt, rb, h, seg)),
-  cone: (r: number, h: number, seg = 12) => cached(`k${r}|${h}|${seg}`, () => new THREE.ConeGeometry(r, h, seg)),
-  capsule: (r: number, l: number) => cached(`p${r}|${l}`, () => new THREE.CapsuleGeometry(r, l, 6, 12)),
-  torus: (r: number, t: number, arc = Math.PI * 2, rs = 8, ts = 20) => cached(`t${r}|${t}|${arc}|${rs}|${ts}`, () => new THREE.TorusGeometry(r, t, rs, ts, arc)),
+  cyl: (rt: number, rb: number, h: number, n = 12) => cached(`c${rt}|${rb}|${h}|${n}`, () => new THREE.CylinderGeometry(rt, rb, h, seg(n))),
+  cone: (r: number, h: number, n = 12) => cached(`k${r}|${h}|${n}`, () => new THREE.ConeGeometry(r, h, n < 7 ? n : seg(n))),
+  capsule: (r: number, l: number) => cached(`p${r}|${l}`, () => new THREE.CapsuleGeometry(r, l, seg(6), seg(12))),
+  torus: (r: number, t: number, arc = Math.PI * 2, rs = 8, ts = 20) => cached(`t${r}|${t}|${arc}|${rs}|${ts}`, () => new THREE.TorusGeometry(r, t, rs < 5 ? rs : seg(rs), seg(ts), arc)),
   ico: (r: number, d = 0) => cached(`i${r}|${d}`, () => new THREE.IcosahedronGeometry(r, d)),
   dodeca: (r: number) => cached(`d${r}`, () => faceted(new THREE.DodecahedronGeometry(r, 0))),
-  halfSphere: (r: number) => cached(`h${r}`, () => new THREE.SphereGeometry(r, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2)),
+  halfSphere: (r: number) => cached(`h${r}`, () => new THREE.SphereGeometry(r, seg(16), seg(10), 0, Math.PI * 2, 0, Math.PI / 2)),
 };
 
 /** Гранёная геометрия (плоские нормали) — для камней и кристаллов. */

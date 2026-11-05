@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { releaseBaked } from './bake';
+import { DETAIL, setDetail } from './detail';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -215,6 +216,12 @@ export class Engine {
   setQuality(q: Quality) {
     const prev = this.quality;
     this.quality = q;
+    // Новые сцены и модели строятся с новой детализацией; готовые карты пересоберутся при следующем входе
+    if (DETAIL.level !== (q === 'low' ? 1 : q === 'high' ? 2 : 3)) {
+      setDetail(q);
+      this.dropCachedStages();
+    }
+    this.effects.setQuality(q);
     this.renderer.shadowMap.enabled = q !== 'low';
     // Ультра: тени — мягкие с большим ядром; «высокое» — статичная карта как раньше
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -367,7 +374,22 @@ export class Engine {
     this.tavernStage?.setSignText();
   }
 
-  stageForPhase(ph: Phase, round = 1): Stage {
+  /** Забыть готовые сцены (кроме текущей): при следующем входе соберутся с новой детализацией. */
+  private dropCachedStages() {
+    for (const [k, st] of this.islands) {
+      if (st === this.stage) continue;
+      releaseBaked(st.scene);
+      this.islands.delete(k);
+    }
+    if (this.lairStage && this.lairStage !== this.stage) {
+      releaseBaked(this.lairStage.scene);
+      this.lairStage = null;
+    }
+    if (this.tavernStage && this.tavernStage !== (this.stage as unknown)) this.tavernStage = null;
+    if (this.arenaStage && this.arenaStage !== (this.stage as unknown)) this.arenaStage = null;
+  }
+
+    stageForPhase(ph: Phase, round = 1): Stage {
     if (ph === 'tavern') return (this.tavernStage ??= new TavernStage());
     if (ph === 'duel_intro' || ph === 'duel' || ph === 'duel_end') return (this.arenaStage ??= new ArenaStage());
     if (round >= LAIR_ROUND) {
@@ -1001,6 +1023,8 @@ export class Engine {
     this.updateAim();
     this.updateCamera(dt);
 
+    // Вспышка экспозиции от тяжёлых ударов
+    this.renderer.toneMappingExposure = 0.95 * (1 + this.effects.exposure);
     if (this.quality === 'ultra') {
       this.followSun(this.stage.sun);
       this.casterT -= dt;

@@ -182,8 +182,10 @@ class ParticlePool {
 
 /** Две системы частиц: аддитивная (огонь, магия) и обычная (дым, пыль). */
 export class Particles {
-  readonly add = new ParticlePool(2400, true);
-  readonly norm = new ParticlePool(1600, false);
+  readonly add = new ParticlePool(4000, true);
+  readonly norm = new ParticlePool(2400, false);
+  /** Плотность частиц: на высоких настройках вспышки и взрывы гуще. */
+  density = 1;
   readonly group = new THREE.Group();
 
   constructor() {
@@ -205,7 +207,8 @@ export class Particles {
   burst(x: number, y: number, z: number, o: BurstOpts, additive = true) {
     const pool = additive ? this.add : this.norm;
     const colors = o.colors ?? [0xffffff];
-    for (let i = 0; i < o.n; i++) {
+    const n = Math.round(o.n * this.density);
+    for (let i = 0; i < n; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = (o.speed ?? 3) * (0.4 + Math.random() * 0.6);
       const rr = (o.radius ?? 0) * Math.sqrt(Math.random());

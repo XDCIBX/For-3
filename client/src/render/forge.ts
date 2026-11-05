@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { DETAIL, seg } from './detail';
 
 /**
  * «Кузница»: заготовки для детализированного оружия и доспехов — клинки и
@@ -9,6 +10,7 @@ import * as THREE from 'three';
 
 const cache = new Map<string, THREE.BufferGeometry>();
 function cached(key: string, make: () => THREE.BufferGeometry): THREE.BufferGeometry {
+  key = `${DETAIL.level}|${key}`;
   let g = cache.get(key);
   if (!g) cache.set(key, (g = make()));
   return g;
@@ -63,6 +65,8 @@ export function blade(len: number, width: number, thick: number, o: { taper?: nu
 
 /** Сужающаяся трубка по гладкой кривой: луки, когти, рога, ветви, шнуры. */
 export function tube(key: string, points: [number, number, number][], r0: number, r1: number, radial = 8, segs = 24, flat = 1): THREE.BufferGeometry {
+  radial = radial < 5 ? radial : seg(radial);
+  segs = seg(segs);
   return cached(`tube|${key}|${r0}|${r1}|${radial}|${segs}|${flat}`, () => {
     const curve = new THREE.CatmullRomCurve3(points.map((p) => new THREE.Vector3(...p)));
     const frames = curve.computeFrenetFrames(segs, false);
@@ -111,11 +115,12 @@ export function wrap(r: number, y0: number, y1: number, turns: number, thick = 0
 }
 
 /** Тело вращения по профилю [радиус, высота]. */
-export function lathe(key: string, prof: Pt[], seg = 16): THREE.BufferGeometry {
-  return cached(`lathe|${key}|${seg}`, () => {
+export function lathe(key: string, prof: Pt[], n = 16): THREE.BufferGeometry {
+  const sg = seg(n);
+  return cached(`lathe|${key}|${sg}`, () => {
     const g = new THREE.LatheGeometry(
       prof.map(([r, y]) => new THREE.Vector2(Math.max(0.0001, r), y)),
-      seg,
+      sg,
     );
     g.computeVertexNormals();
     return g;

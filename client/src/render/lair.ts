@@ -3,6 +3,7 @@ import { Rng, type Obstacle, type WorldData } from '@game/shared';
 import { G, TIME, faceted, part, toon } from './toon';
 import { normalFor, rockTex } from './textures';
 import { bakeStatic } from './bake';
+import { DETAIL, count } from './detail';
 import { makeSun, skyTexture, type Stage } from './env';
 import type { Particles } from './particles';
 
@@ -404,7 +405,8 @@ export class LairStage implements Stage {
       n++;
     }
     // Кристаллы обсидиана с алым свечением
-    for (let n = 0, tries = 0; n < 14 && tries < 300; tries++) {
+    const crystals = count(14);
+    for (let n = 0, tries = 0; n < crystals && tries < 500; tries++) {
       const a = rng.range(0, Math.PI * 2);
       const d = rng.range(6, R - 1);
       const x = Math.cos(a) * d;
@@ -424,10 +426,11 @@ export class LairStage implements Stage {
     }
     // Мелкие обломки базальта
     const pebGeo = faceted(new THREE.DodecahedronGeometry(0.16, 0));
-    const pebbles = new THREE.InstancedMesh(pebGeo, toon(0x2a2220, { rough: 0.9 }), 260);
+    const pebN = count(260);
+    const pebbles = new THREE.InstancedMesh(pebGeo, toon(0x2a2220, { rough: 0.9 }), pebN);
     const dm = new THREE.Object3D();
     let k = 0;
-    for (let tries = 0; tries < 900 && k < 260; tries++) {
+    for (let tries = 0; tries < pebN * 4 && k < pebN; tries++) {
       const a = rng.range(0, Math.PI * 2);
       const d = Math.sqrt(rng.next()) * (R - 0.5);
       const x = Math.cos(a) * d;
@@ -442,8 +445,25 @@ export class LairStage implements Stage {
     pebbles.count = k;
     pebbles.receiveShadow = true;
     s.add(pebbles);
+    const emberN = count(90);
+    const embers = new THREE.InstancedMesh(faceted(new THREE.DodecahedronGeometry(0.07, 0)), toon(0x3a1008, { emissive: 0xff5a1a, emissiveIntensity: 1.1 }), emberN);
+    k = 0;
+    for (let tries = 0; tries < emberN * 4 && k < emberN; tries++) {
+      const a = rng.range(0, Math.PI * 2);
+      const d = Math.sqrt(rng.next()) * (R - 1);
+      const x = Math.cos(a) * d;
+      const z = Math.sin(a) * d;
+      if (!free(x, z, 0.2)) continue;
+      dm.position.set(x, 0.03, z);
+      dm.rotation.set(rng.range(0, 3), rng.range(0, 3), 0);
+      dm.scale.setScalar(rng.range(0.6, 1.8));
+      dm.updateMatrix();
+      embers.setMatrixAt(k++, dm.matrix);
+    }
+    embers.count = k;
+    s.add(embers);
     // Дымящие трещины
-    for (let i = 0; i < 4; i++) {
+    for (let i = 0; i < 2 + DETAIL.level * 2; i++) {
       const a = rng.range(0, Math.PI * 2);
       const d = rng.range(8, R - 4);
       this.vents.push({ x: Math.cos(a) * d, z: Math.sin(a) * d });
@@ -455,7 +475,7 @@ export class LairStage implements Stage {
     for (const L of this.lights) L.l.intensity = L.base * (0.85 + Math.sin(this.t * 3.1 + L.ph) * 0.08 + Math.sin(this.t * 7.3 + L.ph * 2) * 0.05);
     this.emitT -= dt;
     if (this.emitT > 0) return;
-    this.emitT = 0.05;
+    this.emitT = 0.05 / DETAIL.level;
     // Искры и пепел в воздухе
     const a = Math.random() * Math.PI * 2;
     const d = Math.sqrt(Math.random()) * this.world.radius;

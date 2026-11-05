@@ -740,3 +740,40 @@ export function leatherTex() {
     g.setLineDash([]);
   });
 }
+
+/** Шкура существ: пятна пигмента, поры и мелкие складки — гоблины, орки и тролли не выглядят пластиком. */
+export function hideTex() {
+  return make('hide', 256, (g, s, r) => {
+    g.fillStyle = grey(0.88);
+    g.fillRect(0, 0, s, s);
+    blotches(g, s, r, 40, 0.68, 1, [0.05, 0.2]);
+    // Складки — короткие изогнутые тёмные штрихи
+    g.lineCap = 'round';
+    for (let i = 0; i < 90; i++) {
+      const x = r.range(0, s);
+      const y = r.range(0, s);
+      const len = r.range(6, 18);
+      const a = r.range(-0.5, 0.5);
+      g.strokeStyle = grey(r.range(0.5, 0.65), 0.45);
+      g.lineWidth = r.range(0.8, 1.6);
+      g.beginPath();
+      g.moveTo(x, y);
+      g.quadraticCurveTo(x + len * 0.5, y + r.range(-4, 4), x + Math.cos(a) * len, y + Math.sin(a) * len);
+      g.stroke();
+    }
+    // Поры и бородавки
+    for (let i = 0; i < 1600; i++) {
+      g.fillStyle = grey(r.range(0.55, 0.8), 0.5);
+      g.fillRect(r.range(0, s), r.range(0, s), 1.4, 1.4);
+    }
+    for (let i = 0; i < 40; i++) {
+      const x = r.range(0, s);
+      const y = r.range(0, s);
+      const gr = g.createRadialGradient(x - 1, y - 1, 0, x, y, 3.5);
+      gr.addColorStop(0, grey(1, 0.8));
+      gr.addColorStop(1, grey(0.6, 0));
+      g.fillStyle = gr;
+      g.fillRect(x - 4, y - 4, 8, 8);
+    }
+  });
+}

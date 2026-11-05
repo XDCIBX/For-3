@@ -4,6 +4,7 @@ import { Rng, type Obstacle, type WorldData, type Vec2 } from '@game/shared';
 import { G, addOutline, faceted, glow, instancedOutline, part, swayToon, toon } from './toon';
 import { barkTex, clothTex, grassTex, leafTex, normalFor, rockTex, sandTex, stoneTex, woodTex } from './textures';
 import { bakeStatic } from './bake';
+import { DETAIL, count } from './detail';
 import { Flame, makeSun, portalMaterial, skyTexture, waterMaterial, type Stage } from './env';
 import type { Particles } from './particles';
 
@@ -152,8 +153,13 @@ export class IslandStage implements Stage {
   }
 
   private buildGround() {
-    const rings = 70;
-    const segs = 160;
+    // На высоких уровнях сетка гуще: края троп и пятна травы мягче
+    const rings = [0, 70, 92, 120][DETAIL.level];
+    const segs = [0, 160, 220, 300][DETAIL.level];
+    // Контактные тени: под кронами, у камней, палаток и пней земля темнее (запечённое затенение)
+    const occluders = this.world.obstacles
+      .filter((o) => o.kind !== 'pond' && o.kind !== 'campfire')
+      .map((o) => ({ x: o.x, z: o.z, r: o.kind === 'tree' ? 1.7 * o.scale : o.r, soft: o.kind === 'tree' ? 1.6 * o.scale : 0.9, k: o.kind === 'tree' ? 0.34 : 0.42 }));
     const maxR = 40;
     const pos: number[] = [];
     const col: number[] = [];
@@ -214,6 +220,12 @@ export class IslandStage implements Stage {
         if (r > sr - 2.4) c.lerp(sand, Math.min(1, (r - sr + 2.4) / 1.2));
         if (r > sr + 0.2) c.lerp(wet, Math.min(1, (r - sr - 0.2) / 1.5));
         if (r > sr - 2.4) grassy = Math.min(grassy, Math.max(0, 1 - (r - sr + 2.4) / 1.2));
+        let ao = 0;
+        for (const o of occluders) {
+          const dd = Math.hypot(x - o.x, z - o.z) - o.r * 0.55;
+          if (dd < o.soft) ao = Math.max(ao, o.k * (1 - Math.max(0, dd) / o.soft) ** 1.6);
+        }
+        if (ao > 0) c.multiplyScalar(1 - ao);
         col.push(c.r, c.g, c.b);
         detail.push(grassy);
       }
@@ -536,7 +548,8 @@ export class IslandStage implements Stage {
     // Трава
     // Пучок тонких изогнутых травинок: тёмные у земли, светлые на концах
     const blades: THREE.BufferGeometry[] = [];
-    for (let i = 0; i < 7; i++) {
+    const bladesN = [0, 7, 8, 10][DETAIL.level];
+    for (let i = 0; i < bladesN; i++) {
       const a = i * 2.4;
       const h = 0.32 + ((i * 37) % 10) * 0.025;
       const tilt = 0.15 + ((i * 53) % 7) * 0.05;
@@ -553,7 +566,8 @@ export class IslandStage implements Stage {
       }
       tuft.setAttribute('color', new THREE.BufferAttribute(col, 3));
     }
-    const grassN = 2200;
+    // Трава — самая «дорогая» мелочь (по 6 треугольников на травинку), поэтому своя шкала
+    const grassN = [0, 2600, 3700, 6000][DETAIL.level];
     const grass = new THREE.InstancedMesh(tuft, swayToon(0xffffff, 0.25, { vertexColors: true, side: THREE.DoubleSide }), grassN);
     const gc = new THREE.Color();
     let n = 0;
@@ -577,7 +591,7 @@ export class IslandStage implements Stage {
     this.scene.add(grass);
 
     // Цветы
-    const flowerN = 420;
+    const flowerN = count(420);
     const stems = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.015, 0.02, 0.35, 4).translate(0, 0.17, 0), toon(0x4f9a3a), flowerN);
     const heads = new THREE.InstancedMesh(new THREE.IcosahedronGeometry(0.065, 1).translate(0, 0.37, 0), toon(0xffffff), flowerN);
     const centers = new THREE.InstancedMesh(new THREE.SphereGeometry(0.028, 6, 4).translate(0, 0.4, 0.03), toon(0xffd54a), flowerN);
@@ -614,7 +628,7 @@ export class IslandStage implements Stage {
       new THREE.IcosahedronGeometry(0.45, 1).translate(0.5, 0.35, 0.1),
       new THREE.IcosahedronGeometry(0.42, 1).translate(-0.45, 0.32, -0.1),
     ])!;
-    const bushN = 70;
+    const bushN = count(55);
     const bushes = new THREE.InstancedMesh(bushGeo, swayToon(0xffffff, 0.04, { map: leafTex() }), bushN);
     const berries = new THREE.InstancedMesh(
       mergeGeometries([
@@ -648,7 +662,7 @@ export class IslandStage implements Stage {
     this.scene.add(bushes, berries, instancedOutline(bushes, 0.035, 0));
 
     // Грибы и камешки
-    const mushN = 50;
+    const mushN = count(50);
     const caps = new THREE.InstancedMesh(new THREE.SphereGeometry(0.16, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2).translate(0, 0.17, 0), toon(0xffffff), mushN);
     const mstems = new THREE.InstancedMesh(new THREE.CylinderGeometry(0.05, 0.07, 0.18, 6).translate(0, 0.09, 0), toon(0xfff2d6), mushN);
     n = 0;
@@ -687,6 +701,66 @@ export class IslandStage implements Stage {
     }
     pebbles.count = n;
     this.scene.add(pebbles);
+
+    // Камни по краям троп: тропа читается утоптанной дорожкой, а не пятном цвета
+    const edgeN = count(110);
+    const edge = new THREE.InstancedMesh(faceted(new THREE.DodecahedronGeometry(0.16, 0)), toon(0x9c958a, { map: stoneTex() }), edgeN);
+    n = 0;
+    for (const p of this.paths) {
+      for (let i = 0; i < p.length - 1 && n < edgeN; i++) {
+        const a = p[i];
+        const b = p[i + 1];
+        const len = Math.hypot(b.x - a.x, b.z - a.z) || 1;
+        const steps = Math.ceil(len / 0.9);
+        for (let k = 0; k < steps && n < edgeN; k++) {
+          if (!rng.chance(0.55)) continue;
+          const t = (k + rng.next()) / steps;
+          const side = rng.chance(0.5) ? 1 : -1;
+          const off = rng.range(0.95, 1.35) * side;
+          const x = a.x + (b.x - a.x) * t + (-(b.z - a.z) / len) * off;
+          const z = a.z + (b.z - a.z) * t + ((b.x - a.x) / len) * off;
+          let hit = false;
+          for (const o of this.world.obstacles) if (Math.hypot(o.x - x, o.z - z) < o.r + 0.2) hit = true;
+          if (hit) continue;
+          dummy.position.set(x, 0.02, z);
+          dummy.rotation.set(rng.range(0, 3), rng.range(0, 3), 0);
+          dummy.scale.set(rng.range(0.6, 1.5), rng.range(0.35, 0.7), rng.range(0.6, 1.3));
+          dummy.updateMatrix();
+          edge.setMatrixAt(n, dummy.matrix);
+          edge.setColorAt(n, gc.set(rng.pick([0xffffff, 0xe8e2d8, 0xd4ccbe])));
+          n++;
+        }
+      }
+    }
+    edge.count = n;
+    edge.receiveShadow = true;
+    this.scene.add(edge);
+
+    // Опавшие листья и хвоя под деревьями
+    const trees = this.world.obstacles.filter((o) => o.kind === 'tree');
+    const litterN = count(trees.length * 9);
+    const leaf = new THREE.InstancedMesh(new THREE.PlaneGeometry(0.16, 0.1).rotateX(-Math.PI / 2), toon(0xffffff, { side: THREE.DoubleSide }), litterN);
+    n = 0;
+    for (const t of trees) {
+      const per = Math.round(litterN / Math.max(1, trees.length));
+      for (let k = 0; k < per && n < litterN; k++) {
+        const a = rng.range(0, Math.PI * 2);
+        const d = rng.range(0.5, 1.9) * t.scale;
+        const x = t.x + Math.cos(a) * d;
+        const z = t.z + Math.sin(a) * d;
+        dummy.position.set(x, 0.025, z);
+        dummy.rotation.set(rng.range(-0.2, 0.2), rng.range(0, 6.28), rng.range(-0.2, 0.2));
+        dummy.scale.setScalar(rng.range(0.7, 1.5));
+        dummy.updateMatrix();
+        leaf.setMatrixAt(n, dummy.matrix);
+        const pal = t.variant === 0 ? [0x5a4a2a, 0x6a5430, 0x4a3e24] : t.variant === 2 ? [0xc8a83a, 0xb89a34, 0x9a8a3a] : [0x8a6a30, 0x6a7a34, 0xa07a3a, 0x5a6a2c];
+        leaf.setColorAt(n, gc.set(rng.pick(pal)));
+        n++;
+      }
+    }
+    leaf.count = n;
+    leaf.receiveShadow = true;
+    this.scene.add(leaf);
 
     // Фонари вдоль тропинок
     for (const p of this.paths) {

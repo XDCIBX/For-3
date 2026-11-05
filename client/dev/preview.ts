@@ -6,6 +6,10 @@ import { MobModel } from '../src/render/mobs';
 import { MinionModel } from '../src/render/minions';
 import { makeEnvironment } from '../src/render/env';
 import { makeItem, TEMPLATE_BY_ID, emptyEquip, type MobKind } from '@game/shared';
+import { DETAIL } from '../src/render/detail';
+// ?detail=1|2|3 — уровень детализации моделей
+const detailQ = Number(new URLSearchParams(location.search).get('detail'));
+if (detailQ >= 1 && detailQ <= 3) DETAIL.level = detailQ as 1 | 2 | 3;
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const renderer = new THREE.WebGLRenderer({ canvas, antialias: true });

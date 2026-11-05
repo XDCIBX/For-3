@@ -39,6 +39,7 @@ import { overScreen } from './ui/over';
 import { el, esc, onTap } from './ui/dom';
 import { sfx } from './audio/sfx';
 import { reportOnce } from './report';
+import { setDetail } from './render/detail';
 import * as Shared from '@game/shared';
 import { getLang, itemName, playerName, setLang, t, tServer } from './i18n';
 import { clearSession, loadSession, loadSettings, saveSession, saveSettings, type Settings } from './settings';
@@ -73,6 +74,8 @@ class App {
 
   constructor() {
     setLang(this.settings.lang);
+    // Детализация моделей и карт — до постройки первой сцены
+    setDetail(this.settings.quality);
     this.engine = new Engine(document.getElementById('game') as HTMLCanvasElement);
     this.engine.setQuality(this.settings.quality);
     sfx.setEnabled(this.settings.sound);
@@ -102,6 +105,7 @@ class App {
     if (import.meta.env.DEV) {
       (window as unknown as { __app: App; __shared: typeof Shared }).__app = this;
       (window as unknown as { __shared: typeof Shared }).__shared = Shared;
+      (window as unknown as { __sfx: typeof sfx }).__sfx = sfx;
       // ?shots=1 — съёмка: постоянное разрешение, без служебных значков
       if (new URLSearchParams(location.search).has('shots')) {
         this.engine.lockRes = true;
@@ -493,7 +497,7 @@ class App {
             pvp ? '#ff7a5a' : lair ? '#ff8a4a' : 'var(--gold)',
           );
         sfx.fanfare();
-        sfx.music('battle');
+        sfx.music(st.round >= DRAGON_ROUND ? 'dragon' : st.round >= LAIR_ROUND ? 'lair' : 'battle');
         break;
       }
       case 'clear':
@@ -516,7 +520,7 @@ class App {
         const b = d ? st.players.get(d.b) : null;
         hud.showBanner(t('banner.duel'), a && b ? t('banner.vs', { a: playerName(a.n), b: playerName(b.n) }) : '', '#ff7a5a');
         sfx.fanfare();
-        sfx.music('battle');
+        sfx.music(st.round >= DRAGON_ROUND ? 'dragon' : st.round >= LAIR_ROUND ? 'lair' : 'battle');
         break;
       }
       case 'gameover':

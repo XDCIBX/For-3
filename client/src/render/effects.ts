@@ -48,6 +48,10 @@ export class Effects {
   scene: THREE.Scene | null = null;
   private fx: Particles;
   shake = 0;
+  /** Вспышка экспозиции (доля): тяжёлые удары на миг высветляют кадр. */
+  exposure = 0;
+  /** Пул точечных источников: умения освещают землю и героев своим цветом. Размер постоянный — шейдеры не пересобираются. */
+  private lights: { l: THREE.PointLight; t: number; dur: number; peak: number }[] = [];
 
   constructor(fx: Particles) {
     this.fx = fx;
@@ -63,7 +67,50 @@ export class Effects {
     this.list = [];
   }
 
+  /** Качество: на высоком и ультра — свет умений и больше частиц. */
+  setQuality(q: 'low' | 'high' | 'ultra') {
+    const want = q === 'low' ? 0 : q === 'high' ? 3 : 5;
+    this.fx.density = q === 'low' ? 1 : q === 'high' ? 1.35 : 1.7;
+    while (this.lights.length > want) this.lights.pop()!.l.removeFromParent();
+    while (this.lights.length < want) {
+      const l = new THREE.PointLight(0xffffff, 0, 10, 2);
+      this.lights.push({ l, t: 1, dur: 1, peak: 0 });
+    }
+  }
+
+  /** Вспышка света умения: цвет, сила, радиус, длительность. */
+  light(x: number, y: number, z: number, color: number, power: number, dist: number, dur = 0.35) {
+    if (!this.lights.length) return;
+    // Берём самый угасший источник
+    let best = this.lights[0];
+    for (const L of this.lights) if (L.l.intensity < best.l.intensity) best = L;
+    best.l.color.setHex(color);
+    best.l.position.set(x, y, z);
+    best.l.distance = dist;
+    best.peak = power;
+    best.t = 0;
+    best.dur = dur;
+    best.l.intensity = power;
+  }
+
+  /** Короткое высветление кадра (0.1–0.3) для самых тяжёлых ударов. */
+  flashScreen(k: number) {
+    this.exposure = Math.max(this.exposure, k);
+  }
+
   update(dt: number) {
+    for (const L of this.lights) {
+      if (this.scene && L.l.parent !== this.scene) this.scene.add(L.l);
+      if (L.t >= L.dur) {
+        L.l.intensity = 0;
+        continue;
+      }
+      L.t += dt;
+      const k = Math.min(1, L.t / L.dur);
+      // Резкая вспышка и мягкое угасание
+      L.l.intensity = L.peak * (k < 0.12 ? k / 0.12 : Math.pow(1 - (k - 0.12) / 0.88, 2));
+    }
+    this.exposure = Math.max(0, this.exposure - dt * 1.8);
     for (let i = this.list.length - 1; i >= 0; i--) {
       const f = this.list[i];
       f.t += dt;
@@ -124,6 +171,28 @@ export class Effects {
     });
   }
 
+  /** Каменные клыки, вырывающиеся из земли по кругу и уходящие обратно (землетрясение, приземление). */
+  private rockSpikes(x: number, z: number, r: number, n: number) {
+    const g = new THREE.Group();
+    const mat = toon(0x6a5a4a, { rough: 0.95 });
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + Math.random() * 0.3;
+      const d = r * (0.45 + Math.random() * 0.45);
+      const h = 0.6 + Math.random() * 0.9;
+      const sp = new THREE.Mesh(G.cone(0.22 + Math.random() * 0.12, h, 5), mat);
+      sp.position.set(Math.cos(a) * d, h * 0.4, Math.sin(a) * d);
+      sp.rotation.set(Math.sin(a) * 0.5, Math.random() * 3, -Math.cos(a) * 0.5);
+      g.add(sp);
+    }
+    g.position.set(x, 0, z);
+    this.add(g, 1.1, (k) => {
+      // Резко выстреливают, держатся и медленно уходят в землю
+      const up = k < 0.1 ? easeOut(k / 0.1) : k > 0.7 ? 1 - (k - 0.7) / 0.3 : 1;
+      g.position.y = -1.2 * (1 - up);
+      g.scale.set(1, Math.max(0.01, up), 1);
+    });
+  }
+
   // ----------------------------------------------------------------- умения
 
   /** Взмах меча: два слоя серпа (цветной и белый) с проворотом. */
@@ -168,6 +237,7 @@ export class Effects {
 
   /** Рывок щитом: полосы скорости и ударная волна. */
   charge(x: number, z: number, rot: number) {
+    this.light(x, 1.2, z, 0xffe0a0, 16, 7, 0.4);
     this.ring(x, z, 1.6, 0xffffff, 0.3);
     for (let i = 0; i < 5; i++) {
       const mat = texMat(trailTex(), 0xdff0ff, 0.8);
@@ -186,6 +256,7 @@ export class Effects {
   }
 
   explosion(x: number, z: number, r: number) {
+    this.light(x, 1.4, z, 0xff8a30, 40, r * 5, 0.55);
     this.flash(x, 0.9, z, 0xfff3b0, r * 0.9, 0.22);
     this.flash(x, 1.0, z, 0xff7020, r * 1.4, 0.45);
     // Огненный «гриб» из нескольких мягких шаров
@@ -211,6 +282,8 @@ export class Effects {
   }
 
   meteor(x: number, z: number, r: number) {
+    this.light(x, 2, z, 0xff6a20, 70, r * 6, 0.9);
+    this.flashScreen(0.28);
     this.explosion(x, z, r);
     this.ring(x, z, r * 2, 0xff5a1a, 0.8);
     this.ring(x, z, r * 1.2, 0xffffff, 0.35);
@@ -227,6 +300,8 @@ export class Effects {
   }
 
   nova(x: number, z: number, r: number) {
+    this.light(x, 1.2, z, 0x7ad8ff, 60, r * 3, 0.8);
+    this.flashScreen(0.12);
     this.ring(x, z, r * 1.05, 0x5ac8f0, 0.55);
     this.ring(x, z, r * 0.7, 0x9fe8ff, 0.4);
     this.flash(x, 1, z, 0x9fe8ff, 1.6, 0.25);
@@ -260,6 +335,7 @@ export class Effects {
   }
 
   warcry(x: number, z: number, r: number) {
+    this.light(x, 1.6, z, 0xff6a2a, 30, r * 1.4, 0.6);
     this.ring(x, z, r, 0xff5a2a, 0.7, 0.1);
     this.ring(x, z, r * 0.6, 0xffc040, 0.5, 0.1);
     this.decal(runeTex(), x, z, 2.6, 0xff6a2a, 1.1, { spin: 2, grow: 0.15 });
@@ -273,6 +349,7 @@ export class Effects {
   }
 
   slam(x: number, z: number, r: number) {
+    this.light(x, 1, z, 0xffd080, 26, r * 3, 0.45);
     this.ring(x, z, r * 1.1, 0xffa060, 0.6);
     this.ring(x, z, r * 0.6, 0xffffff, 0.3);
     this.flashDisc(x, z, r, 0xff3020, 0.3);
@@ -284,6 +361,7 @@ export class Effects {
 
   /** Двойной удар охотника: два перекрещённых серпа цвета скверны. */
   twin(x: number, z: number, rot: number) {
+    this.light(x + Math.sin(rot), 1.2, z + Math.cos(rot), 0x7affb0, 8, 4, 0.15);
     for (const [c, size, op, off] of [
       [0x5dff8a, 2.7, 0.7, 0.35],
       [0xb070ff, 2.5, 0.6, -0.35],
@@ -307,6 +385,7 @@ export class Effects {
 
   /** Теневой рывок: тёмные полосы и зелёные искры. */
   shadowDash(x: number, z: number, rot: number) {
+    this.light(x, 1.2, z, 0x5dff8a, 20, 7, 0.45);
     this.ring(x, z, 1.3, 0x5dff8a, 0.3);
     for (let i = 0; i < 4; i++) {
       const mat = texMat(trailTex(), i % 2 ? 0x5dff8a : 0x7a3aff, 0.7);
@@ -326,6 +405,8 @@ export class Effects {
 
   /** Превращение в демона: столб пламени скверны. */
   demon(x: number, z: number, r: number) {
+    this.light(x, 1.6, z, 0x5dff8a, 34, 9, 0.9);
+    this.flashScreen(0.1);
     this.ring(x, z, r, 0x5dff8a, 0.6, 0.1);
     this.ring(x, z, r * 0.6, 0xb070ff, 0.45, 0.1);
     this.decal(runeTex(), x, z, 2.2, 0x5dff8a, 1.0, { spin: -3, grow: 0.15 });
@@ -339,6 +420,7 @@ export class Effects {
 
   /** Удар голема о землю. */
   golemSlam(x: number, z: number, r: number) {
+    this.light(x, 1, z, 0x9ad8ff, 18, r * 3, 0.4);
     this.ring(x, z, r * 1.1, 0x9fe8ff, 0.45);
     this.decal(scorchTex(), x, z, r * 0.6, 0xa89880, 1.6, { additive: false, grow: 0.05, opacity: 0.45 });
     this.fx.burst(x, 0.2, z, { n: 16, speed: r * 2, up: 4, life: 0.7, size: 0.28, colors: [0x7a7268, 0x9a9288, 0x6ff0ff], gravity: 12 }, false);
@@ -347,6 +429,7 @@ export class Effects {
 
   /** Появление помощника: круг рун и всполох духов. */
   summon(x: number, z: number, big = false) {
+    this.light(x, 1, z, 0x6ff0ff, big ? 26 : 14, big ? 8 : 5, 0.6);
     const r = big ? 1.8 : 1.1;
     this.decal(runeTex(), x, z, r, 0x6ff0ff, 0.9, { spin: 3, grow: 0.2 });
     this.ring(x, z, r * 1.2, 0x6ff0ff, 0.6, 0.08, 0.2);
@@ -356,6 +439,7 @@ export class Effects {
 
   /** Удар когтями: три рваные полосы веером. */
   rend(x: number, z: number, rot: number) {
+    this.light(x + Math.sin(rot), 1.2, z + Math.cos(rot), 0xffd0a0, 8, 4, 0.15);
     for (let i = -1; i <= 1; i++) {
       const mat = texMat(trailTex(), i === 0 ? 0xffe0b0 : 0xff9a4a, 0.85);
       const m = new THREE.Mesh(trailGeo, mat);
@@ -382,6 +466,8 @@ export class Effects {
 
   /** Приземление после прыжка: ударная волна, комья земли. */
   pounceLand(x: number, z: number, r: number) {
+    this.light(x, 1, z, 0xffb060, 30, r * 3, 0.5);
+    this.rockSpikes(x, z, r * 0.8, 7);
     this.ring(x, z, r * 1.1, 0xffb060, 0.45);
     this.decal(scorchTex(), x, z, r * 0.6, 0xb8a080, 1.6, { additive: false, grow: 0.05, opacity: 0.5 });
     this.fx.burst(x, 0.2, z, { n: 18, speed: r * 2, up: 4, life: 0.7, size: 0.28, colors: [0x7a6a5a, 0x9a8a7a], gravity: 12 }, false);
@@ -391,6 +477,8 @@ export class Effects {
 
   /** Вой: звуковые волны расходятся кольцами. */
   howl(x: number, z: number, r: number) {
+    this.light(x, 1.8, z, 0xffd060, 30, r * 1.6, 0.8);
+    this.flashScreen(0.08);
     for (let i = 0; i < 3; i++) {
       const mat = texMat(ringTex(), 0xffd070, 0.9);
       const m = new THREE.Mesh(flatGeo, mat);
@@ -409,6 +497,8 @@ export class Effects {
 
   /** Превращение в зверя: вихрь шерсти и золотистая вспышка. */
   beast(x: number, z: number) {
+    this.light(x, 1.8, z, 0xff8a3a, 40, 10, 1.0);
+    this.flashScreen(0.15);
     this.ring(x, z, 2.6, 0xffa040, 0.55, 0.1);
     this.decal(runeTex(), x, z, 1.8, 0xffa040, 0.9, { spin: -3, grow: 0.15 });
     this.flash(x, 1.4, z, 0xffb060, 2.6, 0.4);
@@ -422,6 +512,7 @@ export class Effects {
 
   /** Выстрел мушкетона: вспышка у дула и клубы дыма. */
   muzzle(x: number, z: number, rot: number, big = true) {
+    this.light(x + Math.sin(rot) * 1.2, 1.3, z + Math.cos(rot) * 1.2, 0xffc060, big ? 18 : 10, 6, 0.18);
     const mx = x + Math.sin(rot) * (big ? 1.0 : 0.75);
     const mz = z + Math.cos(rot) * (big ? 1.0 : 0.75);
     const y = big ? 0.95 : 0.95;
@@ -432,6 +523,9 @@ export class Effects {
 
   /** Землетрясение: трещины и каменная волна. */
   quake(x: number, z: number, r: number) {
+    this.light(x, 1, z, 0xffa040, 55, r * 2.6, 0.8);
+    this.flashScreen(0.16);
+    this.rockSpikes(x, z, r, 14);
     this.ring(x, z, r * 1.1, 0xd8a050, 0.6);
     this.ring(x, z, r * 0.6, 0xffffff, 0.35);
     this.decal(scorchTex(), x, z, r * 0.75, 0x9a8a70, 2.5, { additive: false, grow: 0.04, opacity: 0.6 });
@@ -453,6 +547,7 @@ export class Effects {
 
   /** Волна духов от тотема: бирюзовое кольцо расходится до края круга. */
   totemPulse(x: number, z: number, r: number) {
+    this.light(x, 1.2, z, 0x6ff0ff, 12, r * 1.6, 0.35);
     this.ring(x, z, r, 0x6ff0ff, 0.45, 0.1, 0.1);
     for (let i = 0; i < 10; i++) {
       const a = Math.random() * Math.PI * 2;
@@ -546,6 +641,8 @@ export class Effects {
 
   /** Рёв дракона: ударная волна, пыль и тряска. */
   dragonRoar(x: number, z: number) {
+    this.light(x, 3, z, 0xff3a1a, 60, 20, 1.2);
+    this.flashScreen(0.22);
     this.ring(x, z, 9, 0xff7a3a, 0.9, 0.1);
     this.ring(x, z, 5, 0xffffff, 0.5, 2.5);
     this.dust(x, z, 18);
