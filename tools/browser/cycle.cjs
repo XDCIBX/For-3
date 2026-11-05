@@ -31,6 +31,8 @@ const { chromium } = require('playwright');
     await p.screenshot({ path: `cycle_${game}.png` });
     // Выход через меню паузы: первое нажатие — подтверждение, второе — выход
     await p.tap('#pause'); await p.waitForTimeout(400);
+    // У хоста ❚❚ ставит паузу — меню открывается кнопкой на затемнении
+    if (await p.$('.pause-ov #pmenu')) { await p.tap('.pause-ov #pmenu'); await p.waitForTimeout(400); }
     const ex = await p.$('.modal .btn.red');
     await ex.tap(); await p.waitForTimeout(300);
     console.log('   после 1-го нажатия выхода:', await p.evaluate(() => window.__app.screen), await ex.textContent());

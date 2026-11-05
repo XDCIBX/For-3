@@ -1,9 +1,10 @@
 import * as THREE from 'three';
 import type { Equip, HeroClass, Item, Rarity } from '@game/shared';
 import { G, RARITY_HEX, blobShadow, glow, part, toon } from './toon';
-import { clothTex, texturize, woodTex } from './textures';
+import { clothTex, hairTex, leatherTex, metalTex, texturize, woodTex } from './textures';
 import { bake, releaseBaked, unbake } from './bake';
 import { earShape, footShape, gait, handShape, headShape, legHeight, limb, noseShape, torsoShape, type LegPose } from './anatomy';
+import { braid, cape, fine, finest, foldedSkirt, furPatch, rivetRing, stitchRing, strands } from './details';
 import { buildAmulet, buildArmor, buildBoots, buildHelmet, buildRing, type Built, type Rig } from './equipment';
 import { buildWeapon } from './weapons';
 
@@ -55,8 +56,16 @@ const HELM_COLORS: Record<string, Record<Rarity, number>> = {
   helm: { common: 0x9aa6b2, rare: 0x5b8fd0, epic: 0x8a5ac7, legendary: 0xf0c04a, relic: 0x6a1c22 },
   hood: { common: 0x7a6a55, rare: 0x2f6aa8, epic: 0x4a2f78, legendary: 0xc9343a, relic: 0x5a0f14 },
 };
-function eye(x: number, iris = 0x5a3a22): THREE.Group {
+function eye(x: number, iris = 0x5a3a22, lid = SKIN): THREE.Group {
   const g = new THREE.Group();
+  if (fine()) {
+    // Верхнее веко: глаз не «кукольный», взгляд живее
+    const l = new THREE.Mesh(G.halfSphere(0.082), toon(lid, { rough: 0.55 }));
+    l.scale.set(1.04, 0.42, 0.52);
+    l.position.set(0, 0.014, 0.002);
+    l.rotation.x = -0.25;
+    g.add(l);
+  }
   const white = new THREE.Mesh(G.sphere(0.075, 12, 8), toon(0xece6dc, { rough: 0.25 }));
   white.scale.set(1, 0.55, 0.45);
   const pupil = new THREE.Mesh(G.sphere(0.04, 10, 8), toon(iris, { rough: 0.2 }));
@@ -186,6 +195,13 @@ export class HeroModel {
       const foot = part(footShape(L), 0x6a4428, {});
       ankle.add(foot);
       this.bootParts.push(shaft, foot);
+      if (fine()) {
+        const strap = part(G.torus(0.071 * L, 0.011, Math.PI * 2, 4, 14), 0x3a2414, { pos: [0, -B.shin * 0.82, 0], rot: [Math.PI / 2, 0, 0], outline: false });
+        const bk = part(G.box(0.035, 0.03, 0.012), 0xc8a24a, { pos: [x > 0 ? 0.05 : -0.05, -B.shin * 0.82, 0.05], rot: [0, x > 0 ? 0.8 : -0.8, 0], outline: false });
+        knee.add(strap, bk);
+        this.bootParts.push(strap);
+        if (finest()) knee.add(part(stitchRing(0.07 * L, 22, 0.012, 0.004), 0xc9a36a, { pos: [0, -B.shin * 0.5, 0], outline: false }));
+      }
     }
 
     // Торс: таз, талия, грудная клетка
@@ -195,6 +211,11 @@ export class HeroModel {
     const belt = part(G.cyl(0.272, 0.272, 0.09, 20), 0x5a3a22, { pos: [0, 0.12, 0], scale: [1.02, 1, 0.82] });
     const buckle = part(G.box(0.11, 0.08, 0.03), 0xffc93c, { pos: [0, 0.12, 0.225], rot: [0, 0, 0] });
     this.torsoG.add(belt, buckle);
+    if (fine()) {
+      for (const y of [0.155, 0.085]) this.torsoG.add(part(stitchRing(0.278, 34), 0xc9a36a, { pos: [0, y, 0], scale: [1.02, 1, 0.82], outline: false }));
+      this.torsoG.add(part(G.box(0.07, 0.05, 0.035), 0x5a3a22, { pos: [0, 0.12, 0.222], outline: false }));
+      this.torsoG.add(part(G.box(0.012, 0.06, 0.012), 0xc8a24a, { pos: [0, 0.12, 0.242], outline: false }));
+    }
 
     // Руки: плечо → локоть → предплечье → кисть
     for (const [arm, elbow, hand, x] of [
@@ -231,7 +252,8 @@ export class HeroModel {
     this.torsoG.add(part(G.sphere(0.16 * nk, 12, 8), neckCol, { pos: [0, 0.72, -0.02], scale: [1.5, 0.45, 0.9] }));
     // У охотника глаза скрыты повязкой
     const iris = cls === 'werewolf' ? 0xd8a020 : cls === 'mage' ? 0x4a6a8a : cls === 'summoner' ? 0x3a6a5a : 0x5a3a22;
-    this.eyes = cls === 'hunter' ? [] : [eye(-0.14, iris), eye(0.14, iris)];
+    const lidCol = cls === 'werewolf' ? FUR : SKIN;
+    this.eyes = cls === 'hunter' ? [] : [eye(-0.14, iris, lidCol), eye(0.14, iris, lidCol)];
     for (const e of this.eyes) e.userData.anim = true;
     if (this.eyes.length) this.head.add(...this.eyes);
     if (cls !== 'werewolf') {
@@ -313,10 +335,27 @@ export class HeroModel {
         this.trimMeshes.push(p);
       }
       // Плащ с золотой каймой и застёжками
-      const cape = part(G.box(0.62, 0.8, 0.05), 0xc8412f, { pos: [0, 0.26, -0.3], rot: [0.12, 0, 0], outline: 0.025 });
-      this.torsoG.add(cape);
-      this.torsoG.add(part(G.box(0.63, 0.05, 0.06), 0xffc93c, { pos: [0, -0.13, -0.35], rot: [0.12, 0, 0], outline: false }));
+      if (fine()) {
+        // Ткань со складками, края огибают спину, кайма повторяет волну подола
+        this.torsoG.add(part(cape(0.6, 0.84, { wrap: 0.07, folds: 4, amp: 0.035, flare: 0.3, lift: 0.1 }), 0xc8412f, { pos: [0, 0.66, -0.26], rot: [0.1, 0, 0], outline: 0.02, map: clothTex() }));
+        this.torsoG.add(part(cape(0.6, 0.84, { wrap: 0.07, folds: 4, amp: 0.035, flare: 0.3, lift: 0.1, v0: 0.93, v1: 1 }), 0xffc93c, { pos: [0, 0.66, -0.268], rot: [0.1, 0, 0], outline: false }));
+      } else {
+        const cape0 = part(G.box(0.62, 0.8, 0.05), 0xc8412f, { pos: [0, 0.26, -0.3], rot: [0.12, 0, 0], outline: 0.025 });
+        this.torsoG.add(cape0);
+        this.torsoG.add(part(G.box(0.63, 0.05, 0.06), 0xffc93c, { pos: [0, -0.13, -0.35], rot: [0.12, 0, 0], outline: false }));
+      }
       for (const x of [-0.24, 0.24]) this.torsoG.add(part(G.sphere(0.045, 8, 6), 0xffc93c, { pos: [x, 0.66, -0.24], outline: 0.008 }));
+      if (fine()) {
+        // Заклёпки по краю наплечников, горжет, ребро нагрудника, заклёпки на поясе
+        for (const x of [-0.37, 0.37]) {
+          const r = part(rivetRing(0.183, 9, 0.014, Math.PI * 1.3, x > 0 ? Math.PI / 2 : -Math.PI / 2), 0xd6dde3, { pos: [x, 0.625, 0], scale: [1.1, 1, 1], outline: false });
+          this.torsoG.add(r);
+          this.torsoG.add(part(G.torus(0.18, 0.016, Math.PI * 2, 4, 20), 0xc7ced6, { pos: [x, 0.62, 0], rot: [Math.PI / 2, 0, 0], scale: [1.1, 1, 1], outline: false }));
+        }
+        this.torsoG.add(part(G.torus(0.13, 0.035, Math.PI * 2, 5, 18), 0x9aa6b2, { pos: [0, 0.75, 0], rot: [Math.PI / 2, 0, 0], scale: [1.15, 1, 1], outline: 0.01 }));
+        this.torsoG.add(part(G.box(0.03, 0.34, 0.03), 0xc7ced6, { pos: [0, 0.42, 0.27], rot: [-0.12, 0, 0], outline: false }));
+        this.torsoG.add(part(rivetRing(0.277, 14, 0.013), 0xd6dde3, { pos: [0, 0.12, 0], scale: [1.02, 1, 0.82], outline: false }));
+      }
       // Кольчужная юбка под поясом
       for (let i = 0; i < 9; i++) {
         const a = (i / 9) * Math.PI * 2;
@@ -334,7 +373,7 @@ export class HeroModel {
       this.handL.add(shield);
     } else if (cls === 'mage') {
       // Мантия до земли
-      const robe = part(G.cyl(0.3, 0.52, 0.62, 18), 0x6b3fc4, { pos: [0, -0.18, 0], outline: 0.035 });
+      const robe = part(fine() ? foldedSkirt(0.3, 0.52, 0.62, 9, 0.04) : G.cyl(0.3, 0.52, 0.62, 18), 0x6b3fc4, { pos: [0, -0.18, 0], outline: 0.035, map: fine() ? clothTex() : undefined });
       this.torsoG.add(robe);
       this.trimMeshes.push(robe);
       const trim = part(G.torus(0.51, 0.04, Math.PI * 2, 6, 28), 0xffc93c, { pos: [0, -0.48, 0], rot: [Math.PI / 2, 0, 0], outline: false });
@@ -345,8 +384,13 @@ export class HeroModel {
       }
       this.torsoG.add(part(G.cyl(0.24, 0.2, 0.12, 14, ), 0x4e2a9a, { pos: [0, 0.74, -0.02], outline: 0.015 }));
       // Борода
-      const beard = part(G.cone(0.24, 0.5, 14), 0xf3f1ec, { pos: [0, -0.33, 0.24], rot: [Math.PI + 0.35, 0, 0], outline: 0.025 });
+      const beard = part(G.cone(fine() ? 0.2 : 0.24, fine() ? 0.42 : 0.5, 14), 0xf3f1ec, { pos: [0, -0.33, 0.24], rot: [Math.PI + 0.35, 0, 0], outline: 0.025 });
       this.head.add(beard);
+      if (fine()) {
+        // Борода из прядей: внешний слой длиннее, внутренний гуще
+        this.head.add(part(strands('mageBeard', 13, 0.46, 0.065, 0.32, { fan: 0.2, depth: 0.6, curl: 0.3, jitter: 0.15 }), 0xf3f1ec, { pos: [0, -0.1, 0.31], rot: [0.32, 0, 0], outline: false }));
+        this.head.add(part(strands('mageBeard2', 9, 0.36, 0.06, 0.24, { fan: 0.16, depth: 0.5, curl: 0.25, jitter: 0.15 }), 0xe4e0d8, { pos: [0, -0.12, 0.34], rot: [0.28, 0, 0], outline: false }));
+      }
       const mous = part(G.capsule(0.05, 0.22), 0xf3f1ec, { pos: [0, -0.13, 0.35], rot: [0, 0, Math.PI / 2], outline: 0.015 });
       this.head.add(mous);
       // Брови
@@ -361,8 +405,15 @@ export class HeroModel {
       this.buildDwarf();
     } else {
       // Плащ лучника и колчан
-      const cape = part(G.box(0.6, 0.85, 0.05), 0x2f6b2c, { pos: [0, 0.22, -0.3], rot: [0.14, 0, 0], outline: 0.025 });
-      this.torsoG.add(cape);
+      const capeM = fine()
+        ? part(cape(0.58, 0.88, { wrap: 0.07, folds: 4, amp: 0.03, flare: 0.25, lift: 0.12 }), 0x2f6b2c, { pos: [0, 0.645, -0.26], rot: [0.12, 0, 0], outline: 0.02, map: clothTex() })
+        : part(G.box(0.6, 0.85, 0.05), 0x2f6b2c, { pos: [0, 0.22, -0.3], rot: [0.14, 0, 0], outline: 0.025 });
+      this.torsoG.add(capeM);
+      if (fine()) {
+        // Пряжка ремня колчана, стежки на наруче, оперение стрел ярче
+        this.torsoG.add(part(G.box(0.07, 0.06, 0.03), 0xc8a24a, { pos: [-0.02, 0.4, 0.31], rot: [0, 0, -0.75], outline: false }));
+        this.elbowL.add(part(stitchRing(0.069, 18, 0.014, 0.004), 0xc9a36a, { pos: [0, -0.15, 0], outline: false }));
+      }
       const quiver = new THREE.Group();
       quiver.add(part(G.cyl(0.11, 0.09, 0.55, 12), 0x7a4a26, { outline: 0.025 }));
       for (let i = 0; i < 4; i++) {
@@ -428,7 +479,14 @@ export class HeroModel {
       }
     }
     // Рваная набедренная повязка
-    for (const a of [-0.5, 0, 0.5]) T.add(part(G.box(0.15, 0.3, 0.03), 0x2c2733, { pos: [Math.sin(a) * 0.3, -0.08, Math.cos(a) * 0.27], rot: [0.12, a, 0], outline: 0.012 }));
+    for (const a of [-0.5, 0, 0.5]) {
+      if (fine()) T.add(part(cape(0.15, 0.34, { wrap: -0.02, folds: 1, amp: 0.015, flare: 0.15, lift: -0.04 }), 0x2c2733, { pos: [Math.sin(a) * 0.3, 0.08, Math.cos(a) * 0.27], rot: [-0.12, a + Math.PI, 0], outline: 0.01 }));
+      else T.add(part(G.box(0.15, 0.3, 0.03), 0x2c2733, { pos: [Math.sin(a) * 0.3, -0.08, Math.cos(a) * 0.27], rot: [0.12, a, 0], outline: 0.012 }));
+    }
+    if (fine()) {
+      // Заклёпки на ремнях жилета
+      for (const a of [-0.55, 0.55]) for (let i = 0; i < 4; i++) T.add(part(G.sphere(0.013, 5, 4), 0x9aa6b2, { pos: [Math.sin(-a) * (0.18 - i * 0.12) * 0.9, 0.38 + (0.18 - i * 0.12) * Math.cos(a) * 1.0, 0.3], outline: false }));
+    }
     // Светящиеся полосы татуировок на руках
     for (const arm of [this.armL, this.armR]) {
       for (const y of [-0.12, -0.22]) {
@@ -491,7 +549,7 @@ export class HeroModel {
     const T = this.torsoG;
     const H = this.head;
     // Юбка-тотем с узором
-    const skirt = part(G.cyl(0.31, 0.47, 0.5, 16), 0x2a8f9a, { pos: [0, -0.13, 0], outline: 0.03 });
+    const skirt = part(fine() ? foldedSkirt(0.31, 0.47, 0.5, 8, 0.032) : G.cyl(0.31, 0.47, 0.5, 16), 0x2a8f9a, { pos: [0, -0.13, 0], outline: 0.03, map: fine() ? clothTex() : undefined });
     T.add(skirt);
     this.trimMeshes.push(skirt);
     for (let i = 0; i < 8; i++) {
@@ -504,6 +562,7 @@ export class HeroModel {
       const a = (i / 9) * Math.PI * 2;
       T.add(part(G.ico(0.11, 1), 0xe8dcc8, { pos: [Math.sin(a) * 0.25, 0.7, Math.cos(a) * 0.2], outline: 0.012 }));
     }
+    if (fine()) T.add(part(furPatch('sumMantle', 60, 0.27, 0.11, 0.022, { yMin: -0.2, yMax: 0.5, down: 0.9 }), 0xf0e6d4, { pos: [0, 0.66, 0], scale: [1, 0.7, 0.85], outline: false }));
     // Бусы из клыков
     for (let i = 0; i < 5; i++) {
       const a = -0.7 + i * 0.35;
@@ -520,9 +579,19 @@ export class HeroModel {
     }
     // Тёмные волосы с косичками
     H.add(part(G.sphere(0.41, 18, 12), 0x2a1a10, { pos: [0, 0.07, -0.06], scale: [1.03, 0.95, 1], outline: 0.025 }));
-    for (const s of [-1, 1]) {
-      H.add(part(G.capsule(0.05, 0.32), 0x2a1a10, { pos: [s * 0.36, -0.3, -0.02], outline: 0.015 }));
-      H.add(part(G.sphere(0.04, 6, 4), SPIRIT, { pos: [s * 0.36, -0.52, -0.02], outline: false }));
+    if (fine()) {
+      // Длинные волосы прядями по спине и плетёные косы
+      H.add(part(strands('sumHair', 14, 0.6, 0.075, 0.6, { fan: 0.14, depth: 0.25, curl: -0.15, jitter: 0.12 }), 0x2a1a10, { pos: [0, 0.2, -0.32], rot: [-0.25, 0, 0], outline: false }));
+      for (const s of [-1, 1]) {
+        H.add(part(braid(0.42, 0.055, 7), 0x2a1a10, { pos: [s * 0.36, -0.12, -0.02], outline: false }));
+        H.add(part(G.sphere(0.04, 6, 4), SPIRIT, { pos: [s * 0.36, -0.55, -0.02], outline: false }));
+        H.add(part(G.torus(0.04, 0.014, Math.PI * 2, 4, 10), 0xd9a441, { pos: [s * 0.36, -0.5, -0.02], rot: [Math.PI / 2, 0, 0], outline: false }));
+      }
+    } else {
+      for (const s of [-1, 1]) {
+        H.add(part(G.capsule(0.05, 0.32), 0x2a1a10, { pos: [s * 0.36, -0.3, -0.02], outline: 0.015 }));
+        H.add(part(G.sphere(0.04, 6, 4), SPIRIT, { pos: [s * 0.36, -0.52, -0.02], outline: false }));
+      }
     }
     // Огоньки-духи, кружащие вокруг призывателя
     const orbs = new THREE.Group();
@@ -562,6 +631,15 @@ export class HeroModel {
     // Светлая шерсть на груди и рваная жилетка
     T.add(part(G.sphere(0.24, 14, 10), FUR_LIGHT, { pos: [0, 0.42, 0.14], scale: [1, 1.1, 0.7], outline: 0.015 }));
     for (const s of [-1, 1]) T.add(part(G.box(0.16, 0.5, 0.05), 0x4a3a5a, { pos: [s * 0.22, 0.36, 0.22], rot: [0, s * 0.45, s * 0.1], outline: 0.012 }));
+    if (fine()) {
+      // Густая шерсть: плечи, грудь, загривок, предплечья, щёки
+      for (const x of [-0.36, 0.36]) T.add(part(furPatch('wwShoulder', 40, 0.165, 0.085, 0.034, { yMin: 0, yMax: 0.95, down: 1.6 }), FUR, { pos: [x, 0.6, 0], outline: false }));
+      T.add(part(furPatch('wwChest', 44, 0.235, 0.07, 0.03, { arc: Math.PI * 0.8, yMin: -0.6, yMax: 0.6, down: 1.8 }), FUR_LIGHT, { pos: [0, 0.42, 0.1], scale: [1, 1.1, 0.7], outline: false }));
+      T.add(part(furPatch('wwNape', 34, 0.2, 0.11, 0.036, { arc: Math.PI * 0.9, yMin: 0.1, yMax: 0.9, down: 1.2 }), 0x5a4436, { pos: [0, 0.68, -0.12], rot: [0, Math.PI, 0], outline: false }));
+      for (const el of [this.elbowL, this.elbowR]) el.add(part(furPatch('wwArm', 20, 0.068, 0.06, 0.022, { yMin: -0.4, yMax: 0.5, down: 2 }), FUR, { pos: [0, -0.1, 0], outline: false }));
+      // Усы-вибриссы
+      for (const sd of [-1, 1]) for (let i = 0; i < 3; i++) H.add(part(G.cyl(0.003, 0.002, 0.18, 3), 0xe8dcc8, { pos: [sd * 0.13, -0.1 - i * 0.025, 0.6], rot: [0, 0, sd * (1.35 + i * 0.12)], outline: false }));
+    }
     // Клочья шерсти на плечах и рваные штанины
     for (const x of [-0.37, 0.37]) for (let i = 0; i < 3; i++) T.add(part(G.cone(0.07, 0.18, 5), FUR, { pos: [x * (1 + i * 0.05), 0.68 - i * 0.04, -0.06 + i * 0.07], rot: [0, 0, -Math.sign(x) * (0.8 + i * 0.2)], outline: 0.01 }));
     for (const knee of [this.kneeL, this.kneeR]) for (let i = 0; i < 3; i++) knee.add(part(G.cone(0.05, 0.12, 4), 0x34405a, { pos: [(i - 1) * 0.06, -0.12, 0.05], rot: [Math.PI, 0, 0], outline: false }));
@@ -569,6 +647,7 @@ export class HeroModel {
     const tail = new THREE.Group();
     tail.userData.anim = true;
     tail.add(part(G.capsule(0.11, 0.38), FUR, { pos: [0, 0, -0.2], rot: [-1.0, 0, 0], outline: 0.02 }));
+    if (fine()) tail.add(part(furPatch('wwTail', 40, 0.11, 0.07, 0.03, { yMin: -0.9, yMax: 0.9, down: -1.2 }), FUR, { pos: [0, 0.02, -0.22], rot: [-1.0, 0, 0], scale: [1, 2.2, 1], outline: false }));
     tail.add(part(G.sphere(0.11, 10, 8), FUR_LIGHT, { pos: [0, 0.16, -0.38], outline: 0.015 }));
     tail.position.set(0, 0.04, -0.2);
     this.tail = tail;
@@ -611,8 +690,14 @@ export class HeroModel {
     H.add(part(G.sphere(0.3, 14, 10), BEARD, { pos: [0, -0.24, 0.2], scale: [1.2, 1.1, 0.8], outline: 0.025 }));
     H.add(part(G.cone(0.26, 0.42, 12), BEARD, { pos: [0, -0.52, 0.22], rot: [Math.PI + 0.2, 0, 0], outline: 0.025 }));
     for (const s of [-1, 1]) {
-      H.add(part(G.capsule(0.055, 0.3), BEARD, { pos: [s * 0.14, -0.72, 0.28], rot: [0.2, 0, s * 0.15], outline: 0.012 }));
+      if (fine()) H.add(part(braid(0.36, 0.06, 7), BEARD, { pos: [s * 0.14, -0.58, 0.3], rot: [0.2, 0, s * 0.15], outline: false }));
+      else H.add(part(G.capsule(0.055, 0.3), BEARD, { pos: [s * 0.14, -0.72, 0.28], rot: [0.2, 0, s * 0.15], outline: 0.012 }));
       H.add(part(G.torus(0.06, 0.02, Math.PI * 2, 4, 10), 0xffc93c, { pos: [s * 0.15, -0.86, 0.3], rot: [Math.PI / 2, 0, 0], outline: false }));
+    }
+    if (fine()) {
+      // Борода прядями поверх основы, рыжие с проседью; заклёпки и швы фартука
+      H.add(part(strands('dwBeard', 16, 0.44, 0.085, 0.46, { fan: 0.26, depth: 0.5, curl: 0.3, jitter: 0.15 }), BEARD, { pos: [0, -0.1, 0.34], rot: [0.25, 0, 0], outline: false }));
+      H.add(part(strands('dwBeard2', 10, 0.32, 0.07, 0.3, { fan: 0.22, depth: 0.4, curl: 0.2, jitter: 0.15 }), 0xb85e20, { pos: [0, -0.14, 0.37], rot: [0.2, 0, 0], outline: false }));
     }
     // Усы
     for (const s of [-1, 1]) H.add(part(G.capsule(0.05, 0.18), BEARD, { pos: [s * 0.12, -0.12, 0.36], rot: [0, 0, s * 1.1], outline: 0.012 }));
@@ -621,6 +706,13 @@ export class HeroModel {
     // Кожаный фартук с заклёпками
     T.add(part(G.box(0.46, 0.56, 0.05), 0x7a4a2a, { pos: [0, 0.28, 0.27], outline: 0.015 }));
     for (const [x, y] of [[-0.18, 0.5], [0.18, 0.5], [-0.18, 0.06], [0.18, 0.06]]) T.add(part(G.sphere(0.025, 6, 4), 0xc7ced6, { pos: [x, y, 0.3], outline: false }));
+    if (fine()) {
+      // Строчка по краю фартука и карман с инструментом
+      for (const x of [-0.215, 0.215]) for (let i = 0; i < 9; i++) T.add(part(G.box(0.006, 0.03, 0.006), 0xd8b880, { pos: [x, 0.04 + i * 0.058, 0.302], outline: false }));
+      T.add(part(G.box(0.2, 0.12, 0.03), 0x6a3e22, { pos: [0.08, 0.16, 0.31], outline: false }));
+      T.add(part(G.cyl(0.012, 0.012, 0.16, 5), 0x8a8a92, { pos: [0.13, 0.26, 0.325], outline: false }));
+      T.add(part(G.box(0.05, 0.03, 0.02), 0x8a8a92, { pos: [0.13, 0.34, 0.325], outline: false }));
+    }
     // Патронташ через плечо
     T.add(part(G.box(0.08, 0.75, 0.04), 0x4a2e1a, { pos: [0.02, 0.4, 0.3], rot: [0, 0, 0.75], outline: 0.01 }));
     for (let i = 0; i < 5; i++) T.add(part(G.cyl(0.025, 0.025, 0.08, 6), 0xd8a441, { pos: [-0.2 + i * 0.1, 0.18 + i * 0.1, 0.33], rot: [0, 0, 0.75], outline: 0.006 }));
@@ -846,7 +938,17 @@ export class HeroModel {
 
     // Фактура ткани на плащах, мантиях и шляпах, дерево на щите
     const cloth = clothTex();
-    texturize(this.root, { 0x34405a: cloth, 0x3f6a8a: cloth, 0x7a4a2a: cloth, 0x2a8f9a: cloth, 0x3b2f2a: cloth, 0x2c2733: cloth, 0x3b5552: cloth, 0xc8412f: cloth, 0x2f6b2c: cloth, 0x6b3fc4: cloth, 0x3f8f3a: cloth, 0x4e2a9a: cloth, 0x5a4636: cloth, 0x3a2a5a: cloth, 0xb5452f: woodTex() }, (hex, map) => toon(hex, { map }));
+    const table: Record<number, THREE.Texture> = { 0x34405a: cloth, 0x3f6a8a: cloth, 0x7a4a2a: cloth, 0x2a8f9a: cloth, 0x3b2f2a: cloth, 0x2c2733: cloth, 0x3b5552: cloth, 0xc8412f: cloth, 0x2f6b2c: cloth, 0x6b3fc4: cloth, 0x3f8f3a: cloth, 0x4e2a9a: cloth, 0x5a4636: cloth, 0x3a2a5a: cloth, 0xb5452f: woodTex() };
+    if (fine()) {
+      // Высокое и ультра: пряди на волосах, бородах и шерсти, выделанная кожа на сапогах и ремнях, шлифовка на латах
+      const hair = hairTex();
+      const leather = leatherTex();
+      const metal = metalTex();
+      for (const hx of [FUR, FUR_LIGHT, 0x5a4436, 0x6a4024, 0x4a2a1a, BEARD, 0xb85e20, 0xf3f1ec, 0xe4e0d8, 0x2a1a10, 0x1a1612, 0xe8dcc8, 0xf0e6d4]) table[hx] = hair;
+      for (const hx of [0x6a4428, 0x5a3a22, 0x7a4a26, 0x4a2e1a, 0x3a2414, 0x6a3e22, 0x7a5434]) table[hx] = leather;
+      for (const hx of [0xa9b4bf, 0x8e9aa6, 0x8a96a0, 0x9aa6b2, 0x7d8894]) table[hx] = metal;
+    }
+    texturize(this.root, table, (hex, map) => toon(hex, { map }));
     bake(this.body);
 
     const relicCount = eq ? Object.values(eq).filter((i) => i?.rarity === 'relic').length : 0;

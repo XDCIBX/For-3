@@ -20,7 +20,7 @@ import { MinionModel } from './minions';
 import { MobModel } from './mobs';
 import { Particles } from './particles';
 import { TavernStage } from './tavern';
-import { FADE_R, FOCUS, TIME, glow } from './toon';
+import { CHAR_RIM, FADE_R, FOCUS, TIME, glow } from './toon';
 import { LAIR_ROUND, generateLair, generateWorld } from '@game/shared';
 
 const lerpAngle = (a: number, b: number, t: number) => {
@@ -192,6 +192,8 @@ export class Engine {
     this.renderer.shadowMap.enabled = true;
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     this.renderer.shadowMap.autoUpdate = false;
+    // В релизе не ждём журнал компиляции шейдеров: синхронный запрос останавливает кадр до конца компиляции
+    this.renderer.debug.checkShaderErrors = import.meta.env.DEV;
     // Кинематографичная тональная кривая: мягкие света, насыщенные тени
     this.renderer.toneMapping = THREE.ACESFilmicToneMapping;
     this.renderer.toneMappingExposure = 0.95;
@@ -222,6 +224,7 @@ export class Engine {
       this.dropCachedStages();
     }
     this.effects.setQuality(q);
+    CHAR_RIM.value = q === 'low' ? 0 : q === 'high' ? 0.24 : 0.32;
     this.renderer.shadowMap.enabled = q !== 'low';
     // Ультра: тени — мягкие с большим ядром; «высокое» — статичная карта как раньше
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -286,6 +289,8 @@ export class Engine {
       s.scene.environment = env;
     }
     s.scene.add(this.fx.group, this.aimGroup);
+    // Шейдеры сцены компилируем заранее и в фоне — без рывка при первом взгляде на новый объект
+    void this.renderer.compileAsync(s.scene, this.camera).catch(() => {});
     this.fx.clear();
     this.effects.clear();
     this.effects.scene = s.scene;
@@ -649,6 +654,10 @@ export class Engine {
     let pool = this.mobPool.get(v.info.k);
     if (!pool) this.mobPool.set(v.info.k, (pool = []));
     if (pool.length < 40) pool.push(v);
+    else {
+      // Пул полон — модель больше не нужна: освобождаем склейку и скелет
+      v.model.dispose();
+    }
   }
 
   heroPos(id: string): THREE.Vector3 | null {
@@ -865,26 +874,71 @@ export class Engine {
 
   // ----------------------------------------------------------------- кадр
 
-  /** Динамическое разрешение: при просадке FPS рендерим в меньшем разрешении. */
+  /**
+   * Динамическое разрешение под частоту экрана. Цель — частота дисплея (60/90/120/144/240 Гц, определяется
+   * по самым коротким интервалам кадров). Не успеваем за дисплеем — понемногу снижаем разрешение (не ниже 0,8:
+   * чёткость важнее лишних кадров), а ниже ~55 FPS — решительно, до 0,5. Если снижение не ускорило кадр
+   * (упор в процессор, а не в видеокарту), разрешение возвращается и попытки на время прекращаются.
+   */
   resScale = 1;
-  private perf = { last: 0, ema: 16, t: 0 };
+  private perf = { last: 0, ema: 16, t: 0, win: [Infinity, Infinity], mins: [] as number[], refresh: 16.7, good: 0, tryT: 0, tryEma: 0, lockUntil: 0 };
 
   /** Не менять разрешение под FPS (съёмка скриншотов). */
   lockRes = false;
 
-  private adaptResolution(now: number) {
+  /** Оценка частоты экрана, Гц (для отладки и проверки). */
+  get displayHz() {
+    return Math.round(1000 / this.perf.refresh);
+  }
+
+  adaptResolution(now: number) {
     if (this.lockRes) return;
     const p = this.perf;
     const real = p.last ? now - p.last : 16;
     p.last = now;
     if (real > 250) return; // вкладка была в фоне
-    p.ema = p.ema * 0.93 + real * 0.07;
+    p.ema = p.ema * 0.9 + real * 0.1;
+    // Два самых коротких интервала за секунду (второй — защита от одиночного выброса)
+    if (real < p.win[0]) p.win = [real, p.win[0]];
+    else if (real < p.win[1]) p.win[1] = real;
     p.t += real;
-    if (p.t < 1200) return;
+    if (p.t < 1000) return;
     p.t = 0;
+    // Частота экрана — по самым быстрым кадрам за последние 30 с: когда игра не успевает за экраном
+    // 120 Гц, кадр длится ровно два периода, и настоящий период виден только в лёгкие моменты (меню, лобби)
+    p.mins.push(Math.min(33.4, Math.max(1000 / 360, p.win[1])));
+    if (p.mins.length > 30) p.mins.shift();
+    p.win = [Infinity, Infinity];
+    p.refresh = Math.min(16.7, ...p.mins);
+    const target = p.refresh;
     const prev = this.resScale;
-    if (p.ema > 22 && this.resScale > 0.5) this.resScale = Math.max(0.5, this.resScale - 0.15);
-    else if (p.ema < 17.5 && this.resScale < 1) this.resScale = Math.min(1, this.resScale + 0.1);
+    if (p.ema > 18.5) {
+      // Меньше ~55 FPS — снижаем решительно
+      this.resScale = Math.max(0.5, this.resScale - 0.15);
+      p.good = 0;
+    } else if (p.ema > target * 1.2 && this.resScale > 0.8 && now > p.lockUntil) {
+      // Не успеваем за частотой экрана — снижаем понемногу и проверяем, помогло ли
+      this.resScale = Math.max(0.8, this.resScale - 0.08);
+      if (!p.tryT) {
+        p.tryT = now;
+        p.tryEma = p.ema;
+      }
+      p.good = 0;
+    } else if (p.ema < target * 1.06 && this.resScale < 1) {
+      // Есть запас: повышаем после трёх спокойных секунд подряд
+      if (++p.good >= 3) {
+        this.resScale = Math.min(1, this.resScale + 0.05);
+        p.good = 0;
+      }
+    } else p.good = 0;
+    if (p.tryT && now - p.tryT > 2500) {
+      if (p.ema > p.tryEma * 0.93 && p.ema <= 18.5) {
+        // Разрешение не влияет на скорость — упор в процессор: возвращаем чёткость, не пытаемся 20 с
+        this.resScale = 1;
+        p.lockUntil = now + 20000;
+      }
+      p.tryT = 0;
+    }
     if (prev !== this.resScale) this.resize();
   }
 

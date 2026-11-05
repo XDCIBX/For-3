@@ -1,9 +1,11 @@
 import * as THREE from 'three';
 import type { MobKind } from '@game/shared';
 import { G, addOutline, blobShadow, glow, part, toon } from './toon';
-import { bake } from './bake';
+import { bake, releaseBaked } from './bake';
 import { buildCreature, type Creature } from './dragons';
 import { footShape, gait, handShape, headShape, legHeight, limb, torsoShape, type LegPose } from './anatomy';
+import { cape, fine, finest, furPatch, ribcage, rivetRing, strands } from './details';
+import { hairTex, leatherTex, texturize } from './textures';
 
 export interface MobAnimInput {
   moving: boolean;
@@ -248,6 +250,16 @@ export class MobModel {
         const mouth = part(G.box(0.18, 0.03, 0.03), 0x2a1810, { pos: [0, -0.15, 0.27], outline: false });
         r.head.add(mouth);
         for (const s of [-1, 1]) r.head.add(part(G.cone(0.025, 0.07, 4), 0xffffff, { pos: [s * 0.06, -0.12, 0.28], outline: false }));
+        if (fine()) {
+          // Набедренная тряпка спереди и сзади, верёвочный пояс, серьга, бородавка, клочья волос
+          for (const [z, ry] of [[0.16, Math.PI], [-0.16, 0]] as const) r.torso.add(part(cape(0.2, 0.26, { wrap: -0.03, folds: 2, amp: 0.012, flare: 0.3, lift: -0.03 }), 0x5a4430, { pos: [0, 0.02, z], rot: [0, ry, 0], outline: 0.01 }));
+          r.torso.add(part(G.torus(0.2, 0.018, Math.PI * 2, 4, 16), 0x8a7048, { pos: [0, 0.03, 0], rot: [Math.PI / 2, 0, 0], scale: [1, 0.8, 1], outline: false }));
+          r.torso.add(part(G.box(0.09, 0.08, 0.05), 0x6a4428, { pos: [0.15, -0.02, 0.1], rot: [0, 0.6, 0], outline: 0.008 }));
+          r.head.add(part(G.torus(0.035, 0.008, Math.PI * 2, 4, 10), 0xc8a24a, { pos: [-0.5, -0.02, -0.02], rot: [0, 0.3, 0], outline: false }));
+          r.head.add(part(G.sphere(0.022, 5, 4), 0x5a7a30, { pos: [0.03, 0.02, 0.45], outline: false }));
+          r.head.add(part(strands('gobHair', 7, 0.16, 0.025, 0.14, { fan: 0.5, depth: 0.2, curl: -0.4 }), 0x2a2214, { pos: [0, 0.2, -0.06], rot: [-1.2, 0, 0], outline: false }));
+          for (const el of [r.elbowL, r.elbowR]) el.add(part(G.torus(0.05, 0.012, Math.PI * 2, 4, 10), 0xc9b48a, { pos: [0, -0.12, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+        }
         // Дубина
         const club = new THREE.Group();
         club.add(part(G.cyl(0.03, 0.04, 0.4, 6), 0x7a4a26, { pos: [0, 0.15, 0], outline: 0.015 }));
@@ -265,7 +277,17 @@ export class MobModel {
         const r = biped({ skin: bone, torsoCol: 0x3a342e, legCol: bone, bodyR: 0.16, bodyH: 0.32, headR: 0.28, legLen: 0.64, armLen: 0.58, armR: 0.045, hipW: 0.1, bones: true });
         shrinkHead(r, 0.28, 0.7);
         // Рёбра поверх торса
-        for (let i = 0; i < 3; i++) r.torso.add(part(G.torus(0.17 - i * 0.015, 0.025, Math.PI * 2, 4, 14), bone, { pos: [0, 0.26 + i * 0.1, 0], rot: [Math.PI / 2, 0, 0], scale: [1, 0.8, 1], outline: false }));
+        if (finest()) {
+          // Настоящая грудная клетка поверх тёмного торса: рёбра, грудина, позвонки; таз и ключицы
+          r.torso.add(part(ribcage(0.19, 0.34, 5), bone, { pos: [0, 0.37, 0], outline: false }));
+          r.torso.add(part(G.torus(0.13, 0.03, Math.PI, 4, 12), bone, { pos: [0, 0.02, 0.02], rot: [Math.PI / 2 + 0.3, 0, Math.PI], outline: false }));
+          for (const sd of [-1, 1]) r.torso.add(part(G.cyl(0.018, 0.022, 0.2, 5), bone, { pos: [sd * 0.1, 0.57, 0.08], rot: [0, 0, sd * 1.35], outline: false }));
+        } else for (let i = 0; i < 3; i++) r.torso.add(part(G.torus(0.17 - i * 0.015, 0.025, Math.PI * 2, 4, 14), bone, { pos: [0, 0.26 + i * 0.1, 0], rot: [Math.PI / 2, 0, 0], scale: [1, 0.8, 1], outline: false }));
+        if (fine()) {
+          // Истлевшая накидка клочьями и зубы
+          r.torso.add(part(cape(0.34, 0.42, { wrap: 0.06, folds: 3, amp: 0.025, flare: 0.35, lift: 0.05 }), 0x3a342e, { pos: [0, 0.6, -0.12], rot: [0.05, 0, 0], outline: 0.01 }));
+          for (let i = 0; i < 6; i++) r.head.add(part(G.box(0.026, 0.035, 0.02), 0xf0e8d0, { pos: [(i - 2.5) * 0.034, -0.15, 0.2], outline: false }));
+        }
         const skull = part(headShape('skull'), bone, { scale: 0.7 });
         r.head.add(skull);
         r.head.add(part(G.box(0.28, 0.12, 0.2), bone, { pos: [0, -0.2, 0.08], outline: 0.02 }));
@@ -336,10 +358,22 @@ export class MobModel {
           for (let i = -3; i <= 3; i++) r.torso.add(part(G.cone(0.035, 0.12, 5), 0xfff6e0, { pos: [i * 0.08, 0.72 - Math.abs(i) * 0.02, 0.3 - Math.abs(i) * 0.03], rot: [Math.PI, 0, 0], outline: false }));
           // Набедренная повязка
           r.torso.add(part(G.cyl(0.4, 0.44, 0.22, 14), 0x7a4a26, { pos: [0, 0.03, 0], outline: 0.02 }));
+          if (fine()) {
+            // Свисающие лоскуты шкуры, верёвка, когти, бородавки на коже, клочья шерсти на плечах и спине
+            for (const a of [0, Math.PI, 0.9, -0.9]) r.torso.add(part(cape(0.3, 0.34, { wrap: -0.05, folds: 2, amp: 0.02, flare: 0.3, lift: -0.03 }), 0x6a4024, { pos: [Math.sin(a) * 0.43, 0.06, Math.cos(a) * 0.43], rot: [0, a + Math.PI, 0], outline: 0.01 }));
+            r.torso.add(part(G.torus(0.43, 0.03, Math.PI * 2, 4, 22), 0xa08858, { pos: [0, 0.12, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+            for (const el of [r.elbowL, r.elbowR]) for (let i = 0; i < 3; i++) el.add(part(G.cone(0.025, 0.09, 5), 0x2a2420, { pos: [(i - 1) * 0.05, -0.68 * 0.45 - 0.14, 0.07], rot: [Math.PI * 0.85, 0, 0], outline: false }));
+            for (const [x, y, z] of [[0.2, 0.55, 0.28], [-0.25, 0.35, 0.3], [0.05, 0.62, 0.32], [-0.1, 0.2, 0.36]]) r.torso.add(part(G.sphere(0.03, 6, 4), 0x6f7c78, { pos: [x, y, z], outline: false }));
+            if (finest()) {
+              for (const x of [-0.42, 0.42]) r.torso.add(part(furPatch('trollShoulder', 36, 0.2, 0.12, 0.04, { yMin: 0, yMax: 0.95, down: 1.3 }), 0x5a4a3a, { pos: [x, 0.72, -0.02], outline: false }));
+            }
+            r.head.add(part(strands('trollBeard', 9, 0.22, 0.04, 0.2, { fan: 0.3, depth: 0.3, curl: 0.2 }), 0x5a4a3a, { pos: [0, -0.22, 0.2], rot: [0.3, 0, 0], outline: false }));
+          }
           const hammer = buildTrollHammer();
           hammer.rotation.x = Math.PI / 2 - 0.5;
           // Своя группа: молот прячется, пока летит
           hammer.userData.anim = true;
+          hammer.userData.ownMesh = true;
           r.handR.add(hammer);
           this.weapon = hammer;
         } else {
@@ -347,6 +381,22 @@ export class MobModel {
           r.head.add(part(G.halfSphere(0.32), 0x6d7680, { pos: [0, 0.07, -0.02], outline: 0.02 }));
           r.torso.add(part(G.halfSphere(0.2), 0x6d7680, { pos: [-0.46, 0.7, 0], rot: [0, 0, 0.4], outline: 0.02 }));
           r.torso.add(part(G.box(0.08, 0.6, 0.06), 0x5a3a22, { pos: [0, 0.4, 0.3], rot: [0, 0, 0.7], outline: false }));
+          if (fine()) {
+            // Заклёпки и шип на наплечнике, пояс с пряжкой-черепом, передник, наручи, клок волос из-под шлема
+            r.torso.add(part(rivetRing(0.2, 7, 0.018, Math.PI * 1.2, -Math.PI / 2), 0xb8c2cc, { pos: [-0.46, 0.7, 0], rot: [0, 0, 0.4], outline: false }));
+            r.torso.add(part(G.cone(0.05, 0.2, 6), 0xc7ced6, { pos: [-0.52, 0.86, 0], rot: [0, 0, 0.6], outline: 0.01 }));
+            r.torso.add(part(G.torus(0.39, 0.035, Math.PI * 2, 4, 20), 0x3a2414, { pos: [0, 0.1, 0], rot: [Math.PI / 2, 0, 0], scale: [1, 0.85, 1], outline: false }));
+            r.torso.add(part(rivetRing(0.395, 16, 0.016), 0xb8c2cc, { pos: [0, 0.1, 0], scale: [1, 1, 0.85], outline: false }));
+            r.torso.add(part(G.sphere(0.07, 8, 6), 0xe8e0cc, { pos: [0, 0.1, 0.36], scale: [1, 1.1, 0.7], outline: 0.008 }));
+            for (const sd of [-1, 1]) r.torso.add(part(G.sphere(0.018, 5, 4), 0x1a1210, { pos: [sd * 0.025, 0.115, 0.405], outline: false }));
+            r.torso.add(part(cape(0.3, 0.34, { wrap: -0.04, folds: 2, amp: 0.015, flare: 0.2, lift: -0.05 }), 0x3a2a20, { pos: [0, 0.06, 0.34], rot: [0, Math.PI, 0], outline: 0.01 }));
+            for (const el of [r.elbowL, r.elbowR]) {
+              el.add(part(G.cyl(0.12, 0.105, 0.2, 10), 0x4a3020, { pos: [0, -0.2, 0], outline: 0.01 }));
+              el.add(part(rivetRing(0.118, 8, 0.014), 0xb8c2cc, { pos: [0, -0.2, 0], outline: false }));
+            }
+            r.head.add(part(strands('orcHair', 8, 0.34, 0.05, 0.12, { fan: 0.15, depth: 0.2, curl: -0.3 }), 0x1a1612, { pos: [0, 0.2, -0.24], rot: [-0.5, 0, 0], outline: false }));
+            for (const sd of [-1, 1]) r.head.add(part(G.box(0.1, 0.02, 0.02), 0x8a1a12, { pos: [sd * 0.13, -0.06, 0.29], rot: [0, sd * 0.5, sd * 0.4], outline: false }));
+          }
           const axe = new THREE.Group();
           axe.add(part(G.cyl(0.04, 0.05, 1.0, 8), 0x6a4024, { pos: [0, 0.35, 0], outline: 0.015 }));
           axe.add(part(G.cyl(0.3, 0.3, 0.05, 14), 0xb8c2cc, { pos: [0.15, 0.72, 0], rot: [Math.PI / 2, 0, 0], scale: [0.8, 1, 1.1], outline: 0.02 }));
@@ -380,12 +430,23 @@ export class MobModel {
     this.ice.position.y = height * 0.47;
     this.ice.visible = false;
     this.root.add(this.ice);
+    if (fine()) {
+      const hair = hairTex();
+      const leather = leatherTex();
+      texturize(this.inner, { 0x5a4a3a: hair, 0x1a1612: hair, 0x2a2214: hair, 0x3a2414: leather, 0x4a3020: leather, 0x6a4428: leather, 0x7a4a26: leather, 0x6a4024: leather }, (hex, map) => toon(hex, { map }));
+    }
     // Склеиваем детали — в разы меньше отрисовок на каждого моба
     bake(this.inner);
   }
 
   playAttack() {
     this.atkT = 0;
+  }
+
+  /** Модель больше не нужна (пул переполнен): освободить склейку и скелет. */
+  dispose() {
+    releaseBaked(this.root);
+    this.root.removeFromParent();
   }
 
   /** Сброс состояния для повторного использования модели из пула. */

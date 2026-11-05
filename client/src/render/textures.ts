@@ -330,13 +330,33 @@ export function leafTex() {
 }
 
 export function clothTex() {
-  return make('cloth', 128, (g, s) => {
-    g.fillStyle = grey(0.95);
+  // Саржевое плетение: мелкие диагональные нити, потёртости и складки — ткань, а не вязаная сетка
+  return make('cloth', 256, (g, s, r) => {
+    g.fillStyle = grey(0.92);
     g.fillRect(0, 0, s, s);
-    for (let i = 0; i < s; i += 4) {
-      g.fillStyle = grey(0.86, 0.6);
-      g.fillRect(i, 0, 1.5, s);
-      g.fillRect(0, i, s, 1.5);
+    blotches(g, s, r, 22, 0.8, 1, [0.06, 0.22]);
+    g.lineWidth = 1;
+    for (let i = -s; i < s * 2; i += 3) {
+      g.strokeStyle = grey(r.range(0.8, 0.88), 0.55);
+      g.beginPath();
+      g.moveTo(i, 0);
+      g.lineTo(i + s * 0.5, s);
+      g.stroke();
+    }
+    for (let i = 0; i < s; i += 2) {
+      g.fillStyle = grey(0.97, 0.18);
+      g.fillRect(0, i, s, 1);
+    }
+    // Мягкие продольные складки
+    for (let k = 0; k < 6; k++) {
+      const x = r.range(0, s);
+      const w = r.range(6, 16);
+      const gr = g.createLinearGradient(x - w, 0, x + w, 0);
+      gr.addColorStop(0, grey(0.9, 0));
+      gr.addColorStop(0.5, grey(0.72, 0.35));
+      gr.addColorStop(1, grey(0.9, 0));
+      g.fillStyle = gr;
+      g.fillRect(x - w, 0, w * 2, s);
     }
   });
 }
@@ -775,5 +795,54 @@ export function hideTex() {
       g.fillStyle = gr;
       g.fillRect(x - 4, y - 4, 8, 8);
     }
+  });
+}
+
+/** Пряди волос и шерсти: длинные вертикальные нити с бликами и тёмными промежутками. */
+export function hairTex() {
+  return make('hair', 256, (g, s, r) => {
+    g.fillStyle = grey(0.82);
+    g.fillRect(0, 0, s, s);
+    g.lineCap = 'round';
+    for (let i = 0; i < 520; i++) {
+      const x = r.range(0, s);
+      const y = r.range(-s * 0.3, s);
+      const len = r.range(s * 0.25, s * 0.7);
+      const bend = r.range(-6, 6);
+      g.strokeStyle = grey(r.range(0.55, 1), r.range(0.35, 0.8));
+      g.lineWidth = r.range(0.7, 2.2);
+      for (const dx of [-s, 0, s])
+        for (const dy of [-s, 0, s]) {
+          g.beginPath();
+          g.moveTo(x + dx, y + dy);
+          g.quadraticCurveTo(x + dx + bend, y + dy + len * 0.5, x + dx + bend * 0.4, y + dy + len);
+          g.stroke();
+        }
+    }
+  });
+}
+
+/** Перепонка крыла: ветвящиеся прожилки и неровная плотность кожи (тонируется цветом материала). */
+export function membraneTex() {
+  return make('membrane', 256, (g, s, r) => {
+    g.fillStyle = grey(0.9);
+    g.fillRect(0, 0, s, s);
+    blotches(g, s, r, 26, 0.72, 1, [0.05, 0.2]);
+    g.lineCap = 'round';
+    const vein = (x: number, y: number, a: number, w: number, depth: number) => {
+      if (depth <= 0 || w < 0.4) return;
+      const len = r.range(18, 40);
+      const nx = x + Math.cos(a) * len;
+      const ny = y + Math.sin(a) * len;
+      g.strokeStyle = grey(0.45, 0.75);
+      g.lineWidth = w;
+      g.beginPath();
+      g.moveTo(x, y);
+      g.quadraticCurveTo((x + nx) / 2 + r.range(-6, 6), (y + ny) / 2 + r.range(-6, 6), nx, ny);
+      g.stroke();
+      vein(nx, ny, a + r.range(-0.5, 0.5), w * 0.78, depth - 1);
+      if (r.next() < 0.55) vein(nx, ny, a + r.range(0.5, 1.1) * (r.next() < 0.5 ? -1 : 1), w * 0.6, depth - 2);
+    };
+    for (let i = 0; i < 9; i++) vein(r.range(0, s), r.range(0, s), r.range(0, Math.PI * 2), r.range(2, 3.4), 6);
   });
 }

@@ -34,6 +34,8 @@ export interface ToonOpts {
   rough?: number;
   /** Для склеенных моделей: шероховатость/металл берутся из вершин. */
   pbrAttr?: boolean;
+  /** Контровой свет по силуэту (только персонажи). */
+  rim?: boolean;
 }
 
 /**
@@ -71,7 +73,7 @@ const HIDE_HEX = new Set([0x7a8f4a, 0x5f7438, 0x7d8a86, 0x8e9a92, 0x6a7f40, 0x6f
 
 export function toon(color: THREE.ColorRepresentation, o: ToonOpts = {}): THREE.MeshStandardMaterial {
   if (!o.map && !o.vertexColors && DETAIL.level >= 2 && typeof color === 'number' && HIDE_HEX.has(color)) o = { ...o, map: hideTex() };
-  const key = `${new THREE.Color(color).getHexString()}|${o.emissive ?? ''}|${o.emissiveIntensity ?? ''}|${o.transparent ?? ''}|${o.opacity ?? ''}|${o.side ?? ''}|${o.vertexColors ?? ''}|${o.map?.uuid ?? ''}|${o.metal ?? ''}|${o.rough ?? ''}|${o.pbrAttr ?? ''}`;
+  const key = `${new THREE.Color(color).getHexString()}|${o.emissive ?? ''}|${o.emissiveIntensity ?? ''}|${o.transparent ?? ''}|${o.opacity ?? ''}|${o.side ?? ''}|${o.vertexColors ?? ''}|${o.map?.uuid ?? ''}|${o.metal ?? ''}|${o.rough ?? ''}|${o.pbrAttr ?? ''}|${o.rim ?? ''}`;
   let m = cache.get(key) as THREE.MeshStandardMaterial | undefined;
   if (!m) {
     const hex = new THREE.Color(color).getHex();
@@ -94,7 +96,7 @@ export function toon(color: THREE.ColorRepresentation, o: ToonOpts = {}): THREE.
     // Исходный цвет из палитры (до приглушения) — по нему ищут материалы, например для текстур
     m.userData.hex = hex;
     if (m.normalMap) m.normalScale.set(0.6, 0.6);
-    if (o.pbrAttr) withPbrAttr(m);
+    if (o.pbrAttr) withPbrAttr(m, !!o.rim);
     cache.set(key, m);
   }
   return m;
@@ -104,18 +106,29 @@ export function toon(color: THREE.ColorRepresentation, o: ToonOpts = {}): THREE.
  * Склеенные модели хранят шероховатость и металличность каждой детали в вершинах
  * (атрибут pbr) — один меш, но меч блестит, а плащ остаётся матовым.
  */
-function withPbrAttr(m: THREE.MeshStandardMaterial) {
+function withPbrAttr(m: THREE.MeshStandardMaterial, rim: boolean) {
   m.onBeforeCompile = (sh) => {
+    sh.uniforms.rimK = rim ? CHAR_RIM : { value: 0 };
     sh.vertexShader = sh.vertexShader
       .replace('#include <common>', '#include <common>\nattribute vec2 pbr;\nvarying vec2 vPbr;')
       .replace('#include <begin_vertex>', '#include <begin_vertex>\nvPbr = pbr;');
     sh.fragmentShader = sh.fragmentShader
-      .replace('#include <common>', '#include <common>\nvarying vec2 vPbr;')
+      .replace('#include <common>', '#include <common>\nvarying vec2 vPbr;\nuniform float rimK;')
       .replace('#include <roughnessmap_fragment>', 'float roughnessFactor = vPbr.x;')
-      .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = vPbr.y;');
+      .replace('#include <metalnessmap_fragment>', 'float metalnessFactor = vPbr.y;')
+      // Контровой свет по краю силуэта (как в кино): отделяет персонажа от фона, окрашен цветом детали
+      .replace(
+        '#include <emissivemap_fragment>',
+        `#include <emissivemap_fragment>
+        float rimF = 1.0 - saturate(dot(normal, normalize(vViewPosition)));
+        totalEmissiveRadiance += (diffuseColor.rgb * 0.6 + vec3(0.25, 0.27, 0.32)) * pow(rimF, 3.0) * rimK;`,
+      );
   };
-  m.customProgramCacheKey = () => 'pbr-attr';
+  m.customProgramCacheKey = () => (rim ? 'pbr-attr-rim' : 'pbr-attr');
 }
+
+/** Сила контрового света персонажей (меняется с качеством графики; 0 — выключен). */
+export const CHAR_RIM = { value: 0.3 };
 
 const basicCache = new Map<string, THREE.MeshBasicMaterial>();
 export function glow(color: THREE.ColorRepresentation, opacity = 1, additive = true): THREE.MeshBasicMaterial {

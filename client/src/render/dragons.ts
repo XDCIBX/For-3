@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { G, glow, part, toon } from './toon';
-import { scaleTex } from './textures';
+import { membraneTex, scaleTex } from './textures';
+import { fine, strands } from './details';
 import { limb } from './anatomy';
 
 /**
@@ -35,7 +36,8 @@ function wing(span: number, membrane: number, bone: number): THREE.Group {
   shape.moveTo(pts[0][0], pts[0][1]);
   for (const p of pts.slice(1)) shape.lineTo(p[0], p[1]);
   const geo = new THREE.ShapeGeometry(shape).rotateX(Math.PI / 2);
-  const memb = new THREE.Mesh(geo, toon(membrane, { side: THREE.DoubleSide, rough: 0.7 }));
+  // На высоком и ультра — перепонка с прожилками, слегка просвечивает (подсвечена изнутри)
+  const memb = new THREE.Mesh(geo, toon(membrane, fine() ? { side: THREE.DoubleSide, rough: 0.7, map: membraneTex(), emissive: 0x3a0804, emissiveIntensity: 0.6 } : { side: THREE.DoubleSide, rough: 0.7 }));
   memb.userData.noBake = true;
   const inner = new THREE.Group();
   inner.add(memb);
@@ -304,6 +306,10 @@ class Dragon implements Creature {
       B.add(part(G.cyl(0.55 - Math.abs(i - 2) * 0.05, 0.55 - Math.abs(i - 2) * 0.05, 0.4, 14), belly, { pos: [0, -0.82 + Math.abs(i - 2) * 0.03, z], rot: [Math.PI / 2, 0, 0], scale: [1.2, 1, 0.35], rough: 0.6 }));
     }
     for (let i = 0; i < 9; i++) B.add(part(G.cone(0.16 - i * 0.008, 0.6 - i * 0.03, 6), 0x2a0a06, { pos: [0, 1.0 - Math.abs(i - 3) * 0.04, 1.6 - i * 0.48], rot: [-0.45, 0, 0], rough: 0.4 }));
+    if (fine()) {
+      // Второй ряд мелких шипов вдоль хребта и бронированные щитки по бокам
+      for (let i = 0; i < 8; i++) for (const sd of [-1, 1]) B.add(part(G.cone(0.06, 0.22, 5), 0x3a0c06, { pos: [sd * 0.38, 0.88 - Math.abs(i - 3) * 0.03, 1.4 - i * 0.48], rot: [-0.5, 0, -sd * 0.5], rough: 0.4 }));
+    }
 
     // Шея из пяти звеньев, изгибается вверх
     let parent: THREE.Object3D = B;
@@ -316,6 +322,10 @@ class Dragon implements Creature {
       n.rotation.x = i === 0 ? -0.75 : 0.12;
       n.add(part(limb(r, r * 0.92, nl + 0.15, 0.04, 12), red, { rot: [-Math.PI / 2, 0, 0], map, rough: 0.5 }));
       n.add(part(G.cyl(r * 0.62, r * 0.58, nl, 10), 0xa8683a, { pos: [0, -r * 0.42, nl * 0.5], rot: [Math.PI / 2, 0, 0], scale: [1, 1, 0.5], rough: 0.6 }));
+      if (fine()) {
+        // Бороздки между брюшными пластинами: полоса шеи разбита на щитки
+        for (let k = 0; k < 3; k++) n.add(part(G.torus(r * 0.6, 0.018, Math.PI * 2, 4, 14), 0x5a3418, { pos: [0, -r * 0.42, nl * (0.12 + k * 0.33)], scale: [1, 0.5, 1], rough: 0.7 }));
+      }
       n.add(part(G.cone(0.1, 0.42, 5), 0x2a0a06, { pos: [0, r * 0.95, nl * 0.4], rot: [-0.6, 0, 0] }));
       parent.add(n);
       this.neck.push(n);
@@ -363,14 +373,26 @@ class Dragon implements Creature {
       for (let k = 0; k < 3; k++) H.add(part(G.cone(0.05, 0.28, 5), horn, { pos: [s * (0.36 + k * 0.03), -0.1 - k * 0.08, -0.05 - k * 0.12], rot: [-1.6, 0, s * (0.9 + k * 0.1)] }));
       H.add(part(G.sphere(0.045, 6, 4), 0x1a0806, { pos: [s * 0.1, 0.06, 1.36] }));
       // Верхние клыки
-      for (let k = 0; k < 4; k++) H.add(part(G.cone(0.03, 0.14, 5), 0xf4ecd8, { pos: [s * (0.27 - k * 0.025), -0.22, 0.5 + k * 0.19], rot: [Math.PI, 0, 0] }));
+      const nt = fine() ? 7 : 4;
+      for (let k = 0; k < nt; k++) H.add(part(G.cone(k % 3 === 0 ? 0.034 : 0.022, k % 3 === 0 ? 0.16 : 0.09, 5), 0xf4ecd8, { pos: [s * (0.27 - k * (0.1 / nt)), -0.22, 0.5 + k * (0.76 / nt)], rot: [Math.PI, 0, 0] }));
+      if (fine()) {
+        // Ряд шипов над глазом, к рогам, и костяные гребни на скулах
+        for (let k = 0; k < 4; k++) H.add(part(G.cone(0.035 - k * 0.004, 0.18 - k * 0.02, 5), 0x2a0a06, { pos: [s * (0.3 + k * 0.025), 0.32 + k * 0.02, 0.28 - k * 0.14], rot: [-1.2, 0, -s * 0.5] }));
+        H.add(part(G.box(0.05, 0.08, 0.5), dark, { pos: [s * 0.3, -0.08, 0.6], rot: [0.05, s * 0.12, s * 0.3] }));
+      }
     }
     // Нижняя челюсть с клыками и раскалённой пастью
     this.jaw.userData.anim = true;
     this.jaw.position.set(0, -0.25, 0.05);
     this.jaw.add(part(G.cyl(0.15, 0.27, 1.05, 10), red, { pos: [0, -0.06, 0.6], rot: [Math.PI / 2, 0, 0], scale: [1, 1, 0.42], map }));
     this.jaw.add(part(G.box(0.3, 0.04, 0.85), 0x5a1008, { pos: [0, 0.03, 0.6] }));
-    for (const s of [-1, 1]) for (let k = 0; k < 4; k++) this.jaw.add(part(G.cone(0.028, 0.12, 5), 0xf4ecd8, { pos: [s * (0.22 - k * 0.025), 0.05, 0.45 + k * 0.19] }));
+    const jt = fine() ? 6 : 4;
+    for (const s of [-1, 1]) for (let k = 0; k < jt; k++) this.jaw.add(part(G.cone(k % 2 ? 0.02 : 0.028, k % 2 ? 0.08 : 0.12, 5), 0xf4ecd8, { pos: [s * (0.22 - k * (0.1 / jt)), 0.05, 0.45 + k * (0.76 / jt)] }));
+    if (fine()) {
+      // Язык и костяные отростки-«усы» под подбородком
+      this.jaw.add(part(G.capsule(0.07, 0.5), 0x7a1a14, { pos: [0, 0.06, 0.55], rot: [Math.PI / 2, 0, 0], scale: [1.4, 1, 0.5], rough: 0.3 }));
+      this.jaw.add(part(strands('dragonChin', 7, 0.42, 0.045, 0.24, { fan: 0.25, depth: 0.2, curl: -0.35 }), 0x2a0a06, { pos: [0, -0.08, 0.2], rot: [-0.5, 0, 0], rough: 0.4 }));
+    }
     H.add(this.jaw);
     this.throat = new THREE.Mesh(G.sphere(0.2, 10, 8), glow(0xff6a10, 0.0));
     this.throat.position.set(0, -0.2, 0.5);
@@ -394,6 +416,7 @@ class Dragon implements Creature {
       knee.userData.anim = true;
       knee.position.y = -tl;
       hip.add(knee);
+      if (fine()) knee.add(part(G.cone(0.08, 0.36, 6), 0x2a0a06, { pos: [0, 0.05, front ? -0.26 : 0.26], rot: [front ? -2.3 : 2.3, 0, 0], rough: 0.4 }));
       const sl = hipY - tl - 0.12;
       knee.add(part(limb(0.28, 0.2, sl, 0.12, 10), red, { map, rough: 0.5 }));
       const foot = new THREE.Group();

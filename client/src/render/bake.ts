@@ -52,11 +52,16 @@ function flush() {
 
 /** Освободить склейки внутри объекта (модель героя снята, сцена больше не нужна). */
 export function releaseBaked(root: THREE.Object3D) {
+  const skeletons = new Set<THREE.Skeleton>();
   root.traverse((o) => {
     const m = o as THREE.Mesh;
     // Контур делит геометрию со своим мешем — считаем её один раз
     if (m.isMesh && m.userData.baked && m.name !== 'outline' && refs.has(m.geometry)) release(m.geometry);
+    const sk = m.userData?.skeleton as THREE.Skeleton | undefined;
+    if (sk) skeletons.add(sk);
   });
+  // Текстура матриц костей скелета живёт в видеопамяти — освобождаем вместе со склейкой
+  for (const sk of skeletons) sk.dispose();
 }
 const tmp = new THREE.Matrix4();
 const tmpColor = new THREE.Color();
@@ -65,6 +70,8 @@ interface Part {
   mesh: THREE.Mesh;
   matrix: THREE.Matrix4;
   outline: number;
+  /** Номер кости (для скелетной склейки персонажа). */
+  bone?: number;
 }
 
 function canBake(m: THREE.Mesh): boolean {
@@ -114,9 +121,9 @@ function buildGeometry(parts: Part[], withUv: boolean): THREE.BufferGeometry {
   const key = parts
     .map((p) => {
       const mt = p.mesh.material as THREE.MeshStandardMaterial;
-      return `${p.mesh.geometry.uuid}:${mt.color.getHexString()}:${mt.roughness}:${mt.metalness}:${p.matrix.elements.map((e) => e.toFixed(3)).join(',')}`;
+      return `${p.mesh.geometry.uuid}:${mt.color.getHexString()}:${mt.roughness}:${mt.metalness}:${p.bone ?? ''}:${p.matrix.elements.map((e) => e.toFixed(3)).join(',')}`;
     })
-    .join('|') + (withUv ? 'uv' : '');
+    .join('|') + (withUv ? 'uv' : '') + (parts[0]?.bone !== undefined ? 'skin' : '');
   let g = geoCache.get(key);
   if (g) return acquire(g);
   const geos = parts.map((p) => {
@@ -131,13 +138,31 @@ function buildGeometry(parts: Part[], withUv: boolean): THREE.BufferGeometry {
     tmpColor.copy((p.mesh.material as THREE.MeshStandardMaterial).color);
     const n = geo.attributes.position.count;
     const col = new Float32Array(n * 3);
-    for (let i = 0; i < n; i++) col.set([tmpColor.r, tmpColor.g, tmpColor.b], i * 3);
+    // Запечённое затенение: поверхности, смотрящие вниз (под подбородком, подмышки, низ одежды), темнее —
+    // объём как от рассеянного света неба без дорогого SSAO
+    const nrm = geo.attributes.normal;
+    for (let i = 0; i < n; i++) {
+      const ny = nrm.getY(i);
+      const ao = 0.74 + 0.26 * Math.min(1, Math.max(0, (ny + 0.85) / 1.5));
+      col.set([tmpColor.r * ao, tmpColor.g * ao, tmpColor.b * ao], i * 3);
+    }
     geo.setAttribute('color', new THREE.BufferAttribute(col, 3));
     // Шероховатость и металличность детали — в вершины (см. pbrAttr в toon.ts)
     const mt = p.mesh.material as THREE.MeshStandardMaterial;
     const pbr = new Float32Array(n * 2);
     for (let i = 0; i < n; i++) pbr.set([mt.roughness, mt.metalness], i * 2);
     geo.setAttribute('pbr', new THREE.BufferAttribute(pbr, 2));
+    if (p.bone !== undefined) {
+      // Жёсткая привязка к одной кости: деталь движется вместе со своей группой (рука, голова…)
+      const si = new Uint16Array(n * 4);
+      const sw = new Float32Array(n * 4);
+      for (let i = 0; i < n; i++) {
+        si[i * 4] = p.bone;
+        sw[i * 4] = 1;
+      }
+      geo.setAttribute('skinIndex', new THREE.Uint16BufferAttribute(si, 4));
+      geo.setAttribute('skinWeight', new THREE.BufferAttribute(sw, 4));
+    }
     return geo;
   });
   // Индексированные и неиндексированные геометрии не смешиваются — приводим к одному виду
@@ -167,7 +192,7 @@ function bakeGroup(group: THREE.Object3D) {
     }
     for (const b of buckets.values()) {
       const map = (b[0].mesh.material as THREE.MeshStandardMaterial).map ?? undefined;
-      const merged = new THREE.Mesh(buildGeometry(b, !!map), toon(0xffffff, { vertexColors: true, map, pbrAttr: true }));
+      const merged = new THREE.Mesh(buildGeometry(b, !!map), toon(0xffffff, { vertexColors: true, map, pbrAttr: true, rim: true }));
       merged.userData.baked = true;
       merged.raycast = () => {};
       const ol = b.reduce((s, p) => s + p.outline, 0) / b.length;
@@ -185,10 +210,70 @@ function bakeGroup(group: THREE.Object3D) {
   for (const n of nested) bakeGroup(n);
 }
 
-/** Склеить детали модели. Вызывать после того, как модель полностью собрана. */
+/**
+ * Склеить детали персонажа. Вызывать после того, как модель полностью собрана.
+ *
+ * Скелетная склейка: каждая анимируемая группа (userData.anim) становится костью одного скелета,
+ * а все детали — одним мешем на текстуру (SkinnedMesh с жёсткой привязкой вершин к костям). Анимация
+ * групп работает как прежде, а вместо 9–25 отрисовок на персонажа остаётся 1–4. Группы, которые
+ * прячутся во время игры (крылья демона, облик зверя, летящий молот — userData.ownMesh или скрытые
+ * при склейке), склеиваются по-старому, отдельным мешем внутри группы, чтобы их можно было скрыть.
+ */
 export function bake(root: THREE.Object3D) {
   root.updateWorldMatrix(true, true);
-  bakeGroup(root);
+  const bones: THREE.Object3D[] = [root];
+  const parts: Part[] = [];
+  const separate: THREE.Object3D[] = [];
+  const inv = new THREE.Matrix4().copy(root.matrixWorld).invert();
+  const walk = (o: THREE.Object3D, bone: number) => {
+    for (const c of o.children) {
+      if (c.userData.baked) continue;
+      const m = c as THREE.Mesh;
+      if (m.isMesh) {
+        if (canBake(m) && safeToHide(m)) parts.push({ mesh: m, matrix: tmp.multiplyMatrices(inv, m.matrixWorld).clone(), outline: 0, bone });
+        walk(m, bone);
+      } else if (!(c as THREE.Sprite).isSprite && !(c as THREE.Points).isPoints) {
+        if (!c.visible || c.userData.ownMesh) {
+          // Переключаемые группы — своим мешем
+          if (c.userData.anim || c.userData.ownMesh) separate.push(c);
+          continue;
+        }
+        if (c.userData.anim) {
+          bones.push(c);
+          walk(c, bones.length - 1);
+        } else walk(c, bone);
+      }
+    }
+  };
+  walk(root, 0);
+  if (parts.length >= 2) {
+    const skeleton = new THREE.Skeleton(bones as THREE.Bone[]);
+    const buckets = new Map<string, Part[]>();
+    for (const p of parts) {
+      const key = (p.mesh.material as THREE.MeshStandardMaterial).map?.uuid ?? '-';
+      let b = buckets.get(key);
+      if (!b) buckets.set(key, (b = []));
+      b.push(p);
+    }
+    for (const b of buckets.values()) {
+      const map = (b[0].mesh.material as THREE.MeshStandardMaterial).map ?? undefined;
+      const merged = new THREE.SkinnedMesh(buildGeometry(b, !!map), toon(0xffffff, { vertexColors: true, map, pbrAttr: true, rim: true }));
+      merged.userData.baked = true;
+      merged.userData.skeleton = skeleton;
+      merged.raycast = () => {};
+      root.add(merged);
+      merged.updateMatrixWorld(true);
+      merged.bind(skeleton, merged.matrixWorld);
+      // Рамка для отсечения камерой — по позе склейки с запасом на взмахи рук и ног
+      merged.computeBoundingSphere();
+      if (merged.boundingSphere) merged.boundingSphere.radius *= 1.3;
+      for (const p of b) {
+        p.mesh.visible = false;
+        p.mesh.userData.hiddenByBake = true;
+      }
+    }
+  }
+  for (const g of separate) bakeGroup(g);
 }
 
 /** Вернуть исходные детали (перед изменением экипировки). */
