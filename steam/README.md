@@ -7,7 +7,7 @@
 | Тексты страницы на 7 языках, теги, системные требования, возрастной рейтинг и ответы для анкет | [`STORE.md`](STORE.md) |
 | Скриншоты 1920×1080 (8 шт.) | [`screenshots/`](screenshots/) |
 | Капсулы магазина и библиотеки, логотип, иконка | [`art/`](art/) |
-| Конфиги загрузки сборок (SteamPipe) | `app_build.vdf`, `depot_*.vdf` |
+| Загрузка сборок (SteamPipe): шаблоны, ID, генератор, инструкция | `steampipe/`, [`STEAMPIPE.md`](STEAMPIPE.md) |
 | Десктопная сборка (Electron) | [`../desktop/`](../desktop/) |
 
 ## 1. Приложение в Steamworks
@@ -16,7 +16,8 @@
    возвращаются после 1000 $ выручки). Нужны налоговая и банковская анкеты.
 2. Создайте приложение — получите **AppID**. В разделе **SteamPipe → Depots** создайте три депо:
    Windows, macOS, Linux (у каждого — свой **Depot ID** и своя операционная система).
-3. Подставьте AppID и Depot ID в `app_build.vdf` и `depot_*.vdf` (сейчас там 1000000–1000003).
+3. Впишите AppID и ID депо в `steampipe/ids.json` (единственное место; сейчас заглушки), AppID — также в
+   `desktop/steam.config.json`. Подробно — в [`STEAMPIPE.md`](STEAMPIPE.md).
 4. **Installation → General → Launch Options** — три варианта запуска:
 
    | ОС | Исполняемый файл | Аргументы |
@@ -95,15 +96,9 @@ VITE_SERVER_URL=wss://game.example.com npm run dist:win     # или dist:mac / 
 
 ## 4. Загрузка сборки
 
-Скачайте [Steamworks SDK](https://partner.steamgames.com/downloads/list), положите сборки (или артефакты
-CI, распакованные в `desktop/release/`) и выполните из папки `steam/`:
-
-```bash
-steamcmd +login ВАШ_ЛОГИН +run_app_build "$(pwd)/app_build.vdf" +quit
-```
-
-Затем в Steamworks: **SteamPipe → Builds** → выберите сборку → **Set build live** на ветке `default`
-(сначала можно на закрытой ветке `beta` для теста).
+Пошагово — в [`STEAMPIPE.md`](STEAMPIPE.md): аккаунт для сборок, первая загрузка вручную через `steamcmd`,
+секреты GitHub (`STEAM_USERNAME`, `STEAM_CONFIG_VDF` …) для автоматической загрузки по тегу `v*`, выставление
+сборки на ветку `default`.
 
 ## 5. Страница магазина
 

@@ -22,3 +22,4 @@ desktop/release/
 .env.*.local
 *.local.env
 deploy/vps/.env
+steam/steampipe/build/

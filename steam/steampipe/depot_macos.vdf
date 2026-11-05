@@ -1,0 +1,14 @@
+"DepotBuild"
+{
+	// Депо macos: содержимое desktop/release/mac-universal целиком
+	"DepotID" "${DEPOT_MACOS}"
+	"FileMapping"
+	{
+		"LocalPath" "mac-universal/*"
+		"DepotPath" "."
+		"Recursive" "1"
+	}
+	// Служебные файлы electron-builder в игру не нужны
+	"FileExclusion" "*.yml"
+	"FileExclusion" "*.blockmap"
+}

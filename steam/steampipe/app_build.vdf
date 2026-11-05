@@ -1,0 +1,21 @@
+"AppBuild"
+{
+	// Шаблон: значения ${...} подставляет make-vdf.mjs из ids.json и параметров запуска.
+	// Готовые файлы — в steam/steampipe/build/ (в git не попадают).
+	"AppID" "${APP_ID}"
+	"Desc" "${DESC}"
+	// Папка со сборками: win-unpacked/, mac-universal/, linux-unpacked/ (desktop/release или артефакты CI)
+	"ContentRoot" "${CONTENT_ROOT}"
+	"BuildOutput" "${BUILD_OUTPUT}"
+	// Ветка, на которую сборка сразу выставляется (только закрытая, например beta; пусто — вручную).
+	// Ветку default Steam через загрузку выставлять не даёт — только в Steamworks.
+	"SetLive" "${SET_LIVE}"
+	// Предпросмотр без загрузки: 1 — только проверить файлы
+	"Preview" "${PREVIEW}"
+	"Depots"
+	{
+		"${DEPOT_WINDOWS}" "depot_windows.vdf"
+		"${DEPOT_MACOS}" "depot_macos.vdf"
+		"${DEPOT_LINUX}" "depot_linux.vdf"
+	}
+}

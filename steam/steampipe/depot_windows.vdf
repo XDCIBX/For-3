@@ -1,0 +1,14 @@
+"DepotBuild"
+{
+	// Депо windows: содержимое desktop/release/win-unpacked целиком
+	"DepotID" "${DEPOT_WINDOWS}"
+	"FileMapping"
+	{
+		"LocalPath" "win-unpacked/*"
+		"DepotPath" "."
+		"Recursive" "1"
+	}
+	// Служебные файлы electron-builder в игру не нужны
+	"FileExclusion" "*.yml"
+	"FileExclusion" "*.blockmap"
+}

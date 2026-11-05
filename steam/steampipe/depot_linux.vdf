@@ -1,0 +1,14 @@
+"DepotBuild"
+{
+	// Депо linux: содержимое desktop/release/linux-unpacked целиком
+	"DepotID" "${DEPOT_LINUX}"
+	"FileMapping"
+	{
+		"LocalPath" "linux-unpacked/*"
+		"DepotPath" "."
+		"Recursive" "1"
+	}
+	// Служебные файлы electron-builder в игру не нужны
+	"FileExclusion" "*.yml"
+	"FileExclusion" "*.blockmap"
+}

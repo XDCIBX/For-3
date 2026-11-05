@@ -1,0 +1,9 @@
+{
+  "//": "ЕДИНСТВЕННОЕ место, где задаются AppID и ID депо для загрузки в Steam. Впишите числа из Steamworks (App Admin → SteamPipe → Depots) вместо заглушек.",
+  "appId": "APP_ID",
+  "depots": {
+    "windows": "DEPOT_ID_WINDOWS",
+    "macos": "DEPOT_ID_MACOS",
+    "linux": "DEPOT_ID_LINUX"
+  }
+}
