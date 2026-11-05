@@ -142,6 +142,31 @@ const TOTEM_PULSE_DUEL = 0.1;
 /** Доля силы умений, с которой бьют помощники (волки, голем, тотем, турель): на волнах и в дуэлях. */
 const MINION_POWER = 0.9;
 const MINION_POWER_DUEL = 1.3;
+/**
+ * Сила урона класса по другому герою в дуэлях — своя на каждой ПвП-волне (5, 10, 15, 20, 24): классы по-разному
+ * растут со снаряжением (воин силён рано, маг — поздно). Подобрано прогонами tools/sim/pvp.ts так, чтобы при
+ * равном снаряжении у каждого класса было ~50 % побед. На волны с мобами не влияет.
+ */
+export const DUEL_POWER: Record<HeroClass, number[]> = {
+  warrior: [0.88, 0.91, 1.01, 1.06, 1.12],
+  mage: [1.06, 0.96, 0.87, 0.82, 0.74],
+  archer: [1.06, 1.02, 0.95, 0.92, 0.92],
+  hunter: [1.1, 1.1, 1.15, 1.09, 1.2],
+  summoner: [0.98, 1.01, 0.99, 1.09, 0.89],
+  werewolf: [1.07, 1.15, 1.25, 1.21, 1.32],
+  dwarf: [0.87, 0.89, 0.85, 0.87, 0.92],
+};
+const DUEL_WAVES = [5, 10, 15, 20, 24];
+export function duelPower(cls: HeroClass, round: number): number {
+  const t = DUEL_POWER[cls];
+  // Волна ПвП → ближайшая из таблицы (на случай других номеров — между соседними)
+  let i = DUEL_WAVES.findIndex((w) => round <= w);
+  if (i < 0) i = DUEL_WAVES.length - 1;
+  if (i === 0 || round === DUEL_WAVES[i]) return t[i];
+  const k = (round - DUEL_WAVES[i - 1]) / (DUEL_WAVES[i] - DUEL_WAVES[i - 1]);
+  return t[i - 1] + (t[i] - t[i - 1]) * k;
+}
+
 /** Выстрел турели гнома (доля урона гнома). */
 const TURRET_SHOT = 0.6;
 
@@ -904,7 +929,7 @@ export class Game {
         o.slowT = Math.max(o.slowT, fx.slowT ?? 1);
         o.slowAmt = Math.max(o.slowAmt, fx.slow);
       }
-      dealt = this.damagePlayer(o, v * 0.75, crit, p.id);
+      dealt = this.damagePlayer(o, v * 0.75 * (this.phase === 'duel' ? duelPower(p.cls, this.round) : 1), crit, p.id);
     }
     p.dmgDealt += dealt;
     const ls = (p.stats.lifesteal + (p.demonT > 0 ? 0.15 : 0)) * (this.phase === 'duel' ? 0.5 : 1);
