@@ -1,9 +1,10 @@
 // Десктопная оболочка «25 Waves» для Steam (Windows / macOS / Linux / Steam Deck).
 // Игра — та же веб-сборка клиента (client/dist), скопированная в ./app.
-const { app, BrowserWindow, Menu, net, protocol, shell } = require('electron');
+const { app, BrowserWindow, Menu, ipcMain, net, protocol, shell } = require('electron');
 const path = require('node:path');
 const fs = require('node:fs');
 const { pathToFileURL } = require('node:url');
+const { Steam } = require('./steam.cjs');
 
 const ROOT = path.join(__dirname, 'app');
 const STATE_FILE = () => path.join(app.getPath('userData'), 'window.json');
@@ -19,7 +20,23 @@ app.commandLine.appendSwitch('disable-direct-composition');
 // Звук без обязательного клика по странице
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
-if (!app.requestSingleInstanceLock()) app.quit();
+const primary = app.requestSingleInstanceLock();
+if (!primary) app.quit();
+
+// Steam — до создания окна, чтобы оверлей успел встроиться. Без Steam игра работает как обычно.
+const steam = new Steam();
+const steamInit = primary ? steam.init(app, __dirname) : false;
+// Игру запустили не через Steam (только для настоящего AppID) — Steam перезапустит её сам
+if (steamInit === 'restart') app.exit(0);
+else if (steamInit) console.log(`[steam] подключено: AppID ${steam.appId}, игрок ${steam.name}`);
+else console.log(`[steam] не подключено (${steam.error}) — игра без Steam`);
+
+/** Параметры приглашения из командной строки (--w25-join=КОД --w25-server=адрес). */
+function joinArgs(argv) {
+  return argv.filter((a) => /^--w25-(join|server)=/.test(a)).join(' ');
+}
+let pendingJoin = joinArgs(process.argv) || steam.launchCommandLine();
+let pageReady = false;
 
 function loadState() {
   try {
@@ -61,6 +78,7 @@ function createWindow() {
       allowRunningInsecureContent: true,
       backgroundThrottling: false,
       spellcheck: false,
+      preload: path.join(__dirname, 'preload.cjs'),
     },
   });
   win.once('ready-to-show', () => win.show());
@@ -100,10 +118,52 @@ app.whenReady().then(() => {
     Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'viewMenu' }, { role: 'windowMenu' }]));
   } else Menu.setApplicationMenu(null);
   const win = createWindow();
-  app.on('second-instance', () => {
+  app.on('second-instance', (_e, argv) => {
     if (win.isMinimized()) win.restore();
     win.focus();
+    const join = joinArgs(argv);
+    if (join && pageReady) win.webContents.send('steam:join', join);
+    else if (join) pendingJoin = join;
   });
+  setupSteamIpc(win);
 });
 
+/** Запросы страницы к Steam. Всё, что приходит со страницы, проверяем: длина, допустимые символы. */
+function setupSteamIpc(win) {
+  const fromGame = (e) => e.senderFrame?.url?.startsWith('app://');
+  const str = (v, max) => (typeof v === 'string' ? v.slice(0, max) : '');
+  ipcMain.handle('steam:status', (e) =>
+    fromGame(e) ? { ok: steam.ok, appId: steam.appId, name: steam.name, lang: steam.lang, error: steam.error, overlay: steam.overlayEnabled() } : null,
+  );
+  ipcMain.handle('steam:takeJoin', (e) => {
+    if (!fromGame(e)) return '';
+    pageReady = true;
+    const j = pendingJoin;
+    pendingJoin = '';
+    return j;
+  });
+  ipcMain.on('steam:achieve', (e, id) => {
+    if (fromGame(e) && /^[A-Z0-9_]{1,64}$/.test(str(id, 64))) steam.achieve(id);
+  });
+  ipcMain.on('steam:invite', (e, connect) => {
+    if (fromGame(e)) steam.invite(str(connect, 255));
+  });
+  ipcMain.on('steam:presence', (e, connect, status) => {
+    if (fromGame(e)) steam.presence(str(connect, 255), str(status, 255));
+  });
+  ipcMain.on('steam:overlay', (e, dialog) => {
+    const d = str(dialog, 32);
+    if (fromGame(e) && ['Friends', 'Community', 'Players', 'Settings', 'OfficialGameGroup', 'Stats', 'Achievements'].includes(d)) steam.overlay(d);
+  });
+  steam.on('join', (connect) => {
+    // Страница ещё грузится — отдадим приглашение, когда она спросит
+    if (!pageReady) pendingJoin = connect;
+    else if (!win.isDestroyed()) win.webContents.send('steam:join', connect);
+  });
+  steam.on('overlay', (active) => {
+    if (!win.isDestroyed()) win.webContents.send('steam:overlayActive', active);
+  });
+}
+
 app.on('window-all-closed', () => app.quit());
+app.on('will-quit', () => steam.shutdown());

@@ -47,6 +47,14 @@
     кнопки, клавиатура, **геймпад**.
 - `desktop/` — Electron 44: протокол `app://`, полноэкранный режим, F11/Alt+Enter, `npm run dist:linux|win|mac`
   → `desktop/release/*-unpacked` (отдельный `npm ci` в `desktop/`, в workspaces не входит).
+  - **Steamworks SDK 1.65** через FFI (koffi 2.16.3, без C++-аддона): `steam.cjs` (инициализация, ручной разбор
+    обратных вызовов, достижения, приглашения, Rich Presence), `preload.cjs` → `window.steam`, библиотеки в
+    `steam/redist/<os>`. **AppID — в `steam.config.json`** (сейчас 480 = Spacewar; таблица `achievements`
+    переводит наши имена в достижения Spacewar; для релиза — свой AppID, `restartViaSteam: true`, `{}`).
+    Переменная `STEAM_APP_ID` переопределяет. Без Steam игра работает как обычно.
+  - Клиент: `client/src/platform/steam.ts` — достижения (`FIRST_WAVE`, `WAVE_10`, `TROLL_SLAYER`, `DUEL_WINNER`,
+    `DRAGON_LAIR`, `DRAGON_SLAYER`), кнопка «Пригласить друзей Steam» в лобби, вход по `--w25-join=КОД
+    --w25-server=адрес`, имя из Steam, пауза одиночной игры при открытии оверлея.
 - `steam/` — тексты магазина на 7 языках, рейтинг 12+, скриншоты, капсулы, SteamPipe, инструкция выпуска.
 - `tools/` — инструменты проверки (см. `tools/README.md`).
 - CI: `.github/workflows/build.yml` (тесты + APK), `desktop.yml` (сборки для Steam по тегу `v*` или вручную).
@@ -88,7 +96,9 @@
 
 ## Открытые задачи
 
-- Steamworks SDK не подключён (достижения, приглашения, сеть Valve) — нужен AppID.
+- Steamworks: нужен свой AppID (замена в `desktop/steam.config.json`, достижения завести в Steamworks —
+  таблица в `steam/README.md`). Оверлей и достижения проверены только на подставной библиотеке — нужна
+  проверка с запущенным Steam на Windows/macOS/Linux. Сеть Valve (SDR), Steam Cloud не подключены.
 - Трейлер не записан. Скриншоты для Steam сняты в «высоком» качестве — можно переснять в «ультра».
 - Подпись/нотаризация macOS (нужен аккаунт Apple Developer), публичный игровой сервер (`wss://`, `VITE_SERVER_URL`).
 - Первая дуэль (волна 5): призыватель силён (≈85 %), охотник слаб (≈6 %) — не трогали без данных живых игроков.

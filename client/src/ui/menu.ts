@@ -172,6 +172,8 @@ export interface LobbyActions {
   kick(id: string): void;
   botCls(id: string, cls: HeroClass): void;
   leave(): void;
+  /** Пригласить друзей через оверлей Steam (только десктопная сборка в Steam). */
+  invite?: () => void;
 }
 
 /** Лобби комнаты: игроки, выбор класса, готовность. */
@@ -199,6 +201,7 @@ export class LobbyScreen {
           <div class="slots"></div>
           <div class="lobby-actions">
             <button class="btn ghost" id="leave">${t('lobby.leave')}</button>
+            ${!local && act.invite ? `<button class="btn" id="steamInvite">${t('lobby.steamInvite')}</button>` : ''}
           </div>
         </div>
         <div class="lobby-mid"></div>
@@ -216,6 +219,10 @@ export class LobbyScreen {
     this.el.querySelector('#leave')!.addEventListener('click', () => {
       sfx.click();
       act.leave();
+    });
+    this.el.querySelector('#steamInvite')?.addEventListener('click', () => {
+      sfx.click();
+      act.invite?.();
     });
     this.el.querySelector('#start')!.addEventListener('click', () => {
       sfx.click();

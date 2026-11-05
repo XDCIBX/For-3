@@ -31,3 +31,10 @@
 
 `logo.html` + `logo.cjs` — логотип «25 WAVES» с прозрачным фоном; `capsules.py` — капсулы магазина и
 библиотеки из `ka_wide.png`, `ka_tall.png` (результаты `keyart.cjs`) и логотипа → `steam/art/`.
+
+## Steam (`tools/steam`)
+
+`mock_steam_api.c` — подставная `libsteam_api.so` (пишет вызовы в stderr, присылает «Присоединиться» и
+оверлей): `gcc -shared -fPIC -o libsteam_api.so mock_steam_api.c`, положить в
+`desktop/release/linux-unpacked/resources/steam/`. `electron_steam.cjs` — запуск собранной игры по
+приглашению, кнопка «Пригласить», вход в другую комнату по сигналу Steam.

@@ -1,0 +1,13 @@
+{
+  "//": "Настройки Steam. appId 480 — тестовое приложение Valve (Spacewar). Для релиза: свой AppID, restartViaSteam: true, а achievements — {} (имена достижений в Steamworks = id из игры).",
+  "appId": 480,
+  "restartViaSteam": false,
+  "achievements": {
+    "FIRST_WAVE": "ACH_TRAVEL_FAR_SINGLE",
+    "WAVE_10": "ACH_TRAVEL_FAR_ACCUM",
+    "TROLL_SLAYER": null,
+    "DUEL_WINNER": null,
+    "DRAGON_LAIR": "ACH_WIN_100_GAMES",
+    "DRAGON_SLAYER": "ACH_WIN_ONE_GAME"
+  }
+}

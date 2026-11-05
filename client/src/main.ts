@@ -38,10 +38,11 @@ import { TavernUi } from './ui/tavern';
 import { overScreen } from './ui/over';
 import { el, esc, onTap } from './ui/dom';
 import { sfx } from './audio/sfx';
+import { steam, type JoinInfo } from './platform/steam';
 import { reportOnce } from './report';
 import { setDetail } from './render/detail';
 import * as Shared from '@game/shared';
-import { getLang, itemName, playerName, setLang, t, tServer } from './i18n';
+import { getLang, itemName, playerName, setLang, t, tIn, tServer } from './i18n';
 import { clearSession, loadSession, loadSettings, saveSession, saveSettings, type Settings } from './settings';
 
 type Screen = 'menu' | 'lobby' | 'game';
@@ -113,6 +114,7 @@ class App {
       }
     }
     setTimeout(() => document.getElementById('boot')?.classList.add('hide'), 300);
+    void this.initSteam();
     // Попытка вернуться в игру после перезагрузки страницы
     const sess = loadSession();
     if (sess) void this.rejoin(sess.code, sess.token, true);
@@ -151,6 +153,56 @@ class App {
     this.overEl = null;
   }
 
+  // ------------------------------------------------------------------ Steam
+
+  private async initSteam() {
+    const first = await steam.init(
+      (j) => this.joinFromSteam(j),
+      // Оверлей Steam (Shift+Tab) в одиночной игре ставит паузу, как сворачивание окна
+      (active) => {
+        if (active && this.conn?.local && this.screen === 'game' && !this.isPaused() && this.canPause()) this.requestPause(true);
+      },
+    );
+    if (!steam.ok) return;
+    // Имя по умолчанию — имя игрока в Steam
+    if (steam.name && this.settings.name === tIn(this.settings.lang, 'defaultName')) {
+      this.settings.name = steam.name.slice(0, 14);
+      saveSettings(this.settings);
+      if (this.screen === 'menu') this.showMenu();
+    }
+    this.updatePresence();
+    if (first) this.joinFromSteam(first);
+  }
+
+  /** Друг пригласил в комнату (или «Присоединиться» в списке друзей Steam). */
+  private joinFromSteam(j: JoinInfo) {
+    if (j.server && j.server !== this.settings.server) {
+      this.settings.server = j.server;
+      saveSettings(this.settings);
+    }
+    if (this.screen !== 'menu') this.leave();
+    void this.connect({ t: 'join', code: j.code, name: this.settings.name });
+  }
+
+  /** Статус в списке друзей Steam; в лобби сетевой комнаты — кнопка «Присоединиться». */
+  private updatePresence() {
+    if (!steam.ok) return;
+    const st = this.st;
+    if (this.screen === 'menu' || st.phase === 'gameover') return steam.presence(null, '', '');
+    const code = this.screen === 'lobby' && !this.conn?.local && st.code ? st.code : null;
+    const status =
+      this.screen === 'lobby'
+        ? t('steam.lobby')
+        : st.phase === 'tavern'
+          ? t('steam.tavern')
+          : st.round >= DRAGON_ROUND
+            ? t('steam.dragon')
+            : isPvpRound(st.round)
+              ? t('steam.duels')
+              : t('steam.wave', { n: st.round });
+    steam.presence(code, this.settings.server, status);
+  }
+
   private showMenu(error = '') {
     this.screen = 'menu';
     this.clearUi();
@@ -171,6 +223,7 @@ class App {
     );
     this.updateMenuShift();
     window.requestAnimationFrame(() => this.updateMenuShift());
+    this.updatePresence();
   }
 
   /** Сдвиг сцены меню вправо от панели с кнопками, чтобы герои были видны. */
@@ -240,10 +293,12 @@ class App {
         kick: (id) => this.conn?.send({ t: 'kick', id }),
         botCls: (id, cls) => this.conn?.send({ t: 'botcls', id, cls }),
         leave: () => this.leave(),
+        invite: steam.ok ? () => steam.invite(this.st.code, this.settings.server) : undefined,
       },
       !!this.conn?.local,
     );
     this.ui.appendChild(this.lobby.el);
+    this.updatePresence();
   }
 
   private showGame() {
@@ -447,6 +502,7 @@ class App {
     if (ph === 'lobby') {
       if (this.screen !== 'lobby') this.showLobby();
       this.lobby?.update(this.st);
+      this.updatePresence();
       const list = this.st.order.map((id) => this.st.players.get(id)!).map((p) => ({ cls: p.c, name: p.n, me: p.id === this.st.myId }));
       this.engine.showMenu(list, this.st.seed);
       return;
@@ -484,6 +540,7 @@ class App {
     }
     hud.el.style.display = ph === 'tavern' ? 'none' : '';
     if (this.st.me && this.controls) this.controls.setClass(this.st.me.c);
+    this.updatePresence();
     switch (ph) {
       case 'intro': {
         const pvp = isPvpRound(st.round);
@@ -498,9 +555,12 @@ class App {
           );
         sfx.fanfare();
         sfx.music(st.round >= DRAGON_ROUND ? 'dragon' : st.round >= LAIR_ROUND ? 'lair' : 'battle');
+        if (lair) steam.achieve('DRAGON_LAIR');
         break;
       }
       case 'clear':
+        if (st.round >= 1) steam.achieve('FIRST_WAVE');
+        if (st.round >= 10) steam.achieve('WAVE_10');
         hud.showBanner(isPvpRound(st.round) ? t('banner.duelsOver') : t('banner.waveClear'), t('banner.goldEach', { n: 15 + 5 * st.round }), '#8aff7a');
         sfx.victory();
         break;
@@ -525,8 +585,10 @@ class App {
       }
       case 'gameover':
         sfx.music('calm');
-        if (st.result?.win) sfx.victory();
-        else sfx.defeat();
+        if (st.result?.win) {
+          sfx.victory();
+          steam.achieve('DRAGON_SLAYER');
+        } else sfx.defeat();
         clearSession();
         if (!this.overEl) {
           this.overEl = overScreen(st, () => this.leave());
@@ -624,6 +686,7 @@ class App {
           break;
         case 'mdie':
           sfx.mobDie();
+          if (e.k === 'troll') steam.achieve('TROLL_SLAYER');
           if (e.by === me) this.haptic(ImpactStyle.Light);
           break;
         case 'pdie':
@@ -639,7 +702,10 @@ class App {
         case 'duel': {
           const w = e.winner ? this.st.players.get(e.winner) : null;
           if (!w) hud.showBanner(t('banner.draw'), '', '#fff');
-          else if (e.winner === me) hud.showBanner(t('banner.win'), t('banner.goldPlus', { n: e.win }), '#8aff7a');
+          else if (e.winner === me) {
+            hud.showBanner(t('banner.win'), t('banner.goldPlus', { n: e.win }), '#8aff7a');
+            steam.achieve('DUEL_WINNER');
+          }
           else if (e.a === me || e.b === me) hud.showBanner(t('banner.lose'), e.lose ? t('banner.goldMinus', { n: e.lose }) : '', '#ff7a6a');
           else hud.showBanner(t('banner.winner', { name: playerName(w.n) }), '', 'var(--gold)');
           break;

@@ -28,25 +28,64 @@
     },
     "files": [
       "main.cjs",
+      "preload.cjs",
+      "steam.cjs",
+      "steam.config.json",
       "app/**/*",
-      "build/icon.png"
+      "build/icon.png",
+      "!node_modules/koffi/{src,vendor,doc}/**",
+      "!node_modules/koffi/build/koffi/!(win32_x64|linux_x64|darwin_x64|darwin_arm64)/**"
     ],
     "asar": true,
     "win": {
-      "target": [{ "target": "dir", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.ico",
       "executableName": "25Waves"
     },
     "linux": {
-      "target": [{ "target": "dir", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "icon": "build/icon.png",
       "executableName": "25waves",
       "category": "Game"
     },
     "mac": {
-      "target": [{ "target": "dir", "arch": ["universal"] }],
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
       "icon": "build/icon.png",
-      "category": "public.app-category.action-games"
-    }
+      "category": "public.app-category.action-games",
+      "x64ArchFiles": "**/koffi/build/koffi/darwin_*/koffi.node"
+    },
+    "asarUnpack": [
+      "node_modules/koffi/build/**"
+    ],
+    "extraResources": [
+      {
+        "from": "steam/redist/${os}",
+        "to": "steam"
+      }
+    ]
+  },
+  "dependencies": {
+    "koffi": "2.16.3"
   }
 }
