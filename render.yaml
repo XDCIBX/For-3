@@ -1,12 +1,18 @@
-# Развёртывание на Render.com в одну кнопку: сервер игры + веб-клиент на одном адресе
+# Развёртывание на Render.com в одну кнопку: сервер игры + веб-клиент на одном адресе (https://…onrender.com,
+# WebSocket — wss:// на том же адресе). Тариф free засыпает через 15 минут без игроков — для релиза
+# нужен starter (всегда включён).
 services:
   - type: web
     name: three-heroes
     runtime: node
-    plan: free
+    region: frankfurt
+    plan: starter
+    numInstances: 1 # комнаты в памяти — только один экземпляр
     buildCommand: npm ci --include=dev && npm run build
     startCommand: npm start
     healthCheckPath: /health
     envVars:
       - key: NODE_VERSION
         value: "22"
+      - key: TRUST_PROXY
+        value: "1"

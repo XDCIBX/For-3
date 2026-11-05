@@ -1,0 +1,10 @@
+# HTTPS для игры: Caddy сам получает и продлевает сертификат Let's Encrypt.
+# WebSocket (wss://) проксируется автоматически — отдельной настройки не нужно.
+{
+	email {$ACME_EMAIL}
+}
+
+{$GAME_DOMAIN} {
+	encode zstd gzip
+	reverse_proxy game:2567
+}

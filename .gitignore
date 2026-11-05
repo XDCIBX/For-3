@@ -16,3 +16,9 @@ dist-demo/
 desktop/node_modules/
 desktop/app/
 desktop/release/
+
+# Локальные адреса серверов и прочие настройки сборки
+.env
+.env.*.local
+*.local.env
+deploy/vps/.env

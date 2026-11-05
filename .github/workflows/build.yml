@@ -35,6 +35,9 @@ jobs:
       - run: npm ci
       - name: Сборка веб-части и синхронизация с Android
         working-directory: client
+        env:
+          # Адрес публичного сервера (wss://…): переменная репозитория SERVER_URL (Settings → Variables)
+          VITE_SERVER_URL: ${{ vars.SERVER_URL || secrets.SERVER_URL }}
         run: npm run build && npx cap sync android
       - name: Сборка APK
         working-directory: client/android

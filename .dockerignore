@@ -6,3 +6,8 @@ client/ios
 client/assets
 .git
 desktop
+steam
+tools
+docs
+deploy
+*.md

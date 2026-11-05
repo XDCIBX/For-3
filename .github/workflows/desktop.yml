@@ -38,8 +38,8 @@ jobs:
       - name: Сборка
         working-directory: desktop
         env:
-          # Адрес публичного игрового сервера (wss://…) — секрет репозитория SERVER_URL
-          VITE_SERVER_URL: ${{ secrets.SERVER_URL }}
+          # Адрес публичного игрового сервера (wss://…): переменная репозитория SERVER_URL (Settings → Variables)
+          VITE_SERVER_URL: ${{ vars.SERVER_URL || secrets.SERVER_URL }}
           # Подпись и нотаризация macOS (необязательно): сертификат Developer ID и Apple ID
           CSC_LINK: ${{ secrets.MAC_CERT_P12_BASE64 }}
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
