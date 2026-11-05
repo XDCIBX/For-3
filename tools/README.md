@@ -16,8 +16,8 @@
 
 | Файл | Что делает |
 |---|---|
-| `steamshots.cjs <сцена> [WxH]` | Постановочные скриншоты: `island troll tavern duel lair dragon dragon2 lobby menu`; `Q=ultra`, `LANG_UI=ru` |
-| `keyart.cjs <имя> <WxH> <камера> <взгляд> [fov]` | Ключевой арт без интерфейса (дракон и герои), `T=` — момент дыхания |
+| `steamshots.cjs <сцена> [WxH]` | Постановочные скриншоты: `island troll tavern duel lair dragon dragon2 lobby menu`; `Q=ultra`, `LANG_UI=ru`, `TMO=` тайм-аут |
+| `keyart.cjs <имя> <WxH> <камера> <взгляд> [fov]` | Ключевой арт без интерфейса (дракон и герои): `T=` — момент дыхания, `Q=ultra`, `NEAR=` — убрать частицы у камеры, `TMO=` |
 | `seq.cjs <имя> <query> <умение> <времена>` | Покадровая съёмка удара в `client/dev/preview.html?freeze=1` |
 | `poses.cjs` | Снимки превью героев/мобов/оружия |
 | `fullrun.cjs <класс>` | Прогон всех 25 волн в браузере: ошибки страницы, геометрии, текстуры, heap, FPS |

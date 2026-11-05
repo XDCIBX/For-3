@@ -33,7 +33,7 @@ const TMO = Number(process.env.TMO) || 240000;
   await p.click('#ready');
   await p.waitForTimeout(300);
   await p.click('#start');
-  await p.waitForFunction(() => [...window.__app.conn.room.game.mobs.values()].some((m) => m.kind === 'dragon' && m.spawnT <= 0), null, { timeout: 120000 });
+  await p.waitForFunction(() => [...window.__app.conn.room.game.mobs.values()].some((m) => m.kind === 'dragon' && m.spawnT <= 0), null, { timeout: TMO });
   // Снаряжение, неподвижные герои лицом к дракону
   await p.evaluate(() => {
     const A = window.__app;
@@ -104,6 +104,9 @@ const TMO = Number(process.env.TMO) || 240000;
     const d = [...g.mobs.values()].find((m) => m.kind === 'dragon');
     d.rot = Math.atan2(cam[0] * 0.35, cam[2]);
     d.dcd.breath = 0;
+    // Держим дракона лицом к героям: иначе ИИ может отвернуть его к другой цели до кадра
+    const face = d.rot;
+    window.__face = setInterval(() => (d.rot = face), 16);
   }, [cam, look, fov]);
   console.log('камера', await p.evaluate(() => JSON.stringify(window.__app.engine.camOverride)), 'фаза', await p.evaluate(() => window.__app.conn.room.game.phase));
   // NEAR=метры: гасим светящиеся частицы ближе этого расстояния к камере — в «ультра» свечение (bloom)

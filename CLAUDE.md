@@ -36,6 +36,9 @@
   Тесты: `shared/test/game.test.ts` (21 тест, `npm test`).
 - `server/` — Node + ws: комнаты с 4-символьными кодами, раздача клиента, `/health`. Защищён от падений
   (обработчики ошибок сокета, try/catch на комнату). Сборка: `npm run build --workspace server`.
+  Переменные: `PORT`, `HOST`, `TRUST_PROXY`, `MAX_ROOMS`, `MAX_CONN_PER_IP`, `ALLOWED_ORIGINS`, `HEARTBEAT_MS`,
+  `APP_VERSION`; ping/pong закрывает мёртвые соединения, SIGTERM → код 1012. **Только один экземпляр**
+  (комнаты в памяти). Деплой: `deploy/README.md` (VPS + Caddy в `deploy/vps`, `fly.toml`, `render.yaml`).
 - `client/` — Three.js 0.180 + Vite 7. `LocalConnection` — одиночная игра прямо в браузере.
   - `render/engine.ts` — сцены, камера, качество (`low`/`high`/`ultra`), постобработка, тени.
   - `render/heroes.ts`, `mobs.ts`, `dragons.ts`, `weapons.ts`, `equipment.ts`, `anatomy.ts`, `forge.ts` —
@@ -55,9 +58,13 @@
   - Клиент: `client/src/platform/steam.ts` — достижения (`FIRST_WAVE`, `WAVE_10`, `TROLL_SLAYER`, `DUEL_WINNER`,
     `DRAGON_LAIR`, `DRAGON_SLAYER`), кнопка «Пригласить друзей Steam» в лобби, вход по `--w25-join=КОД
     --w25-server=адрес`, имя из Steam, пауза одиночной игры при открытии оверлея.
-- `steam/` — тексты магазина на 7 языках, рейтинг 12+, скриншоты, капсулы, SteamPipe, инструкция выпуска.
+- `steam/` — тексты магазина на 7 языках, рейтинг 12+, скриншоты «Ультра» 1920×1080, капсулы (`ASSETS.md` —
+  что в какое поле Steamworks), инструкция выпуска. SteamPipe — `steam/steampipe/`: **AppID и ID депо только в
+  `ids.json`** (заглушки), шаблоны vdf, `make-vdf.mjs`; загрузка в `desktop.yml` (задание `steam`, секреты
+  окружения `steam`), инструкция `steam/STEAMPIPE.md`.
 - `tools/` — инструменты проверки (см. `tools/README.md`).
-- CI: `.github/workflows/build.yml` (тесты + APK), `desktop.yml` (сборки для Steam по тегу `v*` или вручную).
+- CI: `.github/workflows/build.yml` (тесты + APK), `desktop.yml` (сборки для Steam по тегу `v*` или вручную,
+  артефакты в tar.gz, загрузка через steamcmd). Адрес сервера для сборок — переменная репозитория `SERVER_URL`.
 
 ## Важные решения и правила кода
 
@@ -85,6 +92,10 @@
 
 ## Подводные камни
 
+- Съёмка в «ультра» на swiftshader: один кадр 1920×1080 — 5–7 минут; запускать по одному, `TMO=` побольше.
+  Docker Hub из песочницы отвечает 429 — базовый образ через `--build-arg NODE_IMAGE=mirror.gcr.io/library/node:22-alpine`;
+  `npm ci` внутри docker build здесь не работает (нет прокси), проверять финальную стадию на готовых `dist`.
+
 - Браузерные тесты идут на swiftshader (1–2 FPS): кадр ограничен 0.05 с, поэтому эффекты «отстают» от
   симуляции — в режиме `?shots=1` ограничение снято.
 - Правка файлов во время браузерного прогона на dev-сервере перезагружает страницу (HMR) — не трогать код,
@@ -99,7 +110,9 @@
 - Steamworks: нужен свой AppID (замена в `desktop/steam.config.json`, достижения завести в Steamworks —
   таблица в `steam/README.md`). Оверлей и достижения проверены только на подставной библиотеке — нужна
   проверка с запущенным Steam на Windows/macOS/Linux. Сеть Valve (SDR), Steam Cloud не подключены.
-- Трейлер не записан. Скриншоты для Steam сняты в «высоком» качестве — можно переснять в «ультра».
-- Подпись/нотаризация macOS (нужен аккаунт Apple Developer), публичный игровой сервер (`wss://`, `VITE_SERVER_URL`).
+- Трейлер не записан. Капсулы магазина — из арта в «высоком» качестве (композиция лучше, чем у ультра-рендеров).
+- Подпись/нотаризация macOS (нужен аккаунт Apple Developer). Публичный сервер готов к деплою, но не развёрнут:
+  владелец выбирает хостинг (VPS Hetzner / Fly.io / Render, `deploy/README.md`).
+- Загрузка в Steam через steamcmd не проверена вживую (нужны аккаунт и AppID).
 - Первая дуэль (волна 5): призыватель силён (≈85 %), охотник слаб (≈6 %) — не трогали без данных живых игроков.
 - FPS «ультра» на реальной видеокарте не измерен (здесь нет GPU).
