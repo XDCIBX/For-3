@@ -81,6 +81,26 @@ Caddy сам получает и продлевает сертификат Let's
 2. `render.yaml` уже задаёт регион Frankfurt, тариф Starter, один экземпляр и `TRUST_PROXY=1`.
 3. Проверка: `https://<имя>.onrender.com/health`. Адрес для сборок — `wss://<имя>.onrender.com`.
 
+### C2. Render с Runtime = Docker (только сервер, без веб-версии)
+
+Образ `server/Dockerfile` — только WebSocket-сервер и `/health` (12 пакетов, без Three.js/Vite), пересобирается
+лишь при изменениях сервера и общей логики. Поля Web Service:
+
+| Поле | Значение |
+|---|---|
+| Root Directory | пусто |
+| Docker Build Context Directory | `.` |
+| Dockerfile Path | `./server/Dockerfile` |
+| Docker Command | пусто |
+| Pre-Deploy Command | пусто |
+| Build Filters → Included Paths | `server/**`, `shared/**`, `package.json`, `package-lock.json`, `.dockerignore` |
+| Build Filters → Ignored Paths | `**/*.md`, `shared/test/**` |
+| Environment Variables | `TRUST_PROXY` = `1` (`PORT` Render задаёт сам) |
+| Health Check Path | `/health` |
+
+Веб-версию при этом раздаёт не этот сервер (страница `/` отвечает 404) — играть через приложения и ПК-сборку
+с `VITE_SERVER_URL=wss://<имя>.onrender.com`. Если нужна и веб-версия на том же адресе — корневой `Dockerfile`.
+
 ## Адрес сервера в сборках (`VITE_SERVER_URL`)
 
 Адрес зашивается в клиент при сборке, игрокам ничего вводить не нужно (в настройках его можно сменить).
