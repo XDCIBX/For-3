@@ -69,29 +69,71 @@
 
 ## 4. Секреты GitHub для автоматической загрузки
 
-**Settings → Environments → New environment → `steam`** (там же можно включить *Required reviewers* —
-тогда каждая загрузка ждёт вашего подтверждения). В этом окружении → **Add environment secret**:
+### Где добавлять
 
-| Секрет | Обязателен | Что вписать |
+1. Репозиторий на GitHub → **Settings** → слева **Environments** → **New environment**.
+2. **Name:** `steam` (именно так, маленькими буквами) → **Configure environment**.
+3. Необязательно: **Required reviewers** → вы сами — тогда каждая загрузка ждёт вашего «Approve».
+4. Внизу **Environment secrets** → **Add environment secret**: в поле **Name** — имя из таблицы,
+   в поле **Value** — значение, как описано ниже. Кнопка **Add secret**. Повторить для каждого секрета.
+
+Нужен **либо вариант 1, либо вариант 2**. Рекомендуется вариант 1 — тогда добавляются всего два секрета.
+
+| Name | Когда нужен | Что вписать в Value |
 |---|---|---|
-| `STEAM_USERNAME` | да | Логин аккаунта для сборок |
-| `STEAM_CONFIG_VDF` | вариант 1 | Содержимое `config.vdf` в base64 (см. ниже) |
+| `STEAM_USERNAME` | всегда | Логин аккаунта для сборок |
+| `STEAM_CONFIG_VDF` | вариант 1 | Файл `config.vdf`, закодированный в base64, одной строкой |
 | `STEAM_PASSWORD` | вариант 2 | Пароль аккаунта для сборок |
-| `STEAM_TOTP_SECRET` | вариант 2 | `shared_secret` мобильного аутентификатора (base64) |
+| `STEAM_TOTP_SECRET` | вариант 2 | `shared_secret` мобильного аутентификатора |
 
-**Вариант 1 (проще): сохранённый вход.** После ручного входа из шага 3 steamcmd хранит токен в
-`~/Steam/config/config.vdf` (Windows: `config\config.vdf` рядом с `steamcmd.exe`). Закодируйте и вставьте в секрет:
-```bash
-base64 -w0 ~/Steam/config/config.vdf      # macOS: base64 -i ~/Steam/config/config.vdf
-```
-Токен живёт долго, но может истечь (смена пароля, выход из всех сеансов) — тогда повторите вход и обновите секрет.
+### `STEAM_USERNAME`
 
-**Вариант 2: код из аутентификатора.** Нужен `shared_secret` мобильного аутентификатора аккаунта для
-сборок (его выдают инструменты вроде Steam Desktop Authenticator при привязке). Код генерирует
-`guard-code.mjs`. Подходит, если не хочется обновлять `config.vdf`.
+**Имя аккаунта**, которое вводится при входе в Steam, — не ник в профиле и не почта. Посмотреть: клиент
+Steam → правый верхний угол → *Об аккаунте* → строка «Аккаунт …». Пример значения: `w25builder`
+(без кавычек и пробелов).
 
-Адрес игрового сервера для сборок — **переменная** (не секрет) репозитория `SERVER_URL`
-(Settings → Secrets and variables → Actions → Variables), см. `deploy/README.md`.
+### `STEAM_CONFIG_VDF` (вариант 1)
+
+Это сохранённый вход steamcmd — после него Steam больше не спрашивает код Steam Guard.
+
+1. Один раз войдите через steamcmd на своём компьютере (см. шаг 3) и выйдите:
+   ```
+   steamcmd +login w25builder +quit
+   ```
+   steamcmd спросит пароль и код Steam Guard (из письма или приложения Steam) — введите их.
+2. Найдите файл `config.vdf`:
+   - Linux (steamcmd распакован в `~/Steam`): `~/Steam/config/config.vdf`
+     (если ставили пакетом: `~/.steam/steam/config/config.vdf`; найти: `find ~ -path "*config/config.vdf"`)
+   - macOS: `~/Library/Application Support/Steam/config/config.vdf`
+   - Windows: `config\config.vdf` в папке, где лежит `steamcmd.exe`
+3. Закодируйте файл в base64 — получится одна длинная строка из латинских букв, цифр, `+`, `/`
+   (в конце бывает `=`):
+   - Linux: `base64 -w0 ~/Steam/config/config.vdf`
+   - macOS: `base64 -i ~/Library/Application\ Support/Steam/config/config.vdf | pbcopy` (строка сразу в буфере)
+   - Windows (PowerShell):
+     `[Convert]::ToBase64String([IO.File]::ReadAllBytes("C:\steamcmd\config\config.vdf")) | Set-Clipboard`
+4. Вставьте эту строку **целиком** в Value — без кавычек, пробелов и переносов.
+
+Файл даёт доступ к аккаунту без пароля — храните его как пароль и никуда больше не выкладывайте. Если загрузка
+однажды упадёт с `Login Failure` или запросом кода (сменили пароль, вышли из всех сеансов) — повторите
+шаги 1–4 и обновите секрет (**Update secret**).
+
+### `STEAM_PASSWORD` и `STEAM_TOTP_SECRET` (вариант 2, вместо `STEAM_CONFIG_VDF`)
+
+- `STEAM_PASSWORD` — обычный пароль аккаунта для сборок, как есть.
+- `STEAM_TOTP_SECRET` — секретный ключ мобильного аутентификатора Steam Guard (`shared_secret`). Официальное
+  приложение Steam его не показывает; он есть, только если аутентификатор привязан через сторонний инструмент
+  (например, Steam Desktop Authenticator — поле `"shared_secret"` в файле `.maFile`). Значение вида
+  `AbCdEf0123456789xyzABCdefGH=` — вставить как есть. Из него CI сам считает 5-значный код при каждом входе.
+
+Вариант 2 удобен тем, что ничего не нужно обновлять, но требует аутентификатора со сторонним инструментом.
+Если его нет — берите вариант 1.
+
+### Не секрет: адрес сервера
+
+Адрес игрового сервера для сборок — **переменная** репозитория, а не секрет окружения:
+Settings → Secrets and variables → Actions → вкладка **Variables** → **New repository variable** →
+Name `SERVER_URL`, Value `wss://game.ваш-домен` (см. `deploy/README.md`).
 
 ## 5. Загрузка из GitHub
 
