@@ -5,7 +5,7 @@
 | Что | Где |
 |---|---|
 | Тексты страницы на 7 языках, теги, системные требования, возрастной рейтинг и ответы для анкет | [`STORE.md`](STORE.md) |
-| Скриншоты 1920×1080 (8 шт.) | [`screenshots/`](screenshots/) |
+| Скриншоты 1920×1080 «Ультра» (9 шт.) и список, что куда загружать | [`screenshots/`](screenshots/), [`ASSETS.md`](ASSETS.md) |
 | Капсулы магазина и библиотеки, логотип, иконка | [`art/`](art/) |
 | Загрузка сборок (SteamPipe): шаблоны, ID, генератор, инструкция | `steampipe/`, [`STEAMPIPE.md`](STEAMPIPE.md) |
 | Десктопная сборка (Electron) | [`../desktop/`](../desktop/) |
@@ -108,7 +108,7 @@ VITE_SERVER_URL=wss://game.example.com npm run dist:win     # или dist:mac / 
   `main_capsule_1232x706`, `vertical_capsule_748x896`, `page_background_1438x810`.
 - **Library Assets:** `library_capsule_600x900`, `library_header_920x430`, `library_hero_3840x1240`
   (без текста), `library_logo_1280x720` (прозрачный фон; в редакторе расположите его слева внизу).
-- **Screenshots:** восемь файлов из `screenshots/` в этом порядке (первые четыре показываются в поиске).
+- **Screenshots:** файлы из `screenshots/` в этом порядке (первые четыре показываются в поиске) — подробно в [`ASSETS.md`](ASSETS.md).
 - **Community icon:** `art/community_icon_184x184.jpg`; иконка исполняемого файла уже зашита в сборку.
 - **Trailer:** очень желателен (страницы с видео продаются заметно лучше), в этом наборе его нет —
   проще всего записать 30–60 секунд игры с OBS: бой на острове, таверна, дуэль, дракон.
