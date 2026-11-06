@@ -1,7 +1,8 @@
 import * as THREE from 'three';
 import type { MobKind } from '@game/shared';
-import { G, addOutline, blobShadow, glow, part, toon } from './toon';
+import { G, blobShadow, glow, part, toon } from './toon';
 import { bake, releaseBaked } from './bake';
+import { buildWeapon, makeBowDraw, poseBowDraw, type BowDraw } from './weapons';
 import { buildCreature, type Creature } from './dragons';
 import { footShape, gait, handShape, headShape, legHeight, limb, torsoShape, type LegPose } from './anatomy';
 import { cape, fine, finest, furPatch, ribcage, rivetRing, strands } from './details';
@@ -162,7 +163,7 @@ function biped(o: { skin: number; torsoCol: number; legCol: number; bodyR: numbe
   const head = new THREE.Group();
   head.position.y = ty + 0.785 * sy + o.headR * 0.85;
   torso.add(head);
-  for (const g of [body, torso, head, armL, armR, legL, legR, kneeL, kneeR, elbowL, elbowR]) g.userData.anim = true;
+  for (const g of [body, torso, head, armL, armR, legL, legR, kneeL, kneeR, elbowL, elbowR, handL, handR]) g.userData.anim = true;
   return { body, torso, head, armL, armR, legL, legR, handL, handR, kneeL, kneeR, elbowL, elbowR, thigh, shin };
 }
 
@@ -174,6 +175,9 @@ export class MobModel {
   /** Обитатели логова и дракон — свои модели. */
   private creature: Creature | null = null;
   private inner = new THREE.Group();
+  /** Скелет-лучник: тетива и стрела; drawK — насколько натянута тетива (0..1). */
+  private bowDraw: BowDraw | null = null;
+  private drawK = 0;
   private t = Math.random() * 10;
   private walk = 0;
   private atkT = 99;
@@ -301,19 +305,13 @@ export class MobModel {
         }
         // Шлем-шапка
         r.head.add(part(G.halfSphere(0.3), 0x6a5a48, { pos: [0, 0.06, 0], outline: 0.02 }));
-        // Лук
-        const bow = new THREE.Group();
-        const arc = Math.PI * 0.75;
-        const limb = new THREE.Mesh(G.torus(0.5, 0.03, arc, 6, 16), toon(0x4a3626));
-        addOutline(limb, 0.015);
-        limb.rotation.z = -arc / 2;
-        limb.position.x = -0.42;
-        bow.add(limb);
-        bow.rotation.set(Math.PI / 2, Math.PI / 2, 0);
-        const holder = new THREE.Group();
-        holder.add(bow);
-        holder.rotation.x = Math.PI / 2;
-        r.handL.add(holder);
+        // Лук — тот же, что у героя-лучника: держится за рукоять посередине, стоит вертикально,
+        // тетива натягивается к правой руке (poseBowDraw)
+        const bow = buildWeapon('bow', 'common', { parts: [], glow: [], spin: [] });
+        bow.rotation.set(Math.PI / 2, 0, 0);
+        bow.scale.setScalar(1.05);
+        r.handL.add(bow);
+        this.bowDraw = makeBowDraw(bow);
         this.rig = r;
         this.inner.add(r.body);
         height = 1.8;
@@ -551,29 +549,51 @@ export class MobModel {
       let armR = sw * 0.7;
       let elbR = 0.3 + Math.max(0, -armR) * 0.3 + (heavy ? 0.15 : 0);
       let elbL = 0.3 + Math.max(0, sw * 0.7) * 0.3 + (heavy ? 0.15 : 0);
-      if (st.windup) {
-        armR = this.kind === 'skeleton' ? -1.5 : -2.6;
-        elbR = this.kind === 'skeleton' ? 1.9 : 1.2;
+      const archer = this.kind === 'skeleton';
+      if (st.windup && !archer) {
+        armR = -2.6;
+        elbR = 1.2;
       }
-      if (strike > 0) {
+      if (strike > 0 && !archer) {
         const k = this.atkT / 0.25;
-        armR = this.kind === 'skeleton' ? -1.5 : -2.6 + k * 2.4;
-        elbR = this.kind === 'skeleton' ? 1.9 * (1 - k) + 0.1 : 1.2 * (1 - k) + 0.1;
+        armR = -2.6 + k * 2.4;
+        elbR = 1.2 * (1 - k) + 0.1;
+      }
+      let armRz = 0;
+      let armLz = 0;
+      if (archer) {
+        // Выстрел из лука: левая рука с луком вытянута к цели, правая на уровне плеча локтем назад
+        // натягивает тетиву к щеке; после выстрела (strike) тетива отпущена, руки опускаются
+        const aiming = st.windup || this.atkT < 0.45;
+        this.drawK = st.windup ? Math.min(1, this.drawK + dt * 2.5) : Math.max(0, this.drawK - dt * 12);
+        const aimK = aiming ? 1 : 0;
+        if (aimK) {
+          r.armL.rotation.x = -1.5;
+          armLz = -0.05;
+          elbL = 0.05;
+          armR = 0.05 + this.drawK * 0.45;
+          armRz = 1.3;
+          elbR = 1.6 + this.drawK * 0.85;
+        }
       }
       r.armR.rotation.x = armR;
-      if (this.kind === 'skeleton' && (st.windup || strike > 0)) {
-        r.armL.rotation.x = -1.5;
-        elbL = 0.05;
-      }
+      r.armR.rotation.z = armRz;
+      r.armL.rotation.z = armLz;
       r.elbowL.rotation.x = -elbL;
       r.elbowR.rotation.x = -elbR;
+      if (archer) {
+        // Кисть с луком компенсирует наклон плеча и локтя — лук всегда стоит вертикально
+        r.handL.rotation.x = elbL - r.armL.rotation.x;
+        if (this.bowDraw) poseBowDraw(this.bowDraw, st.windup && this.drawK > 0.15, this.root, r.handR);
+      }
       // Стопы на земле: тело опускается вместе со сгибом ног
       const drop = r.thigh + r.shin - Math.max(legHeight(this.poseL.thigh, this.poseL.knee, r.thigh, r.shin), legHeight(this.poseR.thigh, this.poseR.knee, r.thigh, r.shin));
       r.body.position.y = -drop * this.scale;
       r.body.rotation.z = mv && heavy ? Math.sin(this.walk) * 0.05 : 0;
-      r.torso.rotation.x = windupLean + strike * 0.35 + (mv ? 0.12 : 0);
+      // Лучник стоит ровно и целится, остальные откидываются для замаха и подаются вперёд в ударе
+      r.torso.rotation.x = this.kind === 'skeleton' ? (mv ? 0.12 : 0.04) : windupLean + strike * 0.35 + (mv ? 0.12 : 0);
       r.torso.rotation.y = 0;
-      r.armR.rotation.z = 0;
+      if (this.kind !== 'skeleton') r.armR.rotation.z = 0;
       if (wind) {
         // Замах: молот заведён далеко за голову, корпус откинут и развёрнут
         const k = Math.min(1, this.windT / 0.5);

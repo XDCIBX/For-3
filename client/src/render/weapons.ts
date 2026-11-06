@@ -566,3 +566,78 @@ export function buildWeapon(tpl: string, r: Rarity, out: Built): THREE.Group {
   w.userData.tip = tip;
   return w;
 }
+
+// ------------------------------------------------------------------ натяжение лука (герой-лучник и скелет-лучник)
+
+/** Тетива, её половины при натяжении и стрела на полочке. */
+export interface BowDraw {
+  str: THREE.Mesh;
+  halves: THREE.Mesh[];
+  arrow: THREE.Group;
+}
+
+/** Половины тетивы и стрела для натяжения лука (видны только во время выстрела). Лук — из buildWeapon('bow'). */
+export function makeBowDraw(weapon: THREE.Object3D): BowDraw | null {
+  const str = weapon.getObjectByName('bowstring') as THREE.Mesh | undefined;
+  if (!str || !str.parent) return null;
+  const mat = str.material as THREE.Material;
+  const halves = [0, 1].map(() => {
+    const m = new THREE.Mesh(G.cyl(0.005, 0.005, 1, 4), mat);
+    m.userData.noBake = true;
+    m.visible = false;
+    str.parent!.add(m);
+    return m;
+  });
+  // Стрела: древко, наконечник, оперение; ось — вдоль y
+  const arrow = new THREE.Group();
+  arrow.add(part(G.cyl(0.009, 0.009, 1, 5), 0xc9a36a, { outline: false }));
+  arrow.add(part(G.cone(0.02, 0.07, 4), 0xc6ccd4, { pos: [0, 0.53, 0], outline: false, metal: 0.8, rough: 0.3 }));
+  for (const a of [0, Math.PI / 2]) arrow.add(part(G.box(0.002, 0.11, 0.035), 0xe94b3c, { pos: [0, -0.42, 0], rot: [0, a, 0], outline: false }));
+  arrow.traverse((o) => (o.userData.noBake = true));
+  arrow.visible = false;
+  str.parent.add(arrow);
+  return { str, halves, arrow };
+}
+
+const _bv1 = new THREE.Vector3();
+const _bv2 = new THREE.Vector3();
+const _bv3 = new THREE.Vector3();
+const _bv4 = new THREE.Vector3();
+const _bup = new THREE.Vector3(0, 1, 0);
+
+/** Отрезок-цилиндр (высота 1 вдоль y) от точки a до b. */
+function stretch(m: THREE.Mesh, a: THREE.Vector3, b: THREE.Vector3) {
+  const d = _bv4.copy(b).sub(a);
+  const l = d.length();
+  m.position.copy(a).addScaledVector(d, 0.5);
+  m.scale.set(1, Math.max(0.001, l), 1);
+  m.quaternion.setFromUnitVectors(_bup, d.multiplyScalar(1 / Math.max(1e-6, l)));
+}
+
+/** Натянуть тетиву к руке (hand — группа кисти, тянущей тетиву), стрелу — от руки через рукоять лука. */
+export function poseBowDraw(bd: BowDraw, drawn: boolean, root: THREE.Object3D, hand: THREE.Object3D) {
+  bd.str.visible = !drawn;
+  bd.arrow.visible = drawn;
+  for (const h of bd.halves) h.visible = drawn;
+  if (!drawn) return;
+  const lg = bd.str.parent!;
+  root.updateMatrixWorld(true);
+  // Точка натяжения — рука, переведённая в систему лука
+  const p = hand.getWorldPosition(_bv1);
+  lg.worldToLocal(p);
+  const [tx, H] = bd.str.userData.tips as [number, number];
+  const grip = _bv2.set(0.12, 0, 0);
+  // Не даём тетиве уйти вбок от плоскости лука
+  p.z *= 0.3;
+  if (p.x > tx - 0.05) p.x = tx - 0.05;
+  bd.halves.forEach((m, i) => stretch(m, _bv3.set(tx, i ? -H : H, 0), p));
+  // Стрела лежит на полочке у рукояти и упирается хвостом в тетиву
+  const dir = _bv4.copy(grip).sub(p);
+  const len = dir.length() + 0.18;
+  dir.normalize();
+  bd.arrow.position.copy(p).addScaledVector(dir, len / 2 - 0.02);
+  bd.arrow.quaternion.setFromUnitVectors(_bup, dir);
+  bd.arrow.children[0].scale.y = len;
+  bd.arrow.children[1].position.y = len / 2 + 0.03;
+  for (const f of bd.arrow.children.slice(2)) f.position.y = -len / 2 + 0.07;
+}
