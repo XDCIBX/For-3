@@ -310,7 +310,8 @@ function robeSkirt(): THREE.BufferGeometry {
 // ================================================================== Голова
 
 /** Шлем или капюшон вместо классового головного убора (координаты головы радиуса 0.4). */
-export function buildHelmet(g: THREE.Group, tpl: string, r: Rarity, out: Built) {
+/** color — свой цвет капюшона (капюшон лучника без вещи из лавки). */
+export function buildHelmet(g: THREE.Group, tpl: string, r: Rarity, out: Built, color?: number) {
   const rank = RANK[r];
   if (tpl === 'helm') {
     if (rank === 0) {
@@ -335,10 +336,20 @@ export function buildHelmet(g: THREE.Group, tpl: string, r: Rarity, out: Built) 
     }
     // Наносник и бармица из кольчуги
     add(g, out, part(plate('nasal', [[-0.035, 0.05], [0.035, 0.05], [0.03, -0.2], [0, -0.24], [-0.03, -0.2]], 0.03, 0.008), metal, { pos: [0, 0.0, 0.45], rot: [0.12, 0, 0], outline: false, ...M }));
-    add(g, out, part(lathe('aventail', [[0.46, 0], [0.47, -0.12], [0.44, -0.3], [0.4, -0.36]], 24, ), 0xa8b0b8, { pos: [0, 0.03, -0.02], rot: [0, Math.PI, 0], outline: false, map: chainTex(), metal: 0.85, rough: 0.45, side: THREE.DoubleSide, scale: [1, 1, 1] }));
+    // Бармица закрывает затылок и бока, спереди — проём для лица (угол 0 — вперёд)
+    const av = 0.95;
+    add(g, out, part(lathe('aventail', [[0.46, 0], [0.47, -0.12], [0.44, -0.3], [0.4, -0.36]], 24, av, Math.PI * 2 - av * 2), 0xa8b0b8, { pos: [0, 0.03, -0.02], outline: false, map: chainTex(), metal: 0.85, rough: 0.45, side: THREE.DoubleSide }));
     if (rank >= 2) {
       // Нащёчники, гребень и плюмаж
-      for (const s of [-1, 1]) add(g, out, part(plate('cheek', [[0, 0], [0.14, 0], [0.13, -0.22], [0.02, -0.3], [-0.02, -0.12]], 0.035, 0.01), metal, { pos: [s * 0.3, -0.02, 0.3], rot: [0, s * 0.75, 0], scale: [s, 1, 1], outline: false, ...M }));
+      // Нащёчники: изогнутые пластины продолжают купол вниз по бокам лица, спереди — проём для глаз и рта
+      // Висят по бокам над ушами (угол 0 и π сферы — бока), лицо спереди остаётся открытым
+      for (const [p0, k] of [[-Math.PI * 0.13, 0], [Math.PI * 0.87, 1]] as const) {
+        add(g, out, part(new THREE.SphereGeometry(0.475, 10, 6, p0, Math.PI * 0.26, Math.PI * 0.5, Math.PI * 0.25), metal, { pos: [0, 0.03, 0], outline: false, side: THREE.DoubleSide, ...M }));
+        // Окантовка нижнего края нащёчника
+        const a = p0 + Math.PI * 0.13;
+        add(g, out, part(G.sphere(0.02, 6, 4), TRIM[r], { pos: [-Math.cos(a) * 0.43, -0.32, Math.sin(a) * 0.43], outline: false, metal: 0.95 }));
+        void k;
+      }
       add(g, out, part(plate('crest', [[-0.32, 0], [0.3, 0], [0.24, 0.1], [0, 0.14], [-0.28, 0.09]], 0.04, 0.012), TRIM[r], { pos: [0, 0.49, 0], rot: [0, Math.PI / 2, 0], outline: false, metal: 0.95 }));
       const plume = new THREE.Group();
       for (let i = 0; i < 6; i++) plume.add(part(plate('plume', [[0, 0], [0.04, 0.05], [0.03, 0.22], [0, 0.26], [-0.03, 0.22], [-0.04, 0.05]], 0.03, 0.008), RARITY_HEX[r], { pos: [0, 0, -i * 0.07], rot: [-0.9 - i * 0.18, 0, 0], outline: false }));
@@ -357,24 +368,26 @@ export function buildHelmet(g: THREE.Group, tpl: string, r: Rarity, out: Built) 
     return;
   }
   // Капюшон: ткань с напуском на лоб, складками и пелериной на плечи
-  const col = { common: 0x7a6a55, rare: 0x2f6aa8, epic: 0x2a2238, legendary: 0xf2ecd8, relic: 0x5a0f14 }[r];
+  const col = color ?? { common: 0x7a6a55, rare: 0x2f6aa8, epic: 0x2a2238, legendary: 0xf2ecd8, relic: 0x5a0f14 }[r];
   const cl = clothTex();
   // Купол капюшона с вырезом для лица (спереди), внутри — тень
   const open = 0.75;
-  for (const geo of [new THREE.SphereGeometry(0.47, 24, 6, 0, Math.PI * 2, 0, Math.PI * 0.3), new THREE.SphereGeometry(0.47, 24, 12, Math.PI / 2 + open, Math.PI * 2 - open * 2, Math.PI * 0.3, Math.PI * 0.48)]) {
+  for (const geo of [new THREE.SphereGeometry(0.47, 24, 6, 0, Math.PI * 2, 0, Math.PI * 0.3), new THREE.SphereGeometry(0.47, 24, 12, Math.PI / 2 + open, Math.PI * 2 - open * 2, Math.PI * 0.3, Math.PI * 0.4)]) {
     const hood = part(geo, col, { pos: [0, 0.04, -0.03], outline: false, map: cl, rough: 0.92, side: THREE.DoubleSide });
     hood.scale.set(1.02, 1.05, 1.06);
     add(g, out, hood);
   }
   // Мягкий отворот по краю выреза
-  add(g, out, part(G.torus(0.33, 0.055, Math.PI * 1.15, 8, 24), col, { pos: [0, 0.03, 0.27], rot: [-0.25, 0, -Math.PI * 0.075 - Math.PI * 0.5 + Math.PI], scale: [1.1, 1.2, 0.7], outline: false, map: cl }));
+  // Дуга обрамляет лицо сверху: от одной скулы через лоб к другой (центр дуги — вверху)
+  add(g, out, part(G.torus(0.33, 0.055, Math.PI * 1.05, 8, 24), col, { pos: [0, 0.03, 0.27], rot: [-0.25, 0, Math.PI / 2 - Math.PI * 0.525], scale: [1.1, 1.2, 0.7], outline: false, map: cl }));
   add(g, out, part(G.cone(0.22, 0.55, 12), col, { pos: [0, 0.03, -0.52], rot: [-2.0, 0, 0], outline: false, map: cl }));
-  add(g, out, part(lathe('hoodcape', [[0.28, -0.3], [0.44, -0.42], [0.62, -0.56], [0.66, -0.6]], 22), col, { pos: [0, 0, -0.04], outline: false, map: cl, side: THREE.DoubleSide }));
+  // Пелерина ложится на плечи и спину; спереди расходится (под ней лицо, борода, ворот)
+  const pc = 0.55;
+  add(g, out, part(lathe('hoodcape', [[0.3, -0.28], [0.4, -0.4], [0.5, -0.54], [0.53, -0.62]], 22, pc, Math.PI * 2 - pc * 2), col, { pos: [0, 0, -0.06], outline: false, map: cl, side: THREE.DoubleSide }));
   if (rank >= 1) {
-    add(g, out, part(G.torus(0.37, 0.025, Math.PI * 2, 6, 28), rank >= 3 ? GOLD : 0xd8c8a0, { pos: [0, -0.02, 0.21], scale: [1, 1.08, 1], outline: false, metal: rank >= 3 ? 0.9 : 0 }));
+    add(g, out, part(G.torus(0.35, 0.018, Math.PI * 1.05, 5, 24), rank >= 3 ? GOLD : 0xd8c8a0, { pos: [0, 0.03, 0.29], rot: [-0.25, 0, Math.PI / 2 - Math.PI * 0.525], scale: [1.1, 1.2, 0.7], outline: false, metal: rank >= 3 ? 0.9 : 0 }));
     add(g, out, part(plate('hoodfeather', [[0, 0], [0.035, 0.06], [0.03, 0.26], [0, 0.32], [-0.03, 0.26], [-0.035, 0.06]], 0.008, 0.002), RARITY_HEX[r], { pos: [0.34, 0.3, -0.22], rot: [-0.5, 0, -0.6], outline: false }));
   }
-  if (rank === 2) add(g, out, part(G.sphere(0.3, 16, 12), 0x2a2232, { pos: [0, -0.24, 0.17], scale: [0.95, 0.42, 0.8], outline: false, map: cl }));
   if (rank >= 3) {
     add(g, out, part(G.torus(0.4, 0.025, Math.PI * 2, 6, 28), LUX[r], { pos: [0, 0.2, 0.04], rot: [Math.PI / 2 - 0.25, 0, 0], outline: false, metal: 0.95 }));
     add(g, out, gem(0x5ac8ff, 0.065, [0, 0.27, 0.41], out));

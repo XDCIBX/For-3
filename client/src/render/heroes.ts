@@ -104,6 +104,9 @@ export class HeroModel {
   private elbowR = new THREE.Group();
   /** Детали сапог (стопа и голенище) — перекрашиваются обувью. */
   private bootParts: THREE.Mesh[] = [];
+  /** Брови, уши, макушка: прячутся под шлемом и капюшоном (иначе прорастают сквозь них). */
+  private brows: THREE.Mesh[] = [];
+  private ears: THREE.Mesh[] = [];
   private readonly B: (typeof BUILD)[HeroClass];
   private poseL: LegPose = { thigh: 0, knee: 0, ankle: 0 };
   private poseR: LegPose = { thigh: 0, knee: 0, ankle: 0 };
@@ -244,7 +247,12 @@ export class HeroModel {
     this.torsoG.add(this.head);
     const headM = part(headShape(cls === 'werewolf' || cls === 'dwarf' ? 'brute' : 'human'), skin, { rough: 0.6 });
     this.head.add(headM);
-    if (cls !== 'werewolf') for (const s of [-1, 1]) this.head.add(part(earShape(), skin, { pos: [s * 0.355, 0.0, -0.03], rot: [0, s * 0.35, 0] }));
+    if (cls !== 'werewolf')
+      for (const s of [-1, 1]) {
+        const ear = part(earShape(), skin, { pos: [s * 0.355, 0.0, -0.03], rot: [0, s * 0.35, 0] });
+        this.head.add(ear);
+        this.ears.push(ear);
+      }
     // Шея с кадыком и трапециями
     const neckCol = cls === 'werewolf' ? FUR : cls === 'warrior' ? 0x7d8894 : SKIN;
     const nk = cls === 'werewolf' ? 1.6 : cls === 'dwarf' ? 1.35 : 1;
@@ -285,6 +293,11 @@ export class HeroModel {
     }
 
     this.buildClassParts();
+    // Брови — плоские брусочки над глазами: находим по месту на голове
+    for (const c of this.head.children) {
+      const m = c as THREE.Mesh;
+      if (m.isMesh && (m.geometry as THREE.BufferGeometry & { type: string }).type === 'BoxGeometry' && m.position.y > 0.12 && m.position.y < 0.22 && m.position.z > 0.3) this.brows.push(m);
+    }
     this.applyProportions();
 
     // Эффекты состояния
@@ -349,8 +362,10 @@ export class HeroModel {
         // Заклёпки по краю наплечников, горжет, ребро нагрудника, заклёпки на поясе
         for (const x of [-0.37, 0.37]) {
           const r = part(rivetRing(0.183, 9, 0.014, Math.PI * 1.3, x > 0 ? Math.PI / 2 : -Math.PI / 2), 0xd6dde3, { pos: [x, 0.625, 0], scale: [1.1, 1, 1], outline: false });
-          this.torsoG.add(r);
-          this.torsoG.add(part(G.torus(0.18, 0.016, Math.PI * 2, 4, 20), 0xc7ced6, { pos: [x, 0.62, 0], rot: [Math.PI / 2, 0, 0], scale: [1.1, 1, 1], outline: false }));
+          const edge = part(G.torus(0.18, 0.016, Math.PI * 2, 4, 20), 0xc7ced6, { pos: [x, 0.62, 0], rot: [Math.PI / 2, 0, 0], scale: [1.1, 1, 1], outline: false });
+          this.torsoG.add(r, edge);
+          // Кромка и заклёпки — часть наплечника: под доспехом из лавки прячутся вместе с ним
+          this.trimMeshes.push(r, edge);
         }
         this.torsoG.add(part(G.torus(0.13, 0.035, Math.PI * 2, 5, 18), 0x9aa6b2, { pos: [0, 0.75, 0], rot: [Math.PI / 2, 0, 0], scale: [1.15, 1, 1], outline: 0.01 }));
         this.torsoG.add(part(G.box(0.03, 0.34, 0.03), 0xc7ced6, { pos: [0, 0.42, 0.27], rot: [-0.12, 0, 0], outline: false }));
@@ -446,7 +461,8 @@ export class HeroModel {
     const T = this.torsoG;
     const H = this.head;
     // Повязка на глазах со светящимися прорезями
-    H.add(part(G.torus(0.395, 0.07, Math.PI * 2, 6, 28), 0x1c1820, { pos: [0, 0.02, 0], rot: [Math.PI / 2 - 0.08, 0, 0], scale: [1.03, 1, 1], outline: 0.02 }));
+    // Повязка плотно облегает голову: не толще шлема и капюшона, иначе прорастает сквозь них
+    H.add(part(G.torus(0.385, 0.055, Math.PI * 2, 6, 28), 0x1c1820, { pos: [0, 0.02, 0], rot: [Math.PI / 2 - 0.08, 0, 0], scale: [1.02, 1, 1], outline: 0.02 }));
     for (const x of [-0.14, 0.14]) {
       const slit = new THREE.Mesh(G.box(0.13, 0.03, 0.03), toon(FEL, { emissive: FEL, emissiveIntensity: 1 }));
       slit.position.set(x, 0.02, 0.4);
@@ -554,9 +570,14 @@ export class HeroModel {
     this.trimMeshes.push(skirt);
     for (let i = 0; i < 8; i++) {
       const a = (i / 8) * Math.PI * 2;
-      T.add(part(G.box(0.08, 0.08, 0.02), i % 2 ? 0xd9a441 : 0xe94b3c, { pos: [Math.sin(a) * 0.45, -0.3, Math.cos(a) * 0.45], rot: [0.25, a, Math.PI / 4], outline: false }));
+      const orn = part(G.box(0.08, 0.08, 0.02), i % 2 ? 0xd9a441 : 0xe94b3c, { pos: [Math.sin(a) * 0.45, -0.3, Math.cos(a) * 0.45], rot: [0.25, a, Math.PI / 4], outline: false });
+      T.add(orn);
+      this.trimMeshes.push(orn);
     }
-    T.add(part(G.torus(0.46, 0.03, Math.PI * 2, 5, 28), 0xd9a441, { pos: [0, -0.37, 0], rot: [Math.PI / 2, 0, 0], outline: false }));
+    // Узор и кайма юбки прячутся вместе с ней под доспехом
+    const hem = part(G.torus(0.46, 0.03, Math.PI * 2, 5, 28), 0xd9a441, { pos: [0, -0.37, 0], rot: [Math.PI / 2, 0, 0], outline: false });
+    T.add(hem);
+    this.trimMeshes.push(hem);
     // Меховая накидка
     for (let i = 0; i < 9; i++) {
       const a = (i / 9) * Math.PI * 2;
@@ -620,12 +641,18 @@ export class HeroModel {
     for (const s of [-1, 1]) H.add(part(G.cone(0.028, 0.1, 5), 0xfff6e0, { pos: [s * 0.08, -0.25, 0.55], rot: [Math.PI, 0, 0], outline: 0.006 }));
     // Высокие острые уши
     for (const s of [-1, 1]) {
-      H.add(part(G.cone(0.14, 0.46, 4), FUR, { pos: [s * 0.22, 0.46, -0.06], rot: [-0.12, s * 0.25, -s * 0.22], scale: [1, 1, 0.5], outline: 0.02 }));
-      H.add(part(G.cone(0.08, 0.3, 4), 0xe8a0a0, { pos: [s * 0.22, 0.43, -0.02], rot: [-0.12, s * 0.25, -s * 0.22], scale: [1, 1, 0.35], outline: false }));
+      const outer = part(G.cone(0.14, 0.46, 4), FUR, { pos: [s * 0.22, 0.46, -0.06], rot: [-0.12, s * 0.25, -s * 0.22], scale: [1, 1, 0.5], outline: 0.02 });
+      const inner = part(G.cone(0.08, 0.3, 4), 0xe8a0a0, { pos: [s * 0.22, 0.43, -0.02], rot: [-0.12, s * 0.25, -s * 0.22], scale: [1, 1, 0.35], outline: false });
+      H.add(outer, inner);
+      this.ears.push(outer, inner);
     }
     // Бакенбарды и косматая макушка
     for (const s of [-1, 1]) H.add(part(G.cone(0.1, 0.24, 5), FUR_LIGHT, { pos: [s * 0.36, -0.12, 0.08], rot: [0, 0, s * 1.9], outline: 0.012 }));
-    for (let i = 0; i < 4; i++) H.add(part(G.cone(0.09, 0.22, 5), 0x6a4024, { pos: [(i - 1.5) * 0.1, 0.36, 0.12 - Math.abs(i - 1.5) * 0.06], rot: [-0.5, 0, (i - 1.5) * 0.3], outline: 0.012 }));
+    for (let i = 0; i < 4; i++) {
+      const tuft = part(G.cone(0.09, 0.22, 5), 0x6a4024, { pos: [(i - 1.5) * 0.1, 0.36, 0.12 - Math.abs(i - 1.5) * 0.06], rot: [-0.5, 0, (i - 1.5) * 0.3], outline: 0.012 });
+      H.add(tuft);
+      this.ears.push(tuft);
+    }
     // Хмурые брови
     for (const x of [-0.14, 0.14]) H.add(part(G.box(0.15, 0.04, 0.05), 0x3a2414, { pos: [x, 0.16, 0.36], rot: [0, 0, x * 2], outline: false }));
     // Светлая шерсть на груди и рваная жилетка
@@ -807,14 +834,8 @@ export class HeroModel {
       this.headgear.add(brim, hat, band, star);
     } else {
       const col = it ? (it.tpl === 'helm' ? HELM_COLORS.helm[r] : HELM_COLORS.hood[r]) : 0x2f6b2c;
-      const hood = part(G.sphere(0.45, 18, 14, ), col, { pos: [0, 0.05, -0.06], outline: 0.03 });
-      hood.scale.set(1.04, 1.02, 1.05);
-      // Вырез для лица — «маска» цвета кожи поверх
-      const face = new THREE.Mesh(G.sphere(0.395, 18, 14), toon(SKIN));
-      face.position.set(0, -0.02, 0.06);
-      face.scale.set(0.98, 0.93, 0.95);
-      const tail = part(G.cone(0.2, 0.5, 10), col, { pos: [0, 0.05, -0.5], rot: [-2.0, 0, 0], outline: 0.025 });
-      this.headgear.add(hood, face, tail);
+      // Капюшон лучника: тот же крой, что у капюшона из лавки (вырез для лица, складки, пелерина)
+      buildHelmet(this.headgear, 'hood', 'common', this.built, col);
       if (it?.tpl === 'helm') {
         this.headgear.add(part(G.torus(0.42, 0.05, Math.PI * 2, 6, 24), 0xc7ced6, { pos: [0, 0.18, 0], rot: [Math.PI / 2 - 0.2, 0, 0], outline: false }));
       }
@@ -876,6 +897,14 @@ export class HeroModel {
 
     // Голова: шлем/капюшон заменяет классовый головной убор
     this.headgear.clear();
+    const helm = eq?.helmet?.tpl ?? null;
+    // Купол шлема закрывает лоб — брови под ним не видны (иначе торчат сквозь металл); у воина и гнома
+    // такой купол и без вещи из лавки. Капюшон и шлем закрывают уши и макушку.
+    const domed = helm === 'helm' || (!helm && (this.cls === 'warrior' || this.cls === 'dwarf'));
+    for (const b of this.brows) b.visible = !domed && !(helm === 'hood' && this.cls === 'dwarf');
+    for (const e of this.ears) e.visible = !helm;
+    // Шлем из лавки чуть выше: обод проходит над бровями, глаза не прячутся под ним
+    this.headgear.position.y = helm === 'helm' ? 0.07 : 0;
     if (eq?.helmet) buildHelmet(this.headgear, eq.helmet.tpl, eq.helmet.rarity, this.built);
     else this.buildHeadgear(null);
 

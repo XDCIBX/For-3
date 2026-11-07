@@ -121,7 +121,7 @@ function buildGeometry(parts: Part[], withUv: boolean): THREE.BufferGeometry {
   const key = parts
     .map((p) => {
       const mt = p.mesh.material as THREE.MeshStandardMaterial;
-      return `${p.mesh.geometry.uuid}:${mt.color.getHexString()}:${mt.roughness}:${mt.metalness}:${p.bone ?? ''}:${p.matrix.elements.map((e) => e.toFixed(3)).join(',')}`;
+      return `${p.mesh.geometry.uuid}:${mt.color.getHexString()}:${mt.roughness}:${mt.metalness}:${mt.side}:${p.bone ?? ''}:${p.matrix.elements.map((e) => e.toFixed(3)).join(',')}`;
     })
     .join('|') + (withUv ? 'uv' : '') + (parts[0]?.bone !== undefined ? 'skin' : '');
   let g = geoCache.get(key);
@@ -135,6 +135,37 @@ function buildGeometry(parts: Part[], withUv: boolean): THREE.BufferGeometry {
     else if (withUv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(src.attributes.position.count * 2), 2));
     if (src.index) geo.setIndex(src.index.clone());
     geo.applyMatrix4(p.matrix);
+    // Двусторонняя деталь (плащ, капюшон, перепонка): склейка рисует только лицевую сторону,
+    // поэтому добавляем вывернутую копию — изнанка не пропадает
+    if ((p.mesh.material as THREE.Material).side === THREE.DoubleSide) {
+      const back = geo.clone();
+      if (back.index) {
+        const idx = back.index.array as Uint16Array | Uint32Array;
+        for (let i = 0; i < idx.length; i += 3) {
+          const t = idx[i + 1];
+          idx[i + 1] = idx[i + 2];
+          idx[i + 2] = t;
+        }
+      } else {
+        for (const name of Object.keys(back.attributes)) {
+          const at = back.attributes[name] as THREE.BufferAttribute;
+          const sz = at.itemSize;
+          const arr = at.array as Float32Array;
+          for (let i = 0; i + 2 < at.count; i += 3)
+            for (let c = 0; c < sz; c++) {
+              const t = arr[(i + 1) * sz + c];
+              arr[(i + 1) * sz + c] = arr[(i + 2) * sz + c];
+              arr[(i + 2) * sz + c] = t;
+            }
+        }
+      }
+      const bn = back.attributes.normal;
+      for (let i = 0; i < bn.count; i++) bn.setXYZ(i, -bn.getX(i), -bn.getY(i), -bn.getZ(i));
+      const both = mergeGeometries([geo, back]);
+      if (both) {
+        geo.copy(both);
+      }
+    }
     tmpColor.copy((p.mesh.material as THREE.MeshStandardMaterial).color);
     const n = geo.attributes.position.count;
     const col = new Float32Array(n * 3);

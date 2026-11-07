@@ -115,12 +115,16 @@ export function wrap(r: number, y0: number, y1: number, turns: number, thick = 0
 }
 
 /** Тело вращения по профилю [радиус, высота]. */
-export function lathe(key: string, prof: Pt[], n = 16): THREE.BufferGeometry {
+export function lathe(key: string, prof: Pt[], n = 16, phiStart = 0, phiLen = Math.PI * 2): THREE.BufferGeometry {
   const sg = seg(n);
-  return cached(`lathe|${key}|${sg}`, () => {
+  return cached(`lathe|${key}|${sg}|${phiStart.toFixed(3)}|${phiLen.toFixed(3)}`, () => {
+    // Профиль сверху вниз дал бы грани, смотрящие внутрь (снаружи невидимы) — разворачиваем
+    const pts = prof.length > 1 && prof[0][1] > prof[prof.length - 1][1] ? [...prof].reverse() : prof;
     const g = new THREE.LatheGeometry(
-      prof.map(([r, y]) => new THREE.Vector2(Math.max(0.0001, r), y)),
+      pts.map(([r, y]) => new THREE.Vector2(Math.max(0.0001, r), y)),
       sg,
+      phiStart,
+      phiLen,
     );
     g.computeVertexNormals();
     return g;

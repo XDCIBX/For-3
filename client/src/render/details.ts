@@ -203,7 +203,7 @@ export function ribcage(w: number, h: number, ribs = 5): THREE.BufferGeometry {
     const parts: THREE.BufferGeometry[] = [];
     for (let i = 0; i < ribs; i++) {
       const k = 1 - Math.abs(i - ribs * 0.35) / ribs;
-      const t = new THREE.TorusGeometry(w * (0.75 + 0.3 * k), w * 0.07, 4, seg(14), Math.PI * 1.55);
+      const t = new THREE.TorusGeometry(w * (0.75 + 0.3 * k), w * 0.1, 5, seg(14), Math.PI * 1.55);
       t.rotateX(Math.PI / 2);
       t.rotateY(Math.PI / 2 - Math.PI * 0.775 + Math.PI);
       t.scale(1, 1, 0.8);

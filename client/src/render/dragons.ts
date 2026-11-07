@@ -118,7 +118,20 @@ class Ember implements Creature {
       const e = new THREE.Mesh(G.sphere(0.05, 6, 4), new THREE.MeshBasicMaterial({ color: 0x2a0a00 }));
       e.position.set(x, 0.06, 0.3);
       e.scale.set(1, 0.5, 0.5);
+      e.rotation.z = x > 0 ? 0.5 : -0.5;
       g.add(e);
+    }
+    // Злой рот-трещина
+    const mouth = new THREE.Mesh(G.box(0.14, 0.025, 0.02), new THREE.MeshBasicMaterial({ color: 0x2a0a00 }));
+    mouth.position.set(0, -0.06, 0.31);
+    g.add(mouth);
+    if (fine()) {
+      // Обломки остывшей лавы кружат вокруг ядра
+      for (let i = 0; i < 5; i++) {
+        const a = (i / 5) * Math.PI * 2;
+        const rock = part(G.dodeca(0.07 + (i % 2) * 0.03), 0x2a1a14, { pos: [Math.cos(a) * 0.48, Math.sin(a * 2) * 0.12, Math.sin(a) * 0.48], rot: [a, a * 1.3, 0], rough: 0.9, outline: false });
+        this.tongues.add(rock);
+      }
     }
     g.position.y = 0.9;
   }
@@ -162,6 +175,8 @@ class Drake implements Creature {
     // Туловище и брюхо
     this.body.add(part(G.capsule(0.24, 0.55), col, { rot: [Math.PI / 2, 0, 0], map, rough: 0.55 }));
     this.body.add(part(G.capsule(0.19, 0.45), belly, { rot: [Math.PI / 2, 0, 0], pos: [0, -0.07, 0.03], rough: 0.6 }));
+    // Бороздки между брюшными пластинами
+    if (fine()) for (let i = 0; i < 5; i++) this.body.add(part(G.torus(0.17, 0.012, Math.PI, 4, 10), 0x5a3418, { pos: [0, -0.08, 0.28 - i * 0.13], rot: [0, 0, Math.PI], scale: [1.05, 0.9, 1] }));
     for (let i = 0; i < 5; i++) this.body.add(part(G.cone(0.05, 0.16, 5), 0x2a1410, { pos: [0, 0.24, 0.3 - i * 0.15], rot: [-0.4, 0, 0] }));
     // Шея из двух звеньев и голова
     let parent: THREE.Object3D = this.body;
@@ -194,6 +209,22 @@ class Drake implements Creature {
     this.jaw.position.set(0, -0.06, 0.04);
     this.jaw.add(part(G.box(0.14, 0.04, 0.24), belly, { pos: [0, -0.02, 0.12] }));
     for (let i = 0; i < 3; i++) for (const s of [-1, 1]) this.jaw.add(part(G.cone(0.012, 0.04, 4), 0xf4ecd8, { pos: [s * 0.05, 0.02, 0.18 - i * 0.05] }));
+    if (fine()) {
+      // Надбровья, ноздри, верхние зубы, гребень шипов на затылке
+      for (const s of [-1, 1]) {
+        H.add(part(G.box(0.06, 0.035, 0.12), 0x2a1410, { pos: [s * 0.075, 0.1, 0.07], rot: [0.2, s * 0.25, -s * 0.3] }));
+        H.add(part(G.sphere(0.014, 5, 4), 0x1a0806, { pos: [s * 0.035, 0.02, 0.29] }));
+        for (let i = 0; i < 3; i++) H.add(part(G.cone(0.011, 0.04, 4), 0xf4ecd8, { pos: [s * 0.06, -0.07, 0.24 - i * 0.05], rot: [Math.PI, 0, 0] }));
+      }
+      for (let i = 0; i < 4; i++) H.add(part(G.cone(0.025 - i * 0.003, 0.11 - i * 0.015, 5), 0x2a1410, { pos: [0, 0.1 - i * 0.02, -0.06 - i * 0.06], rot: [-1.1, 0, 0] }));
+      if (spit) {
+        // Огнеплюй: кожистый воротник вокруг шеи и пузырящийся зоб
+        for (let i = 0; i < 7; i++) {
+          const a = -1.2 + (i / 6) * 2.4;
+          H.add(part(G.cone(0.035, 0.2, 4), 0x6a9a3a, { pos: [Math.sin(a) * 0.14, Math.cos(a) * 0.06 - 0.02, -0.08], rot: [-1.4, 0, -a], scale: [1, 1, 0.3] }));
+        }
+      }
+    }
     H.add(this.jaw);
     this.mouth.position.set(0, -0.04, 0.32);
     H.add(this.mouth);
@@ -220,6 +251,8 @@ class Drake implements Creature {
       [0.15, -0.22],
     ]) {
       this.body.add(part(limb(0.05, 0.035, 0.22, 0.1, 6), col, { pos: [x, -0.15, z], rot: [1.0, 0, 0] }));
+      // Когти на лапах
+      if (fine()) for (const c of [-1, 0, 1]) this.body.add(part(G.cone(0.012, 0.06, 4), 0x1a1210, { pos: [x + c * 0.02, -0.27, z - 0.17], rot: [-0.6, 0, 0] }));
     }
     // Хвост
     this.tail = tail(4, 0.13, 0.05, 0.24, col, 0.6, map);
