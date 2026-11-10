@@ -34,6 +34,7 @@ const ALLOWED_ORIGINS = (process.env.ALLOWED_ORIGINS ?? '')
   .filter(Boolean);
 /** Проверка «живости» соединений: прокси и мобильные сети молча рвут связь. */
 const HEARTBEAT_MS = num(process.env.HEARTBEAT_MS, 25_000);
+const COMPRESS = process.env.WS_COMPRESS !== '0';
 const VERSION = process.env.APP_VERSION || '1.0.0';
 const started = Date.now();
 
@@ -115,9 +116,25 @@ function clientIp(req: IncomingMessage): string {
   return req.socket.remoteAddress ?? '?';
 }
 
+/** Один и тот же снимок уходит всем игрокам комнаты — превращаем в текст один раз, а не на каждого. */
+let lastMsg: S2C | null = null;
+let lastText = '';
+function encode(msg: S2C): string {
+  if (msg !== lastMsg) {
+    lastMsg = msg;
+    lastText = JSON.stringify(msg);
+  }
+  return lastText;
+}
+
 const wss = new WebSocketServer({
   server: http,
   maxPayload: 8 * 1024,
+  // Сжатие снимков мира: соседние снимки почти одинаковы, с общим словарём трафик в бою падает в 7–10 раз
+  // (≈100 → 12 КБ/с на игрока) — важно для мобильной сети. Цена — ~0,1 мс процессора на снимок.
+  perMessageDeflate: COMPRESS
+    ? { threshold: 256, zlibDeflateOptions: { level: 3, memLevel: 7 }, serverMaxWindowBits: 14, concurrencyLimit: 8 }
+    : false,
   verifyClient: ({ origin, req }, done) => {
     if (shuttingDown) return done(false, 503, 'Server restarting');
     if (ALLOWED_ORIGINS.length && origin && !ALLOWED_ORIGINS.includes(origin)) return done(false, 403, 'Origin not allowed');
@@ -138,7 +155,7 @@ wss.on('connection', (ws: WebSocket, req: IncomingMessage) => {
   let pid: string | null = null;
   const client = {
     send(msg: S2C) {
-      if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+      if (ws.readyState === WebSocket.OPEN) ws.send(encode(msg));
     },
   };
   const fail = (msg: string) => client.send({ t: 'err', msg });

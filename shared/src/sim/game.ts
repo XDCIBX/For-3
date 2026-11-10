@@ -20,7 +20,7 @@ import type { GameEvent, GameMsg, MinionSnap, MobSnap, PlayerSnap, Snapshot } fr
 import { Rng } from '../rng';
 import type { Equip, HeroClass, Item, MinionKind, MobKind, Phase, ProjKind, Stats, ZoneKind } from '../types';
 import { HERO_CLASSES } from '../types';
-import { ARENA_OBSTACLES, generateWorld, hitsSolid, resolveCollision, worldFor, type Obstacle, type WorldData } from '../world';
+import { ARENA_OBSTACLES, generateWorld, hitsSolid, resolveCollision, shotBlocked, worldFor, type Obstacle, type WorldData } from '../world';
 import { updateBot } from './bot';
 
 export interface Player {
@@ -1787,14 +1787,20 @@ export class Game {
           continue;
         }
         if (def.ranged) {
-          if (dist < (def.keepDist ?? 5) - 1) {
+          // Камень на линии огня: стрелять бесполезно — подходим ближе, обходя его (иначе стрелок
+          // вечно бьёт в камень, а герой за ним неуязвим)
+          const walled = dist > 2 && dist <= def.range + 0.5 && shotBlocked(m.x, m.z, tgt.x, tgt.z, 0.15, obs);
+          if (walled) {
+            mx = nx;
+            mz = nz;
+          } else if (dist < (def.keepDist ?? 5) - 1) {
             mx = -nx;
             mz = -nz;
           } else if (dist > def.range) {
             mx = nx;
             mz = nz;
           }
-          if (dist <= def.range + 0.5 && m.atkCd <= 0) {
+          if (!walled && dist <= def.range + 0.5 && m.atkCd <= 0) {
             m.windup = def.windup;
             this.events.push({ e: 'matk', id: m.id });
             continue;

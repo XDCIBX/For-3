@@ -4,7 +4,7 @@ import { Game, type Player } from '../src/sim/game';
 import { DT, MAX_ROUNDS, PVP_EVERY, isPvpRound } from '../src/constants';
 import { Rng } from '../src/rng';
 import { mobScale, roundComposition } from '../src/data/mobs';
-import { generateWorld } from '../src/world';
+import { generateWorld, shotBlocked, type Obstacle } from '../src/world';
 
 function run(g: Game, seconds: number, until?: () => boolean) {
   const n = Math.round(seconds / DT);
@@ -503,4 +503,27 @@ test('герои не толкают боссов и не тащат мобов 
   g.castSkill(p, 1, 1, 0, 7);
   for (let i = 0; i < 6; i++) g.update(DT);
   assert.ok(Math.abs(gob.x - gx) < 1, `гоблина не протащило рывком (${(gob.x - gx).toFixed(2)})`);
+});
+
+test('стрелок не стреляет в камень: обходит препятствие и попадает в героя', () => {
+  const g = new Game(31);
+  const p = g.addPlayer('Аня') as Player;
+  g.startRound = 2;
+  g.startGame();
+  run(g, 60, () => g.phase === 'battle');
+  for (const m of [...g.mobs.values()]) g.mobs.delete(m.id);
+  (g as unknown as { spawnQueue: unknown[] }).spawnQueue.length = 0;
+  // Чистое место: герой, за ним камень, за камнем — скелет-лучник на дистанции выстрела
+  const obs = g.world.obstacles as Obstacle[];
+  obs.length = 0;
+  obs.push({ x: 0, z: 3.5, r: 1.2, kind: 'rock', variant: 0, scale: 1, rot: 0 });
+  assert.equal(shotBlocked(0, 7, 0, 0, 0.15, obs), true, 'камень на линии огня');
+  assert.equal(shotBlocked(4, 7, 4, 0, 0.15, obs), false, 'в стороне от камня путь свободен');
+  p.x = 0;
+  p.z = 0;
+  p.stats.maxHp = p.hp = 1e6;
+  const sk = g.spawnMob('skeleton', 0, 7);
+  sk.spawnT = 0;
+  run(g, 12, () => p.hp < 1e6);
+  assert.ok(p.hp < 1e6, 'скелет обошёл камень и попал');
 });

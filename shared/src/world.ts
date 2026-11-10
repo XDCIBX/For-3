@@ -256,3 +256,19 @@ export function hitsSolid(x: number, z: number, r: number, obstacles: readonly O
   }
   return false;
 }
+
+/** Упрётся ли снаряд радиуса r в высокое препятствие по пути из (x0, z0) в (x1, z1). */
+export function shotBlocked(x0: number, z0: number, x1: number, z1: number, r: number, obstacles: readonly Obstacle[]): boolean {
+  const dx = x1 - x0;
+  const dz = z1 - z0;
+  const len2 = dx * dx + dz * dz || 1e-6;
+  for (const o of obstacles) {
+    if (o.low) continue;
+    const t = Math.min(1, Math.max(0, ((o.x - x0) * dx + (o.z - z0) * dz) / len2));
+    const px = x0 + dx * t - o.x;
+    const pz = z0 + dz * t - o.z;
+    const min = o.r * 0.85 + r;
+    if (px * px + pz * pz < min * min) return true;
+  }
+  return false;
+}

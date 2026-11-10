@@ -33,7 +33,7 @@ const { chromium } = require('playwright');
       const fps = ((st.frames - fpsStart.f) / ((Date.now() - fpsStart.t) / 1000)).toFixed(1);
       console.log(`волна ${st.r} ${st.ph}: геометрий ${st.geo} текстур ${st.tex} шейдеров ${st.prog} вызовов ${st.calls} heap ${st.heap}МБ DOM ${st.dom} fps(пред.) ${fps} t=${((Date.now() - T0) / 1000).toFixed(0)}с`);
       fpsStart.t = Date.now(); fpsStart.f = st.frames; lastR = st.r;
-      await p.screenshot({ path: `run_${CLS}_${st.r}.png` });
+      await p.screenshot({ path: `run_${CLS}_${st.r}.png`, timeout: 120000 }).catch(() => console.log('   (снимок не успел)'));
     }
     // Управление: джойстик и кнопки умений касаниями
     if (st.ph === 'battle' || st.ph === 'duel') {

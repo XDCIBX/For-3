@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import type { MinionKind } from '@game/shared';
 import { G, blobShadow, faceted, glow, part, toon } from './toon';
-import { bake } from './bake';
+import { bake, releaseBaked } from './bake';
 
 const SPIRIT = 0x6ff0ff;
 
@@ -34,6 +34,12 @@ export class MinionModel {
     else if (kind === 'turret') this.height = this.buildTurret();
     else this.height = this.buildTotem();
     bake(this.body);
+  }
+
+  /** Помощник исчез: освобождаем склейку и текстуру костей (иначе копятся в видеопамяти). */
+  dispose() {
+    this.root.removeFromParent();
+    releaseBaked(this.root);
   }
 
   private buildWolf(): number {

@@ -305,7 +305,7 @@ export class Engine {
     this.projs.clear();
     for (const z of this.zones.values()) z.obj.removeFromParent();
     this.zones.clear();
-    for (const n of [...this.minions.values(), ...this.fading]) n.model.root.removeFromParent();
+    for (const n of [...this.minions.values(), ...this.fading]) n.model.dispose();
     this.minions.clear();
     this.fading = [];
     for (const d of this.dying) {
@@ -1063,7 +1063,7 @@ export class Engine {
       const v = this.fading[i];
       v.model.update(dt, false);
       if (v.model.dying > 0.45) {
-        v.model.root.removeFromParent();
+        v.model.dispose();
         this.fading.splice(i, 1);
       }
     }
