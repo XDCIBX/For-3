@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { hideTex, normalFor } from './textures';
+import { patchCharShader } from './charAtlas';
 import { DETAIL, seg } from './detail';
 
 /** Ступенчатая карта освещения — мультяшный «cel-shading». */
@@ -125,6 +126,38 @@ function withPbrAttr(m: THREE.MeshStandardMaterial, rim: boolean) {
       );
   };
   m.customProgramCacheKey = () => (rim ? 'pbr-attr-rim' : 'pbr-attr');
+}
+
+const charMats = new Map<string, THREE.MeshStandardMaterial>();
+let stub: THREE.DataTexture | null = null;
+/**
+ * Материал склеенного персонажа: один на всех. Цвет детали, её шероховатость/металличность и номер слоя
+ * текстуры лежат в вершинах (см. charAtlas.ts) — герой или моб целиком рисуется одним вызовом.
+ */
+export function charMat(rim: boolean): THREE.MeshStandardMaterial {
+  const key = String(rim);
+  let m = charMats.get(key);
+  if (!m) {
+    // Заглушка нужна только затем, чтобы шейдер получил UV и ветку карты нормалей; читается массив слоёв
+    if (!stub) {
+      stub = new THREE.DataTexture(new Uint8Array([255, 255, 255, 255]), 1, 1);
+      stub.needsUpdate = true;
+    }
+    m = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, map: stub, normalMap: stub, envMapIntensity: 0.55 });
+    m.normalScale.set(0.6, 0.6);
+    m.userData.surface = surfaceOf(0xffffff, {});
+    m.userData.hex = 0xffffff;
+    const mat = m;
+    withPbrAttr(mat, rim);
+    const base = mat.onBeforeCompile;
+    mat.onBeforeCompile = (sh, r) => {
+      base.call(mat, sh, r);
+      patchCharShader(sh);
+    };
+    mat.customProgramCacheKey = () => (rim ? 'char-rim' : 'char');
+    charMats.set(key, m);
+  }
+  return m;
 }
 
 /** Сила контрового света персонажей (меняется с качеством графики; 0 — выключен). */

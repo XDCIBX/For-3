@@ -6,6 +6,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { setTextureAnisotropy } from './textures';
+import { setCharAnisotropy } from './charAtlas';
 import { getLang, playerName } from '../i18n';
 import { MOBS, type GameEvent, type HeroClass, type MinionSnap, type MobSnap, type Phase } from '@game/shared';
 import type { ClientState, PlayerInfo } from '../net/state';
@@ -150,6 +151,7 @@ export class Engine {
   private dying: MobView[] = [];
   /** Пул моделей мобов по видам — без рывков при появлении новой волны. */
   private mobPool = new Map<string, MobView[]>();
+  private envs = new Map<string, THREE.Texture>();
   minions = new Map<number, MinionView>();
   private tmpV = new THREE.Vector3();
   private fading: MinionView[] = [];
@@ -229,6 +231,7 @@ export class Engine {
     // Ультра: тени — мягкие с большим ядром; «высокое» — статичная карта как раньше
     this.renderer.shadowMap.type = THREE.PCFSoftShadowMap;
     setTextureAnisotropy(q === 'ultra' ? this.renderer.capabilities.getMaxAnisotropy() : 4);
+    setCharAnisotropy(q === 'ultra' ? this.renderer.capabilities.getMaxAnisotropy() : 4);
     if (prev === 'ultra' && q !== 'ultra') this.restoreSun(this.stage.sun);
     this.casterT = 0;
     this.applyCasters(q === 'ultra');
@@ -265,7 +268,7 @@ export class Engine {
       if (this.islands.size > 2) {
         const first = [...this.islands.keys()].find((k) => k !== seed && k !== MENU_SEED && k !== this.seed);
         if (first !== undefined) {
-          releaseBaked(this.islands.get(first)!.scene);
+          this.disposeStage(this.islands.get(first)!);
           this.islands.delete(first);
         }
       }
@@ -273,19 +276,37 @@ export class Engine {
     return s;
   }
 
+  /**
+   * Сцена больше не понадобится (остров или логово прошлой игры, сцена со старой детализацией):
+   * освобождаем её геометрии в видеопамяти — иначе с каждой новой игрой их копится на сотни больше.
+   * Общие геометрии из кэшей при этом не теряются: понадобятся снова — загрузятся заново.
+   */
+  private disposeStage(st: Stage) {
+    if (st === this.stage) return;
+    // Герои, эффекты и прицел переезжают из сцены в сцену — их не трогаем
+    for (const o of [this.fx.group, this.aimGroup, ...[...this.heroes.values()].map((h) => h.model.root)]) if (o.parent === st.scene) o.removeFromParent();
+    releaseBaked(st.scene);
+    st.scene.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.geometry && !m.userData.baked) m.geometry.dispose();
+    });
+    st.scene.environment = null;
+  }
+
   private setStage(s: Stage) {
     if (this.stage === s) return;
     this.stage = s;
     if (!s.scene.environment) {
-      // Своё небо для отражений у каждой сцены
-      const env =
+      // Небо для отражений — одно на вид сцены (остров, таверна, арена, логово): строится один раз
+      const env = this.envs.get(s.name) ?? (
         s.name === 'tavern'
           ? makeEnvironment(this.renderer, '#7a5a3a', '#e0a868', '#4a3020', 'rgba(255,220,160,1)', [0.5, 0.45])
           : s.name === 'arena'
             ? makeEnvironment(this.renderer, '#3a4a7a', '#f0b080', '#5a4030', 'rgba(255,210,150,0.95)')
             : s.name === 'lair'
               ? makeEnvironment(this.renderer, '#3a1810', '#c05a2a', '#6a2a14', 'rgba(255,170,90,1)', [0.3, 0.6])
-            : makeEnvironment(this.renderer, '#4a8ad0', '#d8ecf6', '#5a6a3a', 'rgba(255,250,230,1)');
+            : makeEnvironment(this.renderer, '#4a8ad0', '#d8ecf6', '#5a6a3a', 'rgba(255,250,230,1)'));
+      this.envs.set(s.name, env);
       s.scene.environment = env;
     }
     s.scene.add(this.fx.group, this.aimGroup);
@@ -383,15 +404,21 @@ export class Engine {
   private dropCachedStages() {
     for (const [k, st] of this.islands) {
       if (st === this.stage) continue;
-      releaseBaked(st.scene);
+      this.disposeStage(st);
       this.islands.delete(k);
     }
     if (this.lairStage && this.lairStage !== this.stage) {
-      releaseBaked(this.lairStage.scene);
+      this.disposeStage(this.lairStage);
       this.lairStage = null;
     }
-    if (this.tavernStage && this.tavernStage !== (this.stage as unknown)) this.tavernStage = null;
-    if (this.arenaStage && this.arenaStage !== (this.stage as unknown)) this.arenaStage = null;
+    if (this.tavernStage && this.tavernStage !== (this.stage as unknown)) {
+      this.disposeStage(this.tavernStage as unknown as Stage);
+      this.tavernStage = null;
+    }
+    if (this.arenaStage && this.arenaStage !== (this.stage as unknown)) {
+      this.disposeStage(this.arenaStage as unknown as Stage);
+      this.arenaStage = null;
+    }
   }
 
     stageForPhase(ph: Phase, round = 1): Stage {
@@ -401,7 +428,7 @@ export class Engine {
       // Логово строится один раз на игру
       if (!this.lairStage || this.lairStage.world.seed !== this.seed) {
         // Логово прошлой игры больше не понадобится
-        if (this.lairStage && this.stage !== this.lairStage) releaseBaked(this.lairStage.scene);
+        if (this.lairStage && this.stage !== this.lairStage) this.disposeStage(this.lairStage);
         this.lairStage = new LairStage(generateLair(this.seed));
       }
       return this.lairStage;

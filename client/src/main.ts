@@ -1,3 +1,4 @@
+import * as THREE from 'three';
 import '@fontsource/rubik/500.css';
 import '@fontsource/rubik/700.css';
 import '@fontsource/rubik/800.css';
@@ -107,6 +108,8 @@ class App {
       (window as unknown as { __app: App; __shared: typeof Shared }).__app = this;
       (window as unknown as { __shared: typeof Shared }).__shared = Shared;
       (window as unknown as { __sfx: typeof sfx }).__sfx = sfx;
+      // Для поиска утечек видеопамяти (tools/browser/leaks.cjs)
+      (window as unknown as { __THREE: typeof THREE }).__THREE = THREE;
       // ?shots=1 — съёмка: постоянное разрешение, без служебных значков
       if (new URLSearchParams(location.search).has('shots')) {
         this.engine.lockRes = true;

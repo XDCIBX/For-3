@@ -12,6 +12,9 @@ type Draw = (g: CanvasRenderingContext2D, s: number, r: Rng) => void;
 const cache = new Map<string, THREE.CanvasTexture>();
 /** Анизотропная фильтрация: чёткость земли и стен под острым углом (ультра — максимум видеокарты). */
 let aniso = 4;
+export function textureAnisotropy(): number {
+  return aniso;
+}
 export function setTextureAnisotropy(n: number) {
   if (n === aniso) return;
   aniso = n;

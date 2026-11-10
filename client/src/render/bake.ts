@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
-import { addOutline, toon } from './toon';
+import { addOutline, charMat, toon } from './toon';
+import { charLayer } from './charAtlas';
 
 /**
  * «Запекание» моделей: детали внутри каждой анимируемой группы (рука, нога,
@@ -117,13 +118,13 @@ function collect(group: THREE.Object3D, out: Part[], groups: THREE.Object3D[]) {
   walk(group);
 }
 
-function buildGeometry(parts: Part[], withUv: boolean): THREE.BufferGeometry {
+function buildGeometry(parts: Part[], withUv: boolean, char = false): THREE.BufferGeometry {
   const key = parts
     .map((p) => {
       const mt = p.mesh.material as THREE.MeshStandardMaterial;
-      return `${p.mesh.geometry.uuid}:${mt.color.getHexString()}:${mt.roughness}:${mt.metalness}:${mt.side}:${p.bone ?? ''}:${p.matrix.elements.map((e) => e.toFixed(3)).join(',')}`;
+      return `${p.mesh.geometry.uuid}:${mt.color.getHexString()}:${mt.roughness}:${mt.metalness}:${mt.side}:${mt.map ? `${mt.map.source.uuid},${mt.map.repeat.x},${mt.map.repeat.y}` : ''}:${p.bone ?? ''}:${p.matrix.elements.map((e) => e.toFixed(3)).join(',')}`;
     })
-    .join('|') + (withUv ? 'uv' : '') + (parts[0]?.bone !== undefined ? 'skin' : '');
+    .join('|') + (withUv ? 'uv' : '') + (char ? 'char' : '') + (parts[0]?.bone !== undefined ? 'skin' : '');
   let g = geoCache.get(key);
   if (g) return acquire(g);
   const geos = parts.map((p) => {
@@ -131,8 +132,14 @@ function buildGeometry(parts: Part[], withUv: boolean): THREE.BufferGeometry {
     const geo = new THREE.BufferGeometry();
     geo.setAttribute('position', src.attributes.position.clone());
     geo.setAttribute('normal', src.attributes.normal.clone());
-    if (withUv && src.attributes.uv) geo.setAttribute('uv', src.attributes.uv.clone());
-    else if (withUv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(src.attributes.position.count * 2), 2));
+    const pmap = (p.mesh.material as THREE.MeshStandardMaterial).map;
+    if (withUv && src.attributes.uv && (pmap || !char)) {
+      const uv = src.attributes.uv.clone();
+      // Повтор и сдвиг текстуры детали — сразу в координаты (материал у склейки персонажа общий)
+      const { repeat: rp, offset: of } = char && pmap ? pmap : { repeat: { x: 1, y: 1 }, offset: { x: 0, y: 0 } };
+      if (rp.x !== 1 || rp.y !== 1 || of.x !== 0 || of.y !== 0) for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i) * rp.x + of.x, uv.getY(i) * rp.y + of.y);
+      geo.setAttribute('uv', uv);
+    } else if (withUv) geo.setAttribute('uv', new THREE.Float32BufferAttribute(new Float32Array(src.attributes.position.count * 2), 2));
     if (src.index) geo.setIndex(src.index.clone());
     geo.applyMatrix4(p.matrix);
     // Двусторонняя деталь (плащ, капюшон, перепонка): склейка рисует только лицевую сторону,
@@ -183,6 +190,8 @@ function buildGeometry(parts: Part[], withUv: boolean): THREE.BufferGeometry {
     const pbr = new Float32Array(n * 2);
     for (let i = 0; i < n; i++) pbr.set([mt.roughness, mt.metalness], i * 2);
     geo.setAttribute('pbr', new THREE.BufferAttribute(pbr, 2));
+    // Слой массива текстур персонажей (0 — деталь без текстуры)
+    if (char) geo.setAttribute('layer', new THREE.BufferAttribute(new Float32Array(n).fill(charLayer(pmap)), 1));
     if (p.bone !== undefined) {
       // Жёсткая привязка к одной кости: деталь движется вместе со своей группой (рука, голова…)
       const si = new Uint16Array(n * 4);
@@ -215,15 +224,13 @@ function bakeGroup(group: THREE.Object3D) {
     // Корзины: (текстура) × (с контуром / без)
     const buckets = new Map<string, Part[]>();
     for (const p of parts) {
-      const map = (p.mesh.material as THREE.MeshStandardMaterial).map;
-      const key = `${map?.uuid ?? '-'}|${p.outline > 0}`;
+      const key = String(p.outline > 0);
       let b = buckets.get(key);
       if (!b) buckets.set(key, (b = []));
       b.push(p);
     }
     for (const b of buckets.values()) {
-      const map = (b[0].mesh.material as THREE.MeshStandardMaterial).map ?? undefined;
-      const merged = new THREE.Mesh(buildGeometry(b, !!map), toon(0xffffff, { vertexColors: true, map, pbrAttr: true, rim: true }));
+      const merged = new THREE.Mesh(buildGeometry(b, true, true), charMat(true));
       merged.userData.baked = true;
       merged.raycast = () => {};
       const ol = b.reduce((s, p) => s + p.outline, 0) / b.length;
@@ -279,16 +286,9 @@ export function bake(root: THREE.Object3D) {
   walk(root, 0);
   if (parts.length >= 2) {
     const skeleton = new THREE.Skeleton(bones as THREE.Bone[]);
-    const buckets = new Map<string, Part[]>();
-    for (const p of parts) {
-      const key = (p.mesh.material as THREE.MeshStandardMaterial).map?.uuid ?? '-';
-      let b = buckets.get(key);
-      if (!b) buckets.set(key, (b = []));
-      b.push(p);
-    }
-    for (const b of buckets.values()) {
-      const map = (b[0].mesh.material as THREE.MeshStandardMaterial).map ?? undefined;
-      const merged = new THREE.SkinnedMesh(buildGeometry(b, !!map), toon(0xffffff, { vertexColors: true, map, pbrAttr: true, rim: true }));
+    // Все детали — одним мешем: фактуры лежат слоями общего массива текстур (charAtlas.ts)
+    for (const b of [parts]) {
+      const merged = new THREE.SkinnedMesh(buildGeometry(b, true, true), charMat(true));
       merged.userData.baked = true;
       merged.userData.skeleton = skeleton;
       merged.raycast = () => {};

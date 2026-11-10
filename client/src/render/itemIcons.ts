@@ -48,7 +48,7 @@ function setup(): boolean {
 }
 
 /** Модель предмета для иконки и как на неё смотреть. */
-function build(tpl: string, rarity: Rarity, cls: HeroClass): { obj: THREE.Object3D; focus?: (o: THREE.Object3D) => THREE.Box3 } {
+function build(tpl: string, rarity: Rarity, cls: HeroClass): { obj: THREE.Object3D; focus?: (o: THREE.Object3D) => THREE.Box3; dispose?: () => void } {
   const slot = TEMPLATE_BY_ID[tpl]?.slot ?? 'weapon';
   const built: Built = { parts: [], glow: [], spin: [] };
   if (slot === 'weapon') {
@@ -118,7 +118,8 @@ function build(tpl: string, rarity: Rarity, cls: HeroClass): { obj: THREE.Object
     }
     return b;
   };
-  return { obj: h.root, focus };
+  // Модель нужна на один кадр: без освобождения каждая иконка доспеха оставляла в видеопамяти целого героя
+  return { obj: h.root, focus, dispose: () => h.dispose() };
 }
 
 /** Габариты только видимых мешей (без скрытых эффектов: льда, щита, ореолов). */
@@ -141,7 +142,7 @@ function visibleBox(root: THREE.Object3D): THREE.Box3 {
 
 function render(tpl: string, rarity: Rarity, cls: HeroClass): string | null {
   if (!setup() || !renderer || !scene) return null;
-  const { obj, focus } = build(tpl, rarity, cls);
+  const { obj, focus, dispose } = build(tpl, rarity, cls);
   scene.add(obj);
   obj.updateMatrixWorld(true);
   const box = focus ? focus(obj) : visibleBox(obj);
@@ -155,6 +156,7 @@ function render(tpl: string, rarity: Rarity, cls: HeroClass): string | null {
   renderer.render(scene, cam);
   const url = renderer.domElement.toDataURL('image/png');
   scene.remove(obj);
+  dispose?.();
   return url;
 }
 
