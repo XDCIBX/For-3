@@ -439,8 +439,32 @@ export class MobModel {
           if (fine()) T.add(part(rivetRing(0.205 - i * 0.025, 7, 0.013, Math.PI * 1.1, -Math.PI / 2), 0xc7ced6, { pos: [-0.4 - i * 0.03, cy + 0.02 - i * 0.075, 0], rot: [0, 0, 0.45 + i * 0.12], scale: [1.15, 1, 1.05], outline: false }));
         }
         for (const z of [-0.08, 0, 0.08]) T.add(part(G.cone(0.035, 0.17, 6), 0xd8dee4, { pos: [-0.48, cy + 0.17, z], rot: [0, 0, 0.5], outline: false, metal: 0.9, rough: 0.3 }));
-        T.add(part(G.halfSphere(0.17), leather, { pos: [0.41, cy, 0], rot: [0, 0, -0.45], scale: [1.1, 0.6, 1], outline: false, ...L }));
-        if (fine()) T.add(part(finest() ? furPatch('orcFur', 30, 0.16, 0.1, 0.035, { yMin: 0.1, yMax: 0.95, down: 1.2 }) : strands('orcFur2', 7, 0.16, 0.05, 0.2, { fan: 0.5, depth: 0.3 }), 0x4a3a2a, { pos: [0.42, cy + 0.06, 0], outline: false }));
+        // Правое плечо: рогатый череп зверя на кожаной подушке, притянут ремнём
+        T.add(part(G.halfSphere(0.18), leather, { pos: [0.41, cy - 0.03, 0], rot: [0, 0, -0.45], scale: [1.1, 0.55, 1], outline: false, ...L }));
+        {
+          const bone = 0xe8dcc0;
+          const dk = 0x1a1210;
+          const sk = new THREE.Group();
+          // Свод черепа, скулы, вытянутая морда с носовым провалом
+          sk.add(part(G.sphere(0.15, 14, 10), bone, { scale: [1, 0.9, 1.05], rough: 0.7, outline: false }));
+          sk.add(part(G.box(0.16, 0.1, 0.16), bone, { pos: [0, -0.07, 0.12], rot: [0.25, 0, 0], rough: 0.7, outline: false }));
+          for (const sd of [-1, 1]) {
+            sk.add(part(G.sphere(0.05, 8, 6), bone, { pos: [sd * 0.1, -0.05, 0.08], scale: [0.8, 0.7, 1.2], rough: 0.7, outline: false }));
+            sk.add(part(G.sphere(0.047, 8, 6), dk, { pos: [sd * 0.062, 0.015, 0.125], scale: [1, 1.15, 0.5], outline: false }));
+            // Рога загнуты вверх и в стороны
+            sk.add(part(G.cone(0.04, 0.2, 6), 0xcfc2a0, { pos: [sd * 0.16, 0.08, -0.02], rot: [0, 0, -sd * 1.1], rough: 0.6, outline: false }));
+            sk.add(part(G.cone(0.028, 0.16, 6), 0xb8aa88, { pos: [sd * 0.27, 0.19, -0.02], rot: [0, 0, -sd * 0.35], rough: 0.6, outline: false }));
+          }
+          sk.add(part(G.cone(0.03, 0.06, 3), dk, { pos: [0, -0.06, 0.2], rot: [Math.PI - 0.25, 0, 0], scale: [1, 1, 0.5], outline: false }));
+          for (let i = 0; i < 5; i++) sk.add(part(G.cone(0.014, 0.05, 4), 0xf4ecd8, { pos: [(i - 2) * 0.03, -0.14, 0.165 - Math.abs(i - 2) * 0.012], rot: [Math.PI, 0, 0], outline: false }));
+          // Трещина на лбу
+          sk.add(part(G.box(0.012, 0.09, 0.01), dk, { pos: [0.03, 0.09, 0.13], rot: [-0.5, 0, 0.3], outline: false }));
+          sk.position.set(0.47, cy + 0.1, 0.03);
+          sk.rotation.set(-0.1, 0.55, -0.35);
+          sk.scale.setScalar(1.05);
+          T.add(sk);
+        }
+        T.add(part(G.torus(0.17, 0.02, Math.PI * 2, 4, 16), leather, { pos: [0.39, cy - 0.05, 0], rot: [0, 0, -0.9], outline: false, ...L }));
         // Пояс с пряжкой-черепом, кольчужная юбка, набедренная повязка спереди и сзади
         T.add(part(G.torus(0.33, 0.045, Math.PI * 2, 5, 22), leather, { pos: [0, 0.12, 0], rot: [Math.PI / 2, 0, 0], scale: [1, 0.85, 1], outline: false, ...L }));
         if (fine()) T.add(part(rivetRing(0.34, 14, 0.015), 0xb8c2cc, { pos: [0, 0.12, 0], scale: [1, 1, 0.85], outline: false }));

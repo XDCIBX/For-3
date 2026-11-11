@@ -3,6 +3,8 @@ import { G, glow, part, toon } from './toon';
 import { membraneTex, scaleTex } from './textures';
 import { fine, strands } from './details';
 import { limb } from './anatomy';
+import { lathe } from './forge';
+import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 
 /**
  * Обитатели логова: огненный сгусток, дракончик, огнеплюй и финальный босс —
@@ -85,65 +87,144 @@ function tail(n: number, r0: number, r1: number, segLen: number, col: number, sp
 
 // ================================================================== Огненный сгусток
 
+/**
+ * Светящиеся детали одним мешем: положение каждой запекается в геометрию, цвет (ярче единицы — для свечения
+ * в «ультра») — в вершины. Десяток языков пламени — одна отрисовка вместо десяти.
+ */
+function fuse(items: { geo: THREE.BufferGeometry; color: number; k: number; at: THREE.Object3D }[]): THREE.Mesh {
+  const c = new THREE.Color();
+  const geos = items.map(({ geo, color, k, at }) => {
+    at.updateWorldMatrix(true, false);
+    const g = geo.clone().applyMatrix4(at.matrixWorld);
+    c.set(color).multiplyScalar(k);
+    const n = g.attributes.position.count;
+    const col = new Float32Array(n * 3);
+    for (let i = 0; i < n; i++) col.set([c.r, c.g, c.b], i * 3);
+    g.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    g.deleteAttribute('uv');
+    return g.index ? g.toNonIndexed() : g;
+  });
+  const m = new THREE.Mesh(mergeGeometries(geos) ?? new THREE.BufferGeometry(), FUSE_MAT);
+  m.userData.noBake = true;
+  return m;
+}
+const FUSE_MAT = new THREE.MeshBasicMaterial({ vertexColors: true });
+/** Куда поставить деталь: положение, поворот, масштаб. */
+function at(pos: [number, number, number], rot: [number, number, number] = [0, 0, 0], scale: [number, number, number] = [1, 1, 1], parent?: THREE.Object3D): THREE.Object3D {
+  const o = new THREE.Object3D();
+  o.position.set(...pos);
+  o.rotation.set(...rot);
+  o.scale.set(...scale);
+  parent?.add(o);
+  return o;
+}
+
 class Ember implements Creature {
   readonly group = new THREE.Group();
   readonly mouth = new THREE.Object3D();
   private core: THREE.Mesh;
-  private shells: THREE.Mesh[] = [];
-  private tongues = new THREE.Group();
+  private aura: THREE.Mesh;
+  private crust = new THREE.Group();
+  private rings: THREE.Mesh[] = [];
+  private orbit = new THREE.Group();
+  private face = new THREE.Group();
   private t = Math.random() * 10;
   constructor() {
     const g = this.group;
-    this.core = new THREE.Mesh(G.ico(0.32, 2), toon(0xffd070, { emissive: 0xff8a20, emissiveIntensity: 2.2 }));
+    const rockCol = 0x2a1812;
+    for (const o of [this.crust, this.face, this.orbit]) o.userData.anim = true;
+    // Раскалённое ядро: видно в трещинах между плитами корки
+    this.core = new THREE.Mesh(G.ico(0.33, 2), toon(0xffc050, { emissive: 0xff7a10, emissiveIntensity: 2.4 }));
     g.add(this.core);
-    for (const [r, c, o] of [
-      [0.5, 0xff6a10, 0.45],
-      [0.72, 0xff3a00, 0.22],
-    ] as const) {
-      const sh = new THREE.Mesh(G.sphere(r, 14, 10), glow(c, o));
-      this.shells.push(sh);
-      g.add(sh);
+    // Корка остывшей лавы: тёмные гранёные плиты вокруг ядра, между ними светятся щели
+    const plates: [number, number, number][] = [
+      [0.0, -1.2, 0.3], [1.25, -0.75, 0.27], [2.5, -0.8, 0.28], [3.75, -0.7, 0.27], [5.0, -0.75, 0.27],
+      [1.35, 0.0, 0.25], [2.3, 0.1, 0.24], [3.14, -0.05, 0.27], [4.0, 0.1, 0.24], [4.93, 0.0, 0.25],
+      [2.2, 0.75, 0.2], [3.14, 0.8, 0.21], [4.1, 0.75, 0.2], [0.75, -0.55, 0.2], [5.53, -0.55, 0.2],
+    ];
+    for (const [a, el, sz] of plates) {
+      const rr = Math.cos(el);
+      const pl = part(G.dodeca(sz * 0.62), rockCol, { pos: [Math.sin(a) * rr * 0.33, Math.sin(el) * 0.33, Math.cos(a) * rr * 0.33], scale: [1, 1, 0.45], rough: 0.95, outline: false });
+      pl.lookAt(0, 0, 0);
+      this.crust.add(pl);
     }
-    // Языки пламени
+    g.add(this.crust);
+    // Лицо: каменные надбровья, горящие раскосые глаза, зубастая пасть-трещина
+    const F = this.face;
+    const lit: Parameters<typeof fuse>[0] = [];
+    for (const sd of [-1, 1]) {
+      lit.push({ geo: G.sphere(0.085, 10, 8), color: 0xfff6c0, k: 2.8, at: at([sd * 0.13, 0.06, 0.315], [0, sd * 0.3, sd * 0.4], [1.2, 0.62, 0.5]) });
+      lit.push({ geo: G.sphere(0.03, 6, 5), color: 0x1a0600, k: 1, at: at([sd * 0.12, 0.055, 0.355], [0, 0, 0], [0.6, 1.25, 0.5]) });
+      F.add(part(G.box(0.2, 0.05, 0.09), rockCol, { pos: [sd * 0.13, 0.155, 0.31], rot: [0.35, sd * 0.3, sd * 0.42], rough: 0.95, outline: false }));
+    }
+    lit.push({ geo: G.sphere(0.13, 10, 8), color: 0xff8a18, k: 2.2, at: at([0, -0.12, 0.285], [0, 0, 0], [1.3, 0.55, 0.6]) });
+    F.add(fuse(lit));
+    for (let i = 0; i < 5; i++) {
+      const x = (i - 2) * 0.06;
+      F.add(part(G.cone(0.024, 0.075, 4), rockCol, { pos: [x, -0.075 - Math.abs(x) * 0.15, 0.36], rot: [Math.PI, 0, 0], rough: 0.9, outline: false }));
+      if (i % 2) F.add(part(G.cone(0.022, 0.065, 4), rockCol, { pos: [x, -0.17 + Math.abs(x) * 0.1, 0.35], rough: 0.9, outline: false }));
+    }
+    F.add(part(G.box(0.3, 0.05, 0.1), rockCol, { pos: [0, -0.22, 0.27], rot: [-0.35, 0, 0], rough: 0.95, outline: false }));
+    g.add(F);
+    this.mouth.position.set(0, -0.1, 0.36);
+    g.add(this.mouth);
+    // Корона пламени: языки растут вверх и наружу — снаружи красно-оранжевые, внутри жёлтые
+    const tongue = (r: number, h: number, color: number, k: number, x: number, y: number, z: number, lean: number, yaw: number) => {
+      const piv = at([x, y, z], [lean * Math.cos(yaw), 0, -lean * Math.sin(yaw)]);
+      return { geo: G.cone(r, h, 7), color, k, at: at([0, h / 2, 0], [0, 0, 0], [1, 1, 1], piv) };
+    };
+    const outer = [];
     for (let i = 0; i < 7; i++) {
-      const a = (i / 7) * Math.PI * 2;
-      const f = new THREE.Mesh(G.cone(0.13, 0.55, 6), toon(0xffa030, { emissive: 0xff6010, emissiveIntensity: 1.8 }));
-      f.position.set(Math.cos(a) * 0.22, 0.25, Math.sin(a) * 0.22);
-      f.rotation.set(Math.sin(a) * 0.6, 0, -Math.cos(a) * 0.6);
-      this.tongues.add(f);
+      const a = (i / 7) * Math.PI * 2 + 0.3;
+      outer.push(tongue(0.12, 0.5 + (i % 3) * 0.12, 0xff4a08, 1.6, Math.sin(a) * 0.2, 0.16, Math.cos(a) * 0.2 - 0.05, 0.45, a));
     }
-    g.add(this.tongues);
-    // Тёмные провалы-глаза
-    for (const x of [-0.1, 0.1]) {
-      const e = new THREE.Mesh(G.sphere(0.05, 6, 4), new THREE.MeshBasicMaterial({ color: 0x2a0a00 }));
-      e.position.set(x, 0.06, 0.3);
-      e.scale.set(1, 0.5, 0.5);
-      e.rotation.z = x > 0 ? 0.5 : -0.5;
-      g.add(e);
+    // Огненные «руки» по бокам
+    for (const sd of [-1, 1]) outer.push(tongue(0.085, 0.42, 0xff6a10, 1.8, sd * 0.3, -0.06, 0.02, 1.25, (sd * Math.PI) / 2));
+    const inner = [];
+    for (let i = 0; i < 4; i++) {
+      const a = (i / 4) * Math.PI * 2 + 0.9;
+      inner.push(tongue(0.09, 0.62 + (i % 2) * 0.16, 0xffb030, 2.2, Math.sin(a) * 0.09, 0.22, Math.cos(a) * 0.09 - 0.05, 0.18, a));
     }
-    // Злой рот-трещина
-    const mouth = new THREE.Mesh(G.box(0.14, 0.025, 0.02), new THREE.MeshBasicMaterial({ color: 0x2a0a00 }));
-    mouth.position.set(0, -0.06, 0.31);
-    g.add(mouth);
+    const tip = [tongue(0.07, 0.9, 0xffe890, 2.6, 0, 0.24, -0.05, 0, 0)];
+    for (const set of [outer, inner, tip]) {
+      const m = fuse(set);
+      this.rings.push(m);
+      g.add(m);
+    }
+    // Мягкое свечение вокруг — слабое, чтобы не размывать силуэт
+    this.aura = new THREE.Mesh(G.sphere(0.62, 14, 10), glow(0xff5a10, 0.16));
+    g.add(this.aura);
     if (fine()) {
-      // Обломки остывшей лавы кружат вокруг ядра
-      for (let i = 0; i < 5; i++) {
-        const a = (i / 5) * Math.PI * 2;
-        const rock = part(G.dodeca(0.07 + (i % 2) * 0.03), 0x2a1a14, { pos: [Math.cos(a) * 0.48, Math.sin(a * 2) * 0.12, Math.sin(a) * 0.48], rot: [a, a * 1.3, 0], rough: 0.9, outline: false });
-        this.tongues.add(rock);
+      // Обломки остывшей лавы кружат вокруг, с раскалённой стороной
+      const dots = [];
+      for (let i = 0; i < 6; i++) {
+        const a = (i / 6) * Math.PI * 2;
+        const r0 = 0.06 + (i % 3) * 0.022;
+        const pos: [number, number, number] = [Math.cos(a) * 0.56, Math.sin(a * 2) * 0.16 - 0.1, Math.sin(a) * 0.56];
+        this.orbit.add(part(G.dodeca(r0), rockCol, { pos, rot: [a, a * 1.3, 0], rough: 0.9, outline: false }));
+        dots.push({ geo: G.sphere(r0 * 0.55, 6, 5), color: 0xff8a20, k: 2, at: at([pos[0] * 0.93, pos[1] * 0.93, pos[2] * 0.93]) });
       }
+      this.orbit.add(fuse(dots));
+      g.add(this.orbit);
     }
     g.position.y = 0.9;
   }
   update(dt: number, s: CreatureInput) {
     this.t += dt;
     const t = this.t;
-    const swell = s.windup ? 1 + Math.min(1, s.atk) * 0 + 0.35 + Math.sin(t * 40) * 0.12 : 1;
+    const swell = s.windup ? 1.35 + Math.sin(t * 40) * 0.12 : 1;
     this.group.position.y = 0.9 + Math.sin(t * 4) * 0.12;
-    this.core.scale.setScalar(swell * (1 + Math.sin(t * 13) * 0.06));
-    this.shells.forEach((sh, i) => sh.scale.setScalar(swell * (1 + Math.sin(t * (9 + i * 4)) * 0.1)));
-    this.tongues.rotation.y += dt * 3;
-    this.tongues.children.forEach((f, i) => (f.scale.y = 0.8 + Math.sin(t * 11 + i * 1.7) * 0.35));
+    this.core.scale.setScalar(swell * (1 + Math.sin(t * 13) * 0.05));
+    // Перед взрывом корка расходится — ядро просвечивает сильнее
+    this.crust.scale.setScalar(s.windup ? 1.12 + Math.sin(t * 40) * 0.04 : 1 + Math.sin(t * 5) * 0.015);
+    this.aura.scale.setScalar(swell * (1 + Math.sin(t * 9) * 0.1));
+    this.orbit.rotation.y += dt * 2.2;
+    this.face.position.z = s.windup ? 0.04 : 0;
+    this.rings.forEach((f, i) => {
+      f.scale.y = (0.9 + Math.sin(t * (11 + i * 3) + i * 1.7) * 0.22) * (s.windup ? 1.4 : 1);
+      f.scale.x = f.scale.z = 1 + Math.sin(t * 8 + i * 2.3) * 0.08;
+      f.rotation.y = Math.sin(t * (2.5 + i)) * 0.25;
+    });
   }
 }
 
@@ -172,56 +253,88 @@ class Drake implements Creature {
     g.add(this.body);
     this.body.position.y = 1.15;
     for (const o of [this.body, this.head, this.jaw]) o.userData.anim = true;
-    // Туловище и брюхо
-    this.body.add(part(G.capsule(0.24, 0.55), col, { rot: [Math.PI / 2, 0, 0], map, rough: 0.55 }));
-    this.body.add(part(G.capsule(0.19, 0.45), belly, { rot: [Math.PI / 2, 0, 0], pos: [0, -0.07, 0.03], rough: 0.6 }));
-    // Бороздки между брюшными пластинами
-    if (fine()) for (let i = 0; i < 5; i++) this.body.add(part(G.torus(0.17, 0.012, Math.PI, 4, 10), 0x5a3418, { pos: [0, -0.08, 0.28 - i * 0.13], rot: [0, 0, Math.PI], scale: [1.05, 0.9, 1] }));
-    for (let i = 0; i < 5; i++) this.body.add(part(G.cone(0.05, 0.16, 5), 0x2a1410, { pos: [0, 0.24, 0.3 - i * 0.15], rot: [-0.4, 0, 0] }));
-    // Шея из двух звеньев и голова
-    let parent: THREE.Object3D = this.body;
-    const nl = 0.22;
-    for (let i = 0; i < 2; i++) {
+    const dark = spit ? 0x24341a : 0x3a140c;
+    const B = this.body;
+    // Туловище: глубокая грудь, сужение к бёдрам (а не цилиндр); по бокам чуть сплюснуто
+    const trunk: [number, number][] = [[0.05, -0.62], [0.11, -0.52], [0.17, -0.34], [0.215, -0.12], [0.255, 0.12], [0.25, 0.3], [0.19, 0.45], [0.12, 0.54], [0.05, 0.58]];
+    B.add(part(lathe('drakeTrunk', trunk, 18), col, { rot: [Math.PI / 2, 0, 0], scale: [0.84, 1, 1.0], map, rough: 0.55 }));
+    // Плечи и бёдра — мышцы под крыльями и над задними лапами
+    for (const sd of [-1, 1]) {
+      B.add(part(G.sphere(0.1, 10, 8), col, { pos: [sd * 0.135, 0.11, 0.2], scale: [0.8, 0.95, 1.5], map, rough: 0.55, outline: false }));
+      B.add(part(G.sphere(0.1, 10, 8), col, { pos: [sd * 0.12, -0.04, -0.22], scale: [0.8, 1.1, 1.5], map, rough: 0.55, outline: false }));
+    }
+    // Брюхо: светлые пластины внахлёст от груди до хвоста
+    for (let i = 0; i < 7; i++) {
+      const k = i / 6;
+      const z = 0.36 - k * 0.74;
+      const w = 0.2 - Math.abs(k - 0.3) * 0.13;
+      B.add(part(G.sphere(w, 10, 6), belly, { pos: [0, -0.115 - Math.sin(k * Math.PI) * 0.075 + (k > 0.6 ? (k - 0.6) * 0.16 : 0), z], scale: [0.82, 0.5, 0.62], rot: [0.2 - k * 0.5, 0, 0], rough: 0.6, outline: false }));
+    }
+    // Гребень вдоль хребта: шипы растут к середине спины
+    for (let i = 0; i < 7; i++) {
+      const k = i / 6;
+      const h = 0.1 + Math.sin(k * Math.PI) * 0.1;
+      const z = 0.4 - k * 0.82;
+      const y = 0.16 + Math.sin((1 - k) * 2.2) * 0.09;
+      B.add(part(G.cone(0.04, h, 4), dark, { pos: [0, y + h * 0.3, z], rot: [-0.45, 0, 0], scale: [0.45, 1, 1], outline: false }));
+    }
+    // Шея из трёх звеньев: толстая у груди, тоньше к голове, изгиб буквой S
+    let parent: THREE.Object3D = B;
+    const nl = 0.2;
+    for (let i = 0; i < 3; i++) {
       const n = new THREE.Group();
       n.userData.anim = true;
-      n.position.set(0, i === 0 ? 0.08 : 0, i === 0 ? 0.4 : nl);
-      n.rotation.x = -0.45;
-      n.add(part(limb(0.12 - i * 0.02, 0.1 - i * 0.02, nl, 0.05, 8), col, { rot: [-Math.PI / 2, 0, 0], map }));
-      n.add(part(G.cone(0.035, 0.12, 5), 0x2a1410, { pos: [0, 0.11, 0.1], rot: [-0.5, 0, 0] }));
+      n.position.set(0, i === 0 ? 0.1 : 0, i === 0 ? 0.42 : nl * 0.9);
+      n.rotation.x = [-0.45, -0.16, 0.16][i];
+      const r0 = 0.15 - i * 0.022;
+      n.add(part(limb(r0, r0 - 0.022, nl, 0.06, 10), col, { rot: [-Math.PI / 2, 0, 0], map }));
+      n.add(part(limb(r0 * 0.8, r0 * 0.7, nl, 0, 8), belly, { pos: [0, -r0 * 0.3, 0.01], rot: [-Math.PI / 2, 0, 0], rough: 0.6, outline: false }));
+      n.add(part(G.cone(0.035, 0.13 - i * 0.02, 4), dark, { pos: [0, r0 + 0.02, 0.1], rot: [-0.5, 0, 0], scale: [0.45, 1, 1], outline: false }));
       parent.add(n);
       this.neck.push(n);
       parent = n;
     }
-    this.head.position.z = nl;
+    this.head.position.z = nl * 0.9;
     this.head.rotation.x = 0.5;
     parent.add(this.head);
     const H = this.head;
-    H.add(part(G.sphere(0.15, 12, 10), col, { scale: [1, 0.85, 1.15], map }));
-    H.add(part(G.box(0.17, 0.09, 0.24), col, { pos: [0, -0.02, 0.17], map }));
-    for (const s of [-1, 1]) {
-      H.add(part(G.cone(0.035, 0.22, 6), horn, { pos: [s * 0.08, 0.12, -0.1], rot: [-0.9, 0, s * 0.3] }));
-      H.add(part(G.cone(0.02, 0.1, 5), horn, { pos: [s * 0.12, 0.0, -0.02], rot: [-1.3, 0, s * 0.9] }));
+    // Череп, скулы и вытянутая сужающаяся морда
+    H.add(part(G.sphere(0.15, 14, 10), col, { scale: [1, 0.82, 1.1], map }));
+    H.add(part(limb(0.115, 0.065, 0.27, 0.02, 10), col, { pos: [0, 0.0, 0.05], rot: [-Math.PI / 2, 0, 0], scale: [1, 1, 0.72], map }));
+    for (const sd of [-1, 1]) {
+      H.add(part(G.sphere(0.07, 8, 6), col, { pos: [sd * 0.1, -0.02, 0.02], scale: [0.8, 0.9, 1.3], map, outline: false }));
+      // Рога: большие назад и малые по скулам
+      H.add(part(G.cone(0.04, 0.3, 6), horn, { pos: [sd * 0.085, 0.13, -0.14], rot: [-1.05, 0, sd * 0.28] }));
+      H.add(part(G.cone(0.024, 0.14, 5), horn, { pos: [sd * 0.135, 0.0, -0.06], rot: [-1.3, 0, sd * 0.9] }));
       const e = new THREE.Mesh(G.sphere(0.04, 8, 6), toon(0xffe060, { emissive: 0xffb020, emissiveIntensity: 2.2 }));
-      e.position.set(s * 0.075, 0.05, 0.1);
+      e.position.set(sd * 0.082, 0.05, 0.1);
+      e.scale.set(0.7, 0.8, 1.1);
       H.add(e);
+      const slit = new THREE.Mesh(G.sphere(0.014, 5, 4), new THREE.MeshBasicMaterial({ color: 0x120400 }));
+      slit.position.set(sd * 0.108, 0.05, 0.115);
+      slit.scale.set(0.6, 1.8, 1);
+      H.add(slit);
     }
-    // Нижняя челюсть
-    this.jaw.position.set(0, -0.06, 0.04);
-    this.jaw.add(part(G.box(0.14, 0.04, 0.24), belly, { pos: [0, -0.02, 0.12] }));
-    for (let i = 0; i < 3; i++) for (const s of [-1, 1]) this.jaw.add(part(G.cone(0.012, 0.04, 4), 0xf4ecd8, { pos: [s * 0.05, 0.02, 0.18 - i * 0.05] }));
+    // Нижняя челюсть — клином
+    this.jaw.position.set(0, -0.055, 0.03);
+    this.jaw.add(part(limb(0.085, 0.05, 0.26, 0, 8), belly, { pos: [0, -0.02, 0.0], rot: [-Math.PI / 2, 0, 0], scale: [1, 1, 0.38] }));
+    for (let i = 0; i < 4; i++) for (const sd of [-1, 1]) this.jaw.add(part(G.cone(0.012, 0.045, 4), 0xf4ecd8, { pos: [sd * (0.062 - i * 0.008), 0.012, 0.11 + i * 0.045], outline: false }));
+    // Язык
+    this.jaw.add(part(G.box(0.05, 0.012, 0.16), 0xc8364a, { pos: [0, 0.0, 0.14], outline: false }));
     if (fine()) {
-      // Надбровья, ноздри, верхние зубы, гребень шипов на затылке
-      for (const s of [-1, 1]) {
-        H.add(part(G.box(0.06, 0.035, 0.12), 0x2a1410, { pos: [s * 0.075, 0.1, 0.07], rot: [0.2, s * 0.25, -s * 0.3] }));
-        H.add(part(G.sphere(0.014, 5, 4), 0x1a0806, { pos: [s * 0.035, 0.02, 0.29] }));
-        for (let i = 0; i < 3; i++) H.add(part(G.cone(0.011, 0.04, 4), 0xf4ecd8, { pos: [s * 0.06, -0.07, 0.24 - i * 0.05], rot: [Math.PI, 0, 0] }));
+      // Надбровья, ноздри, верхние зубы и клыки, гребень шипов на затылке
+      for (const sd of [-1, 1]) {
+        H.add(part(G.box(0.06, 0.035, 0.13), dark, { pos: [sd * 0.08, 0.1, 0.075], rot: [0.2, sd * 0.25, -sd * 0.35], outline: false }));
+        H.add(part(G.sphere(0.02, 6, 5), col, { pos: [sd * 0.035, 0.035, 0.3], outline: false }));
+        H.add(part(G.sphere(0.011, 5, 4), 0x120604, { pos: [sd * 0.038, 0.038, 0.316], outline: false }));
+        for (let i = 0; i < 4; i++) H.add(part(G.cone(0.011, i === 3 ? 0.065 : 0.04, 4), 0xf4ecd8, { pos: [sd * (0.07 - i * 0.009), -0.055, 0.12 + i * 0.05], rot: [Math.PI, 0, 0], outline: false }));
       }
-      for (let i = 0; i < 4; i++) H.add(part(G.cone(0.025 - i * 0.003, 0.11 - i * 0.015, 5), 0x2a1410, { pos: [0, 0.1 - i * 0.02, -0.06 - i * 0.06], rot: [-1.1, 0, 0] }));
+      for (let i = 0; i < 4; i++) H.add(part(G.cone(0.028 - i * 0.003, 0.12 - i * 0.015, 4), dark, { pos: [0, 0.11 - i * 0.02, -0.04 - i * 0.065], rot: [-1.1, 0, 0], scale: [0.45, 1, 1], outline: false }));
       if (spit) {
-        // Огнеплюй: кожистый воротник вокруг шеи и пузырящийся зоб
-        for (let i = 0; i < 7; i++) {
-          const a = -1.2 + (i / 6) * 2.4;
-          H.add(part(G.cone(0.035, 0.2, 4), 0x6a9a3a, { pos: [Math.sin(a) * 0.14, Math.cos(a) * 0.06 - 0.02, -0.08], rot: [-1.4, 0, -a], scale: [1, 1, 0.3] }));
+        // Огнеплюй: кожистый воротник за головой
+        for (let i = 0; i < 9; i++) {
+          const a = -1.4 + (i / 8) * 2.8;
+          H.add(part(G.cone(0.04, 0.24, 4), i % 2 ? 0x6a9a3a : 0x8ab84a, { pos: [Math.sin(a) * 0.15, Math.cos(a) * 0.07 - 0.02, -0.09], rot: [-1.35, 0, -a], scale: [1.2, 1, 0.25], outline: false }));
         }
       }
     }
@@ -230,35 +343,40 @@ class Drake implements Creature {
     H.add(this.mouth);
     if (spit) {
       // Огнеплюй: светящийся зоб
-      this.throat = new THREE.Mesh(G.sphere(0.11, 10, 8), toon(0xff7a20, { emissive: 0xff5a10, emissiveIntensity: 1 }));
-      this.throat.position.set(0, -0.09, 0.42);
+      this.throat = new THREE.Mesh(G.sphere(0.09, 10, 8), toon(0xff7a20, { emissive: 0xff5a10, emissiveIntensity: 1 }));
+      this.throat.position.set(0, -0.07, 0.46);
       this.body.add(this.throat);
     }
     // Крылья
-    for (const s of [-1, 1]) {
-      const w = wing(1.25, spit ? 0x6a9a3a : 0xc8582a, spit ? 0x2a4018 : 0x5a1a0a);
+    for (const sd of [-1, 1]) {
+      const w = wing(1.45, spit ? 0x6a9a3a : 0xc8582a, spit ? 0x2a4018 : 0x5a1a0a);
       w.userData.anim = true;
-      w.scale.x = s;
-      w.position.set(s * 0.14, 0.15, 0.18);
+      w.scale.x = sd;
+      w.position.set(sd * 0.17, 0.2, 0.2);
       this.body.add(w);
       this.wings.push(w);
     }
-    // Лапы, поджатые в полёте
-    for (const [x, z] of [
-      [-0.14, 0.25],
-      [0.14, 0.25],
-      [-0.15, -0.22],
-      [0.15, -0.22],
-    ]) {
-      this.body.add(part(limb(0.05, 0.035, 0.22, 0.1, 6), col, { pos: [x, -0.15, z], rot: [1.0, 0, 0] }));
-      // Когти на лапах
-      if (fine()) for (const c of [-1, 0, 1]) this.body.add(part(G.cone(0.012, 0.06, 4), 0x1a1210, { pos: [x + c * 0.02, -0.27, z - 0.17], rot: [-0.6, 0, 0] }));
+    // Лапы: передние поджаты к груди, задние — с бедром и голенью, отведены назад; на каждой когти
+    const claws = (x: number, y: number, z: number, rx: number) => {
+      for (const c of [-1, 0, 1]) this.body.add(part(G.cone(0.014, 0.07, 4), 0x1a1210, { pos: [x + c * 0.024, y, z + Math.abs(c) * -0.008], rot: [rx, 0, c * 0.25], outline: false }));
+    };
+    for (const sd of [-1, 1]) {
+      // Передняя
+      this.body.add(part(limb(0.06, 0.045, 0.17, 0.12, 8), col, { pos: [sd * 0.17, -0.02, 0.24], rot: [0.5, 0, sd * 0.15], map }));
+      this.body.add(part(limb(0.042, 0.03, 0.15, 0.06, 8), col, { pos: [sd * 0.19, -0.16, 0.16], rot: [-1.0, 0, 0], map }));
+      this.body.add(part(G.sphere(0.036, 6, 5), col, { pos: [sd * 0.19, -0.245, 0.285], scale: [1, 0.7, 1.2], outline: false }));
+      claws(sd * 0.19, -0.275, 0.31, 2.3);
+      // Задняя
+      this.body.add(part(limb(0.085, 0.055, 0.22, 0.16, 8), col, { pos: [sd * 0.16, -0.08, -0.2], rot: [-0.55, 0, sd * 0.12], map }));
+      this.body.add(part(limb(0.05, 0.034, 0.2, 0.06, 8), col, { pos: [sd * 0.18, -0.26, -0.31], rot: [0.95, 0, 0], map }));
+      this.body.add(part(G.sphere(0.042, 6, 5), col, { pos: [sd * 0.18, -0.385, -0.47], scale: [1, 0.7, 1.3], outline: false }));
+      claws(sd * 0.18, -0.42, -0.5, -2.3);
     }
-    // Хвост
-    this.tail = tail(4, 0.13, 0.05, 0.24, col, 0.6, map);
-    this.tail[0].position.set(0, 0, -0.42);
+    // Хвост: длинный, толстый у основания, с шипами и стреловидным концом
+    this.tail = tail(6, 0.12, 0.035, 0.2, col, 0.6, map);
+    this.tail[0].position.set(0, 0.0, -0.48);
     this.body.add(this.tail[0]);
-    this.tail[3].add(part(G.cone(0.1, 0.18, 4), 0x2a1410, { pos: [0, 0, -0.3], rot: [-Math.PI / 2, 0, 0], scale: [1, 1, 0.3] }));
+    this.tail[5].add(part(G.cone(0.1, 0.2, 4), dark, { pos: [0, 0, -0.26], rot: [-Math.PI / 2, 0, 0], scale: [1, 1, 0.3] }));
   }
   update(dt: number, s: CreatureInput) {
     this.t += dt;
@@ -290,7 +408,8 @@ class Drake implements Creature {
       jaw = this.spit ? 0.7 * e : a < 0.5 ? 0.6 : 0.6 * (1 - (a - 0.5) * 2);
     }
     this.neck[0].rotation.x = neckX;
-    this.neck[1].rotation.x = neckX * 0.4;
+    this.neck[1].rotation.x = neckX * 0.35;
+    this.neck[2].rotation.x = neckX * 0.2 + 0.25;
     this.head.rotation.x = headX;
     this.jaw.rotation.x = jaw;
     if (this.throat) {
