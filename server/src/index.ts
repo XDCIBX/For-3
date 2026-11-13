@@ -20,7 +20,7 @@ const MAX_ROOMS = num(process.env.MAX_ROOMS, 300);
 /** Предел одновременных соединений с одного IP-адреса. */
 const MAX_CONN_PER_IP = num(process.env.MAX_CONN_PER_IP, 16);
 /**
- * Сервер за HTTPS-прокси (Caddy, nginx, Fly.io, Render): адрес игрока берётся из X-Forwarded-For.
+ * Сервер за HTTPS-прокси (Caddy, nginx, Render): адрес игрока берётся из X-Forwarded-For.
  * Без прокси не включать — заголовок можно подделать.
  */
 const TRUST_PROXY = process.env.TRUST_PROXY === '1' || process.env.TRUST_PROXY === 'true';

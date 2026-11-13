@@ -1,7 +1,7 @@
 # Игровой сервер + веб-клиент в одном контейнере.
 # Сборка:  docker build -t 25waves .
 # Запуск:  docker run -p 2567:2567 25waves        → http://localhost:2567, /health
-# TLS (https/wss) делает прокси перед контейнером: Caddy (deploy/vps), Fly.io, Render.
+# TLS (https/wss) делает прокси перед контейнером: Caddy (deploy/vps), Render.
 # Базовый образ можно сменить, например на зеркало: --build-arg NODE_IMAGE=mirror.gcr.io/library/node:22-alpine
 ARG NODE_IMAGE=node:22-alpine
 FROM ${NODE_IMAGE} AS build

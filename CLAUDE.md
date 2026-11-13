@@ -38,7 +38,7 @@
   (обработчики ошибок сокета, try/catch на комнату). Сборка: `npm run build --workspace server`.
   Переменные: `PORT`, `HOST`, `TRUST_PROXY`, `MAX_ROOMS`, `MAX_CONN_PER_IP`, `ALLOWED_ORIGINS`, `HEARTBEAT_MS`,
   `APP_VERSION`; ping/pong закрывает мёртвые соединения, SIGTERM → код 1012. **Только один экземпляр**
-  (комнаты в памяти). Деплой: `deploy/README.md` (VPS + Caddy в `deploy/vps`, `fly.toml`, `render.yaml`).
+  (комнаты в памяти). Деплой: `deploy/README.md` (VPS + Caddy в `deploy/vps`, `render.yaml`).
 - `client/` — Three.js 0.180 + Vite 7. `LocalConnection` — одиночная игра прямо в браузере.
   - `render/engine.ts` — сцены, камера, качество (`low`/`high`/`ultra`), постобработка, тени.
   - `render/heroes.ts`, `mobs.ts`, `dragons.ts`, `weapons.ts`, `equipment.ts`, `anatomy.ts`, `forge.ts` —
@@ -140,7 +140,7 @@
   проверка с запущенным Steam на Windows/macOS/Linux. Сеть Valve (SDR), Steam Cloud не подключены.
 - Трейлер не записан. Капсулы магазина — из арта в «высоком» качестве (композиция лучше, чем у ультра-рендеров).
 - Подпись/нотаризация macOS (нужен аккаунт Apple Developer). Публичный сервер готов к деплою, но не развёрнут:
-  владелец выбирает хостинг (VPS Hetzner / Fly.io / Render, `deploy/README.md`).
+  владелец выбирает хостинг (VPS Hetzner / Render, `deploy/README.md`; Fly.io убран по просьбе владельца).
 - Загрузка в Steam через steamcmd не проверена вживую (нужны аккаунт и AppID).
 - Экономика: золото за моба — добившему; лучник и гном к 20-й волне богаче на ~25 % меньше охотника/воина,
   поэтому в реальных играх ботов слабее в ПвП (22–43 %). Можно выровнять общим золотом за помощь — не делали.
