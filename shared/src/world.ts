@@ -225,7 +225,96 @@ export const ARENA_OBSTACLES: Obstacle[] = [0, 1, 2, 3].map((i) => {
 export const ARENA_BOUND = ARENA_RADIUS;
 
 /** Выталкивает круг из препятствий и удерживает внутри границы. */
+/**
+ * Сетка препятствий: для каждой клетки 3×3 — препятствия (в исходном порядке), которые могут повлиять на
+ * объект в этой клетке. Моб проверяет пару десятков ближних камней, а не все ~100 на острове. Порядок тот же,
+ * лишние по-прежнему отсеиваются точными проверками — результат совпадает с полным перебором.
+ */
+const CELL = 3;
+/** Запас дальности: обход препятствий смотрит на 2,2 + 2r(камня) + r(моба, до 2,6) + 0,25 вперёд и вбок. */
+const REACH = 5.3;
+interface ObstacleGrid {
+  x0: number;
+  z0: number;
+  nx: number;
+  nz: number;
+  cells: Obstacle[][];
+}
+const grids = new WeakMap<readonly Obstacle[], ObstacleGrid | null>();
+function gridOf(obstacles: readonly Obstacle[]): ObstacleGrid | null {
+  let g = grids.get(obstacles);
+  if (g !== undefined) return g;
+  g = null;
+  if (obstacles.length > 12) {
+    let x0 = Infinity, z0 = Infinity, x1 = -Infinity, z1 = -Infinity;
+    for (const o of obstacles) {
+      x0 = Math.min(x0, o.x - o.r);
+      z0 = Math.min(z0, o.z - o.r);
+      x1 = Math.max(x1, o.x + o.r);
+      z1 = Math.max(z1, o.z + o.r);
+    }
+    x0 -= REACH + 6;
+    z0 -= REACH + 6;
+    const nx = Math.ceil((x1 + REACH + 6 - x0) / CELL);
+    const nz = Math.ceil((z1 + REACH + 6 - z0) / CELL);
+    const cells: Obstacle[][] = new Array(nx * nz);
+    // Соседние клетки часто видят одни и те же камни — одинаковые списки храним один раз (память сервера)
+    const shared = new Map<string, Obstacle[]>();
+    for (let iz = 0; iz < nz; iz++)
+      for (let ix = 0; ix < nx; ix++) {
+        const cx0 = x0 + ix * CELL, cz0 = z0 + iz * CELL;
+        const idx: number[] = [];
+        obstacles.forEach((o, i) => {
+          // Расстояние от центра камня до клетки
+          const dx = Math.max(cx0 - o.x, 0, o.x - (cx0 + CELL));
+          const dz = Math.max(cz0 - o.z, 0, o.z - (cz0 + CELL));
+          const reach = 2 * o.r + REACH;
+          if (dx * dx + dz * dz < reach * reach) idx.push(i);
+        });
+        const key = idx.join(',');
+        let list = shared.get(key);
+        if (!list) shared.set(key, (list = idx.map((i) => obstacles[i])));
+        cells[iz * nx + ix] = list;
+      }
+    g = { x0, z0, nx, nz, cells };
+  }
+  grids.set(obstacles, g);
+  return g;
+}
+
+/**
+ * Препятствия, которые могут коснуться объекта радиусом до 2,6 в точке (x, z) или оказаться у него на пути
+ * в пределах 2,2 вперёд (обход). Порядок — как в исходном списке. Вне сетки — весь список.
+ */
+export function obstaclesNear(obstacles: readonly Obstacle[], x: number, z: number): readonly Obstacle[] {
+  const g = gridOf(obstacles);
+  if (!g) return obstacles;
+  const ix = Math.floor((x - g.x0) / CELL);
+  const iz = Math.floor((z - g.z0) / CELL);
+  if (!(ix >= 0 && iz >= 0 && ix < g.nx && iz < g.nz)) return obstacles;
+  return g.cells[iz * g.nx + ix];
+}
+
 export function resolveCollision(pos: Vec2, r: number, obstacles: readonly Obstacle[], bound: number): void {
+  // Обычно объект ни во что не упирается — проверяем только ближние камни. Если толчок всё же был, повторяем
+  // полным перебором с исходной точки: цепочка толчков могла бы увести к камню вне ближнего списка.
+  const near = r <= 2.6 ? obstaclesNear(obstacles, pos.x, pos.z) : obstacles;
+  if (near !== obstacles) {
+    let hit = false;
+    for (const o of near) {
+      const dx = pos.x - o.x;
+      const dz = pos.z - o.z;
+      const min = o.r + r;
+      if (dx * dx + dz * dz < min * min) {
+        hit = true;
+        break;
+      }
+    }
+    if (!hit) {
+      clampToBound(pos, r, bound);
+      return;
+    }
+  }
   for (const o of obstacles) {
     const dx = pos.x - o.x;
     const dz = pos.z - o.z;
@@ -237,6 +326,10 @@ export function resolveCollision(pos: Vec2, r: number, obstacles: readonly Obsta
       pos.z = o.z + (dz / d) * min;
     }
   }
+  clampToBound(pos, r, bound);
+}
+
+function clampToBound(pos: Vec2, r: number, bound: number) {
   const d = Math.hypot(pos.x, pos.z);
   const maxD = bound - r;
   if (d > maxD) {
@@ -247,7 +340,7 @@ export function resolveCollision(pos: Vec2, r: number, obstacles: readonly Obsta
 
 /** Пересекает ли отрезок высокое препятствие (для снарядов). */
 export function hitsSolid(x: number, z: number, r: number, obstacles: readonly Obstacle[]): boolean {
-  for (const o of obstacles) {
+  for (const o of r <= 2.6 ? obstaclesNear(obstacles, x, z) : obstacles) {
     if (o.low) continue;
     const dx = x - o.x;
     const dz = z - o.z;

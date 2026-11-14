@@ -5,6 +5,8 @@ import { DT, MAX_ROUNDS, PVP_EVERY, isPvpRound } from '../src/constants';
 import { Rng } from '../src/rng';
 import { mobScale, roundComposition } from '../src/data/mobs';
 import { generateWorld, shotBlocked, type Obstacle } from '../src/world';
+import { DeltaEncoder, decodeSnapshot } from '../src/sim/delta';
+import type { Snapshot } from '../src/protocol';
 
 function run(g: Game, seconds: number, until?: () => boolean) {
   const n = Math.round(seconds / DT);
@@ -526,4 +528,39 @@ test('стрелок не стреляет в камень: обходит пр�
   sk.spawnT = 0;
   run(g, 12, () => p.hp < 1e6);
   assert.ok(p.hp < 1e6, 'скелет обошёл камень и попал');
+});
+
+test('разностные снимки: клиент восстанавливает каждый снимок точно, новичок начинает с полного', () => {
+  const g = new Game(77);
+  for (let i = 0; i < 3; i++) g.addBot();
+  g.startRound = 19;
+  g.startGame();
+  const enc = new DeltaEncoder();
+  let client: Snapshot | null = null;
+  let late: Snapshot | null = null;
+  let wireBytes = 0;
+  let fullBytes = 0;
+  const strip = (s: Snapshot) =>
+    JSON.stringify(['P', 'M', 'S', 'R', 'Z'].map((k) => ((s as unknown as Record<string, Record<string, unknown>[]>)[k] ?? []).map((e) => {
+      const o = { ...e };
+      delete o.eq;
+      delete o.stats;
+      return Object.keys(o).sort().map((f) => [f, o[f]]);
+    })));
+  for (let i = 0; i < 1200; i++) {
+    g.update(DT);
+    const raw = g.snapshot();
+    const want = JSON.stringify(raw);
+    const wire = JSON.stringify(enc.encode(raw));
+    wireBytes += wire.length;
+    fullBytes += want.length;
+    client = decodeSnapshot(JSON.parse(wire), client);
+    assert.equal(strip(client), strip(JSON.parse(want)), `тик ${i}: снимок восстановлен не так`);
+    // Клиент, подключившийся посреди игры: до полного снимка видит не всё, но ничего чужого не выдумывает
+    if (i >= 600) {
+      late = decodeSnapshot(JSON.parse(wire), late);
+      if (raw.full) assert.equal(strip(late), strip(JSON.parse(want)), 'после полного снимка новичок видит всё');
+    }
+  }
+  assert.ok(wireBytes < fullBytes * 0.7, `разностные снимки короче (${wireBytes} против ${fullBytes})`);
 });

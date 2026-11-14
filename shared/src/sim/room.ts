@@ -1,9 +1,15 @@
 import { DT } from '../constants';
-import type { C2S, GameMsg, S2C } from '../protocol';
+import type { C2S, GameMsg, S2C, Snapshot } from '../protocol';
 import { Game, type Player } from './game';
+import { DeltaEncoder } from './delta';
 
 export interface RoomClient {
   send(msg: S2C): void;
+  /**
+   * Снимок мира: `wire` — разностный (если комната его делает), `raw` — полный. Клиент без этого метода
+   * получает полный снимок через send.
+   */
+  snapshot?(wire: Snapshot, raw: Snapshot): void;
 }
 
 /**
@@ -15,10 +21,13 @@ export class Room {
   readonly game: Game;
   readonly clients = new Map<string, RoomClient>();
   emptySince = 0;
+  /** Разностные снимки (для сети): сервер включает, одиночная игра в браузере обходится без них. */
+  private delta: DeltaEncoder | null;
 
-  constructor(code: string, seed?: number) {
+  constructor(code: string, seed?: number, opts: { delta?: boolean } = {}) {
     this.code = code;
     this.game = new Game(seed);
+    this.delta = opts.delta ? new DeltaEncoder() : null;
   }
 
   join(name: string, client: RoomClient): Player | string {
@@ -55,8 +64,13 @@ export class Room {
 
   step() {
     this.game.update(DT);
-    const snap = this.game.snapshot();
-    for (const c of this.clients.values()) c.send(snap);
+    const raw = this.game.snapshot();
+    // Кодировщик видит каждый снимок — он база для следующего, даже если сейчас слушать некому
+    const wire = this.delta ? this.delta.encode(raw) : raw;
+    for (const c of this.clients.values()) {
+      if (c.snapshot) c.snapshot(wire, raw);
+      else c.send(raw);
+    }
   }
 }
 

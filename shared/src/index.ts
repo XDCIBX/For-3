@@ -8,3 +8,4 @@ export * from './data/items';
 export * from './data/mobs';
 export * from './sim/game';
 export * from './sim/room';
+export * from './sim/delta';

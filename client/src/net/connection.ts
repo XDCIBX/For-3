@@ -1,3 +1,4 @@
+import { inflateSync } from 'fflate';
 import { Room, type C2S, type S2C } from '@game/shared';
 import { reportOnce } from '../report';
 import { t } from '../i18n';
@@ -22,12 +23,25 @@ export class WsConnection implements Connection {
   private closedByUs = false;
   private gotPong = false;
 
+  /** Текст прошлого сжатого снимка — словарь для следующего (см. SnapshotPacker на сервере). */
+  private prevSnap: Uint8Array | null = null;
+  private dec = new TextDecoder();
+
   private constructor(ws: WebSocket) {
     this.ws = ws;
+    ws.binaryType = 'arraybuffer';
     ws.onmessage = (ev) => {
       let m: S2C;
       try {
-        m = JSON.parse(ev.data as string);
+        if (typeof ev.data === 'string') m = JSON.parse(ev.data);
+        else {
+          // Сжатый снимок: байт 0 — сжат ли со словарём (прошлым снимком), дальше deflate-raw
+          const b = new Uint8Array(ev.data as ArrayBuffer);
+          if (b[0] === 1 && !this.prevSnap) return;
+          const text = inflateSync(b.subarray(1), b[0] === 1 ? { dictionary: this.prevSnap!.subarray(-32768) } : undefined);
+          this.prevSnap = text;
+          m = JSON.parse(this.dec.decode(text));
+        }
       } catch {
         return;
       }
@@ -73,7 +87,10 @@ export class WsConnection implements Connection {
   }
 
   send(msg: C2S) {
-    if (this.ws.readyState === WebSocket.OPEN) this.ws.send(JSON.stringify(msg));
+    if (this.ws.readyState !== WebSocket.OPEN) return;
+    // При входе в комнату сообщаем, что понимаем сжатые разностные снимки
+    if (msg.t === 'create' || msg.t === 'join' || msg.t === 'rejoin') msg = { ...msg, z: 1 };
+    this.ws.send(JSON.stringify(msg));
   }
 
   close() {

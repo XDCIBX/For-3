@@ -20,7 +20,7 @@ import type { GameEvent, GameMsg, MinionSnap, MobSnap, PlayerSnap, Snapshot } fr
 import { Rng } from '../rng';
 import type { Equip, HeroClass, Item, MinionKind, MobKind, Phase, ProjKind, Stats, ZoneKind } from '../types';
 import { HERO_CLASSES } from '../types';
-import { ARENA_OBSTACLES, generateWorld, hitsSolid, resolveCollision, shotBlocked, worldFor, type Obstacle, type WorldData } from '../world';
+import { ARENA_OBSTACLES, generateWorld, hitsSolid, obstaclesNear, resolveCollision, shotBlocked, worldFor, type Obstacle, type WorldData } from '../world';
 import { updateBot } from './bot';
 
 export interface Player {
@@ -1823,7 +1823,7 @@ export class Game {
 
       if (mx || mz) {
         // Обход препятствий (летуны пролетают над ними)
-        if (!def.flying) for (const o of obs) {
+        if (!def.flying) for (const o of m.radius <= 2.6 ? obstaclesNear(obs, m.x, m.z) : obs) {
           const ox = o.x - m.x;
           const oz = o.z - m.z;
           const along = ox * mx + oz * mz;

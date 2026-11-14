@@ -21,6 +21,7 @@
     "@capacitor/status-bar": "^8.0.0",
     "@fontsource/rubik": "^5.2.0",
     "@game/shared": "*",
+    "fflate": "^0.8.3",
     "three": "^0.180.0"
   },
   "devDependencies": {

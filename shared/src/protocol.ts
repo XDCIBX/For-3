@@ -17,9 +17,10 @@ export type GameMsg =
 
 /** Сообщения подключения. */
 export type ConnectMsg =
-  | { t: 'create'; name: string }
-  | { t: 'join'; code: string; name: string }
-  | { t: 'rejoin'; code: string; token: string }
+  // z: 1 — клиент понимает сжатые разностные снимки (двоичные, см. server/src/index.ts → SnapshotPacker)
+  | { t: 'create'; name: string; z?: 1 }
+  | { t: 'join'; code: string; name: string; z?: 1 }
+  | { t: 'rejoin'; code: string; token: string; z?: 1 }
   | { t: 'ping'; c: number };
 
 export type C2S = GameMsg | ConnectMsg;

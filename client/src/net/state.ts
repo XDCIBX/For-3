@@ -1,4 +1,4 @@
-import type { DuelInfo, Equip, GameEvent, Item, Phase, PlayerSnap, Snapshot, Stats } from '@game/shared';
+import { decodeSnapshot, type DuelInfo, type Equip, type GameEvent, type Item, type Phase, type PlayerSnap, type Snapshot, type Stats } from '@game/shared';
 
 export type PlayerInfo = Omit<PlayerSnap, 'eq' | 'stats'> & { eq: Equip | null; stats: Stats | null };
 
@@ -29,6 +29,8 @@ export class ClientState {
   }
 
   apply(s: Snapshot): GameEvent[] {
+    // Сервер шлёт только изменившиеся поля — восстанавливаем полные записи по прошлому снимку
+    decodeSnapshot(s, this.snap);
     this.prevPhase = this.phase;
     this.phase = s.ph;
     this.round = s.rd;
